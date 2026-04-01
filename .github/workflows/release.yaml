@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags-ignore: ["**"]
+
+permissions:
+  contents: write   # needed to push version bump commit + tag
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0           # full history so commitizen can read all commits
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install commitizen
+        run: pip install commitizen
+
+      - name: Configure git bot identity
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+      - name: Bump version
+        run: cz bump --yes || true
+        # graceful no-op if no releasable commits since last tag
+
+      - name: Push version bump commit and tag
+        run: |
+          git push
+          git push --tags

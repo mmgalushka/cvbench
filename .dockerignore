@@ -1,0 +1,31 @@
+# Exclude all.
+*
+
+# Except core framework
+!core/
+!core/**/
+!core/**/*.py
+
+# Except CLI
+!cli/
+!cli/**/
+!cli/**/*.py
+
+# Except augmentations
+!augmentations/
+!augmentations/**/
+!augmentations/**/*.py
+
+# Except tests
+!tests/
+!tests/**/
+!tests/**/*.py
+
+# Except configs
+!configs/
+!configs/**/
+!configs/**/*.yaml
+
+# Except project root files
+!pyproject.toml
+!Dockerfile
