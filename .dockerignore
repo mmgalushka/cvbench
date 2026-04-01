@@ -28,4 +28,5 @@
 
 # Except project root files
 !pyproject.toml
+!README.md
 !Dockerfile
