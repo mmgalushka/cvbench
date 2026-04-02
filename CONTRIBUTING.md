@@ -70,6 +70,30 @@ entry would look like:
 ./helper.sh release --dry-run
 ```
 
+## Publishing to Docker Hub
+
+Docker images are published automatically — you never need to push manually.
+
+**How it works:**
+
+1. Merge a `feat:` or `fix:` commit to `main`
+2. The Release pipeline runs `cz bump`, creates a version tag (e.g. `v0.2.3`), and pushes it
+3. The Docker job in the same pipeline immediately builds and pushes to Docker Hub:
+   - `mmgalushka/cvbench:0.2.3`
+   - `mmgalushka/cvbench:latest`
+
+**To force-publish the current version without bumping** (e.g. after fixing a pipeline bug):
+
+1. Go to GitHub → **Actions** → **Release**
+2. Click **Run workflow** → leave "Push current version to Docker Hub" checked → **Run workflow**
+
+**Required repository secrets** (GitHub → Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|--------|-------|
+| `DOCKERHUB_USERNAME` | Your Docker Hub username |
+| `DOCKERHUB_TOKEN` | Docker Hub access token (not your password) |
+
 ## What NOT to do
 
 - **Do not manually edit `CHANGELOG.md`** — it is generated automatically by the pipeline.
