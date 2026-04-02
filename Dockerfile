@@ -21,6 +21,9 @@ COPY augmentations/ ./augmentations/
 # Non-editable install — entry points land in /usr/local/bin
 RUN pip install --no-cache-dir . jupyterlab tensorboard
 
+# ── Suppress TF banner and ldconfig error from /etc/bash.bashrc ──────────
+RUN echo '# cleared by CVBench' > /etc/bash.bashrc
+
 # ── Home directory: volume mount points + shell config ────────────────────
 RUN mkdir -p \
       /home/cvbench/data \
