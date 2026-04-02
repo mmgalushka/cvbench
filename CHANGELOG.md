@@ -1,3 +1,9 @@
+## v0.4.0 (2026-04-02)
+
+### Feat
+
+- improve container UX — non-root user, clean home, tmux aliases, writable data
+
 ## v0.3.0 (2026-04-02)
 
 ### Feat
