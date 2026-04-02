@@ -1,3 +1,9 @@
+## v0.4.1 (2026-04-02)
+
+### Fix
+
+- suppress TF banner and fix terminal colour readability
+
 ## v0.4.0 (2026-04-02)
 
 ### Feat
