@@ -115,8 +115,17 @@ After starting:
 
 ### Generate a synthetic dataset (smoke-test)
 
+`/workspace/data` is mounted read-only to protect real datasets. Generate into the writable `work_dirs` instead:
+
 ```bash
-docker exec cvbench generate --output /workspace/data --train 200 --val 50 --test 50
+docker exec cvbench generate --output /workspace/work_dirs/data --train 200 --val 50 --test 50
+```
+
+Then point training at the generated data:
+
+```bash
+docker exec -it cvbench bash
+train /workspace/work_dirs/data --epochs 5 --backbone efficientnet_b0
 ```
 
 ---
