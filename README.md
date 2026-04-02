@@ -16,7 +16,7 @@ GPU-enabled computer vision training sandbox. Keras + TensorFlow + JupyterLab in
 Create a directory to hold your data, configs, and outputs. `~/cvbench` is a convenient default:
 
 ```bash
-mkdir -p ~/cvbench/{data/train,data/val,data/test,work_dirs,augmentations,configs,experiments}
+mkdir -p ~/cvbench/{data,augmentations,configs,experiments}
 cd ~/cvbench
 ```
 
@@ -32,11 +32,10 @@ docker run -d \
   --gpus all \
   -p 0.0.0.0:8888:8888 \
   -p 0.0.0.0:6006:6006 \
-  -v ~/cvbench/data:/workspace/data:ro \
-  -v ~/cvbench/work_dirs:/workspace/work_dirs \
-  -v ~/cvbench/augmentations:/workspace/augmentations \
-  -v ~/cvbench/configs:/workspace/configs \
-  -v ~/cvbench/experiments:/workspace/experiments \
+  -v ~/cvbench/data:/home/cvbench/data \
+  -v ~/cvbench/augmentations:/home/cvbench/augmentations \
+  -v ~/cvbench/configs:/home/cvbench/configs \
+  -v ~/cvbench/experiments:/home/cvbench/experiments \
   --restart unless-stopped \
   mmgalushka/cvbench:latest
 ```
@@ -48,11 +47,10 @@ docker run -d \
   --name cvbench \
   -p 0.0.0.0:8888:8888 \
   -p 0.0.0.0:6006:6006 \
-  -v ~/cvbench/data:/workspace/data:ro \
-  -v ~/cvbench/work_dirs:/workspace/work_dirs \
-  -v ~/cvbench/augmentations:/workspace/augmentations \
-  -v ~/cvbench/configs:/workspace/configs \
-  -v ~/cvbench/experiments:/workspace/experiments \
+  -v ~/cvbench/data:/home/cvbench/data \
+  -v ~/cvbench/augmentations:/home/cvbench/augmentations \
+  -v ~/cvbench/configs:/home/cvbench/configs \
+  -v ~/cvbench/experiments:/home/cvbench/experiments \
   --restart unless-stopped \
   mmgalushka/cvbench:latest
 ```
@@ -77,11 +75,10 @@ services:
       - "0.0.0.0:8888:8888"
       - "0.0.0.0:6006:6006"
     volumes:
-      - ~/cvbench/data:/workspace/data:ro
-      - ~/cvbench/work_dirs:/workspace/work_dirs
-      - ~/cvbench/augmentations:/workspace/augmentations
-      - ~/cvbench/configs:/workspace/configs
-      - ~/cvbench/experiments:/workspace/experiments
+      - ~/cvbench/data:/home/cvbench/data
+      - ~/cvbench/augmentations:/home/cvbench/augmentations
+      - ~/cvbench/configs:/home/cvbench/configs
+      - ~/cvbench/experiments:/home/cvbench/experiments
     restart: unless-stopped
 ```
 
@@ -96,11 +93,10 @@ services:
       - "0.0.0.0:8888:8888"
       - "0.0.0.0:6006:6006"
     volumes:
-      - ~/cvbench/data:/workspace/data:ro
-      - ~/cvbench/work_dirs:/workspace/work_dirs
-      - ~/cvbench/augmentations:/workspace/augmentations
-      - ~/cvbench/configs:/workspace/configs
-      - ~/cvbench/experiments:/workspace/experiments
+      - ~/cvbench/data:/home/cvbench/data
+      - ~/cvbench/augmentations:/home/cvbench/augmentations
+      - ~/cvbench/configs:/home/cvbench/configs
+      - ~/cvbench/experiments:/home/cvbench/experiments
     restart: unless-stopped
 ```
 
@@ -115,17 +111,15 @@ After starting:
 
 ### Generate a synthetic dataset (smoke-test)
 
-`/workspace/data` is mounted read-only to protect real datasets. Generate into the writable `work_dirs` instead:
-
 ```bash
-docker exec cvbench generate /workspace/work_dirs/data --train 200 --val 50 --test 50
+docker exec cvbench generate --train 200 --val 50 --test 50
 ```
 
-Then point training at the generated data:
+This writes to `data/synthetic/` by default. Point training at it immediately:
 
 ```bash
 docker exec -it cvbench bash
-train /workspace/work_dirs/data --epochs 5 --backbone efficientnet_b0
+train data/synthetic --epochs 5 --backbone efficientnet_b0
 ```
 
 ---
@@ -136,15 +130,15 @@ From a JupyterLab terminal or SSH session:
 
 ```bash
 docker exec -it cvbench bash
-tmux new -s train
-train /workspace/data --epochs 20 --backbone efficientnet_b0
+tm -n train
+train data --epochs 20 --backbone efficientnet_b0
 # Ctrl+B D to detach — training continues after you close the terminal
 ```
 
 ### TensorBoard
 
 ```bash
-docker exec cvbench tensorboard --logdir /workspace/work_dirs --host 0.0.0.0 --port 6006
+docker exec cvbench tensorboard --logdir /home/cvbench/experiments --host 0.0.0.0 --port 6006
 # → http://<server-ip>:6006
 ```
 
@@ -160,20 +154,19 @@ predict   --checkpoint <path> --input <image-or-folder>
 runs      list       [dir] [--sort val_accuracy|date|backbone]
 runs      compare    <run_a_dir> <run_b_dir>
 runs      best       [dir] [--metric val_accuracy|val_loss|test_accuracy]
-generate  <out_dir>     [--train N] [--val N] [--test N] [--image-size N]
+generate  [out_dir]  [--train N] [--val N] [--test N] [--image-size N]
 ```
 
 ---
 
 ## Volume mounts
 
-| Host path                    | Container path              | Notes                              |
-|------------------------------|-----------------------------|------------------------------------|
-| `~/cvbench/data`             | `/workspace/data` (ro)      | Image dataset — read-only          |
-| `~/cvbench/work_dirs`        | `/workspace/work_dirs`      | Checkpoints, logs, eval reports    |
-| `~/cvbench/augmentations`    | `/workspace/augmentations`  | Custom augmentation Python files   |
-| `~/cvbench/configs`          | `/workspace/configs`        | YAML experiment configs            |
-| `~/cvbench/experiments`      | `/workspace/experiments`    | Experiment directories             |
+| Host path                    | Container path                   | Notes                             |
+|------------------------------|----------------------------------|-----------------------------------|
+| `~/cvbench/data`             | `/home/cvbench/data`             | Image datasets (real + synthetic) |
+| `~/cvbench/augmentations`    | `/home/cvbench/augmentations`    | Custom augmentation Python files  |
+| `~/cvbench/configs`          | `/home/cvbench/configs`          | YAML experiment configs           |
+| `~/cvbench/experiments`      | `/home/cvbench/experiments`      | Experiment directories            |
 
 ---
 
@@ -195,5 +188,5 @@ def build(params: dict) -> keras.Sequential:
 ```
 
 ```bash
-train /workspace/data --aug-preset my_aug
+train data --aug-preset my_aug
 ```

@@ -1,0 +1,115 @@
+# CVBench container — interactive shell configuration
+# Sourced by bash for interactive sessions only.
+
+[[ $- != *i* ]] && return
+
+# ── Prompt ────────────────────────────────────────────────────────────────
+PS1='\[\033[1;36m\]cvbench\[\033[0m\]:\[\033[1;34m\]\w\[\033[0m\]\$ '
+
+# ── Banner ────────────────────────────────────────────────────────────────
+echo -e "  ______     ______                  _     "
+echo -e " / ___\\ \\   / / __ )  ___ _ __   ___| |__  "
+echo -e "| |    \\ \\ / /|  _ \\ / _ \\ '_ \\ / __| '_ \\ "
+echo -e "| |___  \\ V / | |_) |  __/ | | | (__| | | |"
+echo -e " \\____|  \\_/  |____/ \\___|_| |_|\\___|_| |_|"
+echo    "Computer Vision Training Sandbox"
+echo
+echo    "  Type 'commands' for a full list of available commands."
+echo
+echo -e "  \033[1mSession shortcuts (tmux):\033[0m"
+echo    "    tm -n <name>   new session"
+echo    "    tm -c <name>   connect / attach"
+echo    "    tm -d <name>   delete session"
+echo    "    tm -l          list sessions"
+echo
+
+# ── commands — full CLI reference ─────────────────────────────────────────
+commands() {
+    local BOLD="\033[1;39m"
+    local CMD="\033[1;34m"
+    local OPT="\033[0;34m"
+    local NC="\033[m"
+
+    echo
+    echo -e "${BOLD}Data Commands:${NC}"
+    echo -e "  ${CMD}generate${OPT} [output] [opts]${NC}          generate synthetic shapes dataset;"
+    echo -e "    ${OPT}output${NC}                            destination dir (default: data/synthetic);"
+    echo -e "    ${OPT}--train/--val/--test <N>${NC}          images per class per split;"
+    echo -e "    ${OPT}--image-size <N>${NC}                  image size in pixels (default: 64);"
+    echo -e "    ${OPT}--overwrite${NC}                       replace existing output directory;"
+    echo
+    echo -e "${BOLD}Training Commands:${NC}"
+    echo -e "  ${CMD}train${OPT} <data_dir> [opts]${NC}            run training;"
+    echo -e "    ${OPT}--output <dir>${NC}                    experiment output directory;"
+    echo -e "    ${OPT}--from <exp_dir>${NC}                  load config from existing experiment;"
+    echo -e "    ${OPT}--backbone <name>${NC}                 backbone (default: efficientnet_b0);"
+    echo -e "    ${OPT}--epochs <N>${NC}                      number of training epochs;"
+    echo -e "    ${OPT}--lr <float>${NC}                      learning rate;"
+    echo -e "    ${OPT}--batch-size <N>${NC}                  batch size;"
+    echo -e "    ${OPT}--aug-preset <name>${NC}               augmentation preset;"
+    echo -e "    ${OPT}--resume <checkpoint>${NC}             resume from a checkpoint;"
+    echo -e "  ${CMD}evaluate${OPT} <run_dir> [opts]${NC}          evaluate a trained model;"
+    echo -e "    ${OPT}--split val|test${NC}                  dataset split to evaluate on;"
+    echo -e "    ${OPT}--output-dir <path>${NC}               where to write eval outputs;"
+    echo -e "  ${CMD}predict${OPT} [opts]${NC}                     run inference on image(s);"
+    echo -e "    ${OPT}--checkpoint <path>${NC}               path to .keras checkpoint;"
+    echo -e "    ${OPT}--input <path>${NC}                    image file or folder;"
+    echo
+    echo -e "${BOLD}Experiment Commands:${NC}"
+    echo -e "  ${CMD}runs list${OPT}    [dir] [--sort val_accuracy|date|backbone]${NC}"
+    echo -e "  ${CMD}runs compare${OPT} <run_a_dir> <run_b_dir>${NC}"
+    echo -e "  ${CMD}runs best${OPT}    [dir] [--metric val_accuracy|val_loss|test_accuracy]${NC}"
+    echo
+    echo -e "${BOLD}Monitoring:${NC}"
+    echo -e "  ${CMD}tensorboard${OPT} --logdir experiments/ --host 0.0.0.0 --port 6006${NC}"
+    echo -e "  ${OPT}→ http://<server-ip>:6006${NC}"
+    echo
+    echo -e "${BOLD}Session (tmux):${NC}"
+    echo -e "  ${CMD}tm -n${OPT} <name>${NC}   new session"
+    echo -e "  ${CMD}tm -c${OPT} <name>${NC}   connect / attach"
+    echo -e "  ${CMD}tm -d${OPT} <name>${NC}   delete session"
+    echo -e "  ${CMD}tm -l${NC}          list sessions"
+    echo
+}
+
+# ── tm — tmux session manager ─────────────────────────────────────────────
+tm() {
+    local usage
+    usage=$(cat <<'EOF'
+Usage:
+  tm -n <name>   new tmux session
+  tm -c <name>   connect / attach to session
+  tm -d <name>   delete session
+  tm -l          list sessions
+EOF
+)
+    if [[ $# -eq 0 ]]; then
+        echo "$usage"
+        return 0
+    fi
+
+    local flag="$1"
+    local name="$2"
+
+    case "$flag" in
+        -n)
+            [[ -z "$name" ]] && { echo "tm -n requires a session name"; return 1; }
+            tmux new-session -s "$name"
+            ;;
+        -c)
+            [[ -z "$name" ]] && { echo "tm -c requires a session name"; return 1; }
+            tmux attach-session -t "$name"
+            ;;
+        -d)
+            [[ -z "$name" ]] && { echo "tm -d requires a session name"; return 1; }
+            tmux kill-session -t "$name"
+            ;;
+        -l)
+            tmux list-sessions 2>/dev/null || echo "No active tmux sessions."
+            ;;
+        *)
+            echo "$usage"
+            return 1
+            ;;
+    esac
+}

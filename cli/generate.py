@@ -115,7 +115,7 @@ def generate_split(split: str, output_root: Path, n: int, size: int, rng: random
 # ---------------------------------------------------------------------------
 
 @click.command()
-@click.argument("output", default="data")
+@click.argument("output", default="data/synthetic")
 @click.option("--image-size", default=64, show_default=True,
               help="Width and height of generated images.")
 @click.option("--train", "n_train", default=200, show_default=True,

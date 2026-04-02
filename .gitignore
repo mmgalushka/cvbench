@@ -1,6 +1,12 @@
 # Exclude all.
 *
 
+# Except GitHub workflow
+
+!.github/
+!.github/**/
+!.github/**/*.yaml
+
 # Except core framework
 !core/
 !core/**/
@@ -21,6 +27,11 @@
 !tests/**/
 !tests/**/*.py
 
+# Except notebooks
+!notebooks/
+!notebooks/**/
+!notebooks/**/*.ipynb
+
 # Except configs
 !configs/
 !configs/**/
@@ -32,6 +43,11 @@
 !scripts/**/*
 
 # Except project root files
-!pyproject.toml
-!README.md
+!helper.sh
 !Dockerfile
+!docker-compose.yml
+!pyproject.toml
+!LICENSE
+!README.md
+!CONTRIBUTING.md
+!.dockerignore
