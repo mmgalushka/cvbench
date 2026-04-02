@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
     tags-ignore: ["**"]
+  workflow_dispatch:
+    inputs:
+      force_docker:
+        description: "Push current version to Docker Hub without bumping"
+        type: boolean
+        default: true
 
 permissions:
   contents: write   # needed to push version bump commit + tag
@@ -36,7 +42,11 @@ jobs:
       - name: Bump version
         id: bump
         run: |
-          if cz bump --yes 2>&1; then
+          if [ "${{ github.event.inputs.force_docker }}" = "true" ]; then
+            VERSION=$(cz version --project)
+            echo "released=true"  >> "$GITHUB_OUTPUT"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          elif cz bump --yes 2>&1; then
             VERSION=$(cz version --project)
             echo "released=true"  >> "$GITHUB_OUTPUT"
             echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -45,7 +55,7 @@ jobs:
           fi
 
       - name: Push version bump commit and tag
-        if: steps.bump.outputs.released == 'true'
+        if: steps.bump.outputs.released == 'true' && github.event.inputs.force_docker != 'true'
         run: |
           git push
           git push --tags
