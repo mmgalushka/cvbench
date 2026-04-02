@@ -1,3 +1,9 @@
+## v0.2.2 (2026-04-02)
+
+### Fix
+
+- correct generate CLI syntax in README (--output flag, not positional arg)
+
 ## v0.2.1 (2026-04-01)
 
 ### Fix
