@@ -1,3 +1,9 @@
+## v0.3.0 (2026-04-02)
+
+### Feat
+
+- make generate output directory a positional argument
+
 ## v0.2.2 (2026-04-02)
 
 ### Fix
