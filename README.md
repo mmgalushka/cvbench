@@ -116,7 +116,7 @@ After starting:
 ### Generate a synthetic dataset (smoke-test)
 
 ```bash
-docker exec cvbench generate /workspace/data --train 200 --val 50 --test 50
+docker exec cvbench generate --output /workspace/data --train 200 --val 50 --test 50
 ```
 
 ---
@@ -151,7 +151,7 @@ predict   --checkpoint <path> --input <image-or-folder>
 runs      list       [dir] [--sort val_accuracy|date|backbone]
 runs      compare    <run_a_dir> <run_b_dir>
 runs      best       [dir] [--metric val_accuracy|val_loss|test_accuracy]
-generate  <out_dir>  [--train N] [--val N] [--test N] [--image-size N]
+generate  [--output DIR] [--train N] [--val N] [--test N] [--image-size N]
 ```
 
 ---
