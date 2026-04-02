@@ -115,8 +115,7 @@ def generate_split(split: str, output_root: Path, n: int, size: int, rng: random
 # ---------------------------------------------------------------------------
 
 @click.command()
-@click.option("--output", default="data", show_default=True,
-              help="Destination root directory.")
+@click.argument("output", default="data")
 @click.option("--image-size", default=64, show_default=True,
               help="Width and height of generated images.")
 @click.option("--train", "n_train", default=200, show_default=True,

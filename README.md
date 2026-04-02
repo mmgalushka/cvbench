@@ -118,7 +118,7 @@ After starting:
 `/workspace/data` is mounted read-only to protect real datasets. Generate into the writable `work_dirs` instead:
 
 ```bash
-docker exec cvbench generate --output /workspace/work_dirs/data --train 200 --val 50 --test 50
+docker exec cvbench generate /workspace/work_dirs/data --train 200 --val 50 --test 50
 ```
 
 Then point training at the generated data:
@@ -160,7 +160,7 @@ predict   --checkpoint <path> --input <image-or-folder>
 runs      list       [dir] [--sort val_accuracy|date|backbone]
 runs      compare    <run_a_dir> <run_b_dir>
 runs      best       [dir] [--metric val_accuracy|val_loss|test_accuracy]
-generate  [--output DIR] [--train N] [--val N] [--test N] [--image-size N]
+generate  <out_dir>     [--train N] [--val N] [--test N] [--image-size N]
 ```
 
 ---
