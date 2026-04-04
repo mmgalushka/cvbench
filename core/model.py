@@ -16,15 +16,11 @@ _BACKBONE_PRESETS = {
 }
 
 
-def build_model(cfg: CVBenchConfig, aug_layer: keras.Layer | None = None) -> keras.Model:
+def build_model(cfg: CVBenchConfig) -> keras.Model:
     """Build and return a compiled Keras model.
 
     Args:
         cfg: Resolved experiment config.
-        aug_layer: Optional augmentation Sequential. Placed as the first layer
-                   inside the model graph when cfg.augmentation.placement is
-                   'inside_model'. Ignored (applied outside via tf.data) when
-                   placement is 'outside_model'.
 
     Returns:
         Compiled keras.Model ready for training.
@@ -42,10 +38,6 @@ def build_model(cfg: CVBenchConfig, aug_layer: keras.Layer | None = None) -> ker
 
     # Rescale pixels from [0, 255] to [0, 1] — EfficientNet backbone expects this range
     x = keras.layers.Rescaling(1.0 / 255.0)(x)
-
-    # Augmentation inside the model graph
-    if aug_layer is not None and cfg.augmentation.placement == "inside_model":
-        x = aug_layer(x)
 
     # Backbone (frozen by default; fine-tune top layers if configured)
     backbone = keras_hub.models.EfficientNetBackbone.from_preset(preset)

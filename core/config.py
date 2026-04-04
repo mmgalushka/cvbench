@@ -32,10 +32,16 @@ class ModelConfig:
 
 
 @dataclass
-class AugmentationConfig:
-    preset: str = "light"
-    placement: str = "inside_model"
+class TransformConfig:
+    name: str
+    prob: float = 1.0
     params: dict = field(default_factory=dict)
+
+
+@dataclass
+class AugmentationConfig:
+    placement: str = "outside_model"
+    transforms: list = field(default_factory=list)  # list[TransformConfig]
 
 
 @dataclass
@@ -111,10 +117,16 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
     )
 
     aug = d.get("augmentation", {})
+    raw_transforms = aug.get("transforms", [])
+    transforms = []
+    for t in raw_transforms:
+        name = t["name"]
+        prob = t.get("prob", 1.0)
+        params = {k: v for k, v in t.items() if k not in ("name", "prob")}
+        transforms.append(TransformConfig(name=name, prob=prob, params=params))
     cfg.augmentation = AugmentationConfig(
-        preset=aug.get("preset", cfg.augmentation.preset),
         placement=aug.get("placement", cfg.augmentation.placement),
-        params=aug.get("params", cfg.augmentation.params),
+        transforms=transforms,
     )
 
     tr = d.get("training", {})
@@ -168,7 +180,6 @@ def build_config(
     batch_size: int | None = None,
     input_size: int | None = None,
     dropout: float | None = None,
-    aug_preset: str | None = None,
     aug_placement: str | None = None,
 ) -> CVBenchConfig:
     """Build a CVBenchConfig from CLI options.
@@ -199,8 +210,6 @@ def build_config(
         cfg.model.input_size = input_size
     if dropout is not None:
         cfg.model.dropout = dropout
-    if aug_preset is not None:
-        cfg.augmentation.preset = aug_preset
     if aug_placement is not None:
         cfg.augmentation.placement = aug_placement
 
@@ -213,8 +222,14 @@ def save_config(cfg: CVBenchConfig, exp_dir: str):
     path.parent.mkdir(parents=True, exist_ok=True)
 
     def _to_dict(obj):
+        if isinstance(obj, TransformConfig):
+            d = {"name": obj.name, "prob": obj.prob}
+            d.update(obj.params)
+            return d
         if dataclasses.is_dataclass(obj):
-            return {k: _to_dict(v) for k, v in dataclasses.asdict(obj).items()}
+            return {f.name: _to_dict(getattr(obj, f.name)) for f in dataclasses.fields(obj)}
+        if isinstance(obj, list):
+            return [_to_dict(item) for item in obj]
         return obj
 
     with open(path, "w") as f:

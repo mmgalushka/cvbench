@@ -3,12 +3,8 @@ import click
 from core.config import build_config, save_config
 from core.data import build_datasets, get_class_names
 from core.model import build_model
-from core.registry import resolve_aug
 from core.runs import make_run_name, make_unique_dir
 from core import trainer as _trainer
-
-# Import builtin augmentations to trigger registration
-import augmentations  # noqa: F401
 
 
 _DEFAULT_EXPERIMENTS_DIR = "experiments"
@@ -26,7 +22,6 @@ _DEFAULT_EXPERIMENTS_DIR = "experiments"
 @click.option("--batch-size", default=None, type=int, help="Batch size.")
 @click.option("--input-size", default=None, type=int, help="Image input size in pixels.")
 @click.option("--dropout", default=None, type=float, help="Dropout rate.")
-@click.option("--aug-preset", default=None, help="Augmentation preset name.")
 @click.option("--aug-placement", default=None,
               type=click.Choice(["inside_model", "outside_model"]),
               help="Augmentation placement.")
@@ -34,7 +29,7 @@ _DEFAULT_EXPERIMENTS_DIR = "experiments"
               help="Path to a checkpoint file to resume training from.")
 def train(
     data_dir, output_dir, from_dir, backbone, epochs, lr,
-    batch_size, input_size, dropout, aug_preset, aug_placement, resume,
+    batch_size, input_size, dropout, aug_placement, resume,
 ):
     """Train a model on DATA_DIR.
 
@@ -52,7 +47,6 @@ def train(
         batch_size=batch_size,
         input_size=input_size,
         dropout=dropout,
-        aug_preset=aug_preset,
         aug_placement=aug_placement,
     )
 
@@ -74,22 +68,24 @@ def train(
     # Write config.yaml before training starts — single source of truth
     save_config(cfg, exp_dir)
 
-    # Build augmentation layer
-    aug_layer = resolve_aug(cfg.augmentation.preset, cfg.augmentation.params)
-
     # Build datasets
     train_ds, val_ds, _ = build_datasets(cfg)
 
-    # For outside_model, pass None so the model graph is aug-free
-    inside_aug = aug_layer if cfg.augmentation.placement == "inside_model" else None
-    model = build_model(cfg, aug_layer=inside_aug)
-
-    if cfg.augmentation.placement == "outside_model":
+    # Apply augmentation pipeline outside the model via tf.data
+    if cfg.augmentation.transforms:
         import tensorflow as tf
-        train_ds = train_ds.map(
-            lambda x, y: (aug_layer(x, training=True), y),
-            num_parallel_calls=tf.data.AUTOTUNE,
-        )
+        from augmentations.pipeline import build_aug_pipeline
+
+        aug_fn = build_aug_pipeline(cfg.augmentation.transforms)
+
+        def _aug_map(x, y):
+            x_aug = tf.numpy_function(lambda img: aug_fn(img), [x], tf.float32)
+            x_aug.set_shape(x.shape)
+            return x_aug, y
+
+        train_ds = train_ds.map(_aug_map, num_parallel_calls=tf.data.AUTOTUNE)
+
+    model = build_model(cfg)
 
     _trainer.train(
         cfg=cfg,

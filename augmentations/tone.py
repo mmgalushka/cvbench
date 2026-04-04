@@ -1,17 +1,6 @@
 import numpy as np
 
 
-def aug_brightness(img: np.ndarray, delta: int) -> np.ndarray:
-    """Shift pixel values by delta (+bright, -dark). Clips to [0, 255]."""
-    return np.clip(img.astype(np.int16) + delta, 0, 255).astype(np.uint8)
-
-
-def aug_contrast(img: np.ndarray, factor: float) -> np.ndarray:
-    """Multiply contrast around mid-grey (128) by factor."""
-    out = 128 + factor * (img.astype(np.float32) - 128)
-    return np.clip(out, 0, 255).astype(np.uint8)
-
-
 def aug_gamma(img: np.ndarray, gamma: float) -> np.ndarray:
     """Apply gamma correction. gamma<1 brightens, gamma>1 darkens."""
     out = 255.0 * (img.astype(np.float32) / 255.0) ** gamma

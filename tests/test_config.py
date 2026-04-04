@@ -21,8 +21,8 @@ def test_build_config_defaults():
     assert cfg.model.backbone == "efficientnet_b0"
     assert cfg.training.epochs == 10
     assert cfg.training.learning_rate == 1e-4
-    assert cfg.augmentation.preset == "light"
-    assert cfg.augmentation.placement == "inside_model"
+    assert cfg.augmentation.transforms == []
+    assert cfg.augmentation.placement == "outside_model"
 
 
 def test_build_config_cli_overrides():

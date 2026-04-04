@@ -18,7 +18,8 @@ def _print_header(exp_dir: str, cfg: CVBenchConfig):
     print(f" Backbone  : {cfg.model.backbone}")
     print(f" Epochs    : {cfg.training.epochs}")
     print(f" LR        : {cfg.training.learning_rate}")
-    print(f" Aug       : {cfg.augmentation.preset} ({cfg.augmentation.placement})")
+    n_transforms = len(cfg.augmentation.transforms)
+    print(f" Aug       : {n_transforms} transform(s) ({cfg.augmentation.placement})")
     print(f" Output    : {exp_dir}")
     print("━" * w)
 
