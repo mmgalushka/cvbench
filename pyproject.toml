@@ -25,11 +25,12 @@ dev = [
 ]
 
 [project.scripts]
-train    = "cli.train:train"
-evaluate = "cli.evaluate:evaluate"
-predict  = "cli.predict:predict"
-runs     = "cli.runs:runs"
-generate = "cli.generate:generate"
+train        = "cli.train:train"
+evaluate     = "cli.evaluate:evaluate"
+predict      = "cli.predict:predict"
+runs         = "cli.runs:runs"
+generate     = "cli.generate:generate"
+augmentations = "cli.augmentations:augmentations"
 
 [tool.setuptools.packages.find]
 where = ["."]

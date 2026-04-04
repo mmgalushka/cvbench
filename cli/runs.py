@@ -55,7 +55,7 @@ def compare(run_a, run_b):
     b = _read_entry(Path(run_b))
 
     fields = [
-        "backbone", "lr", "aug_placement",
+        "backbone", "lr",
         "epochs", "val_accuracy", "test_accuracy", "epochs_run", "status", "date",
     ]
     name_a = a.get("name", run_a)

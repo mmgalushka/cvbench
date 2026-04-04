@@ -22,14 +22,13 @@ _DEFAULT_EXPERIMENTS_DIR = "experiments"
 @click.option("--batch-size", default=None, type=int, help="Batch size.")
 @click.option("--input-size", default=None, type=int, help="Image input size in pixels.")
 @click.option("--dropout", default=None, type=float, help="Dropout rate.")
-@click.option("--aug-placement", default=None,
-              type=click.Choice(["inside_model", "outside_model"]),
-              help="Augmentation placement.")
+@click.option("--augmentation", "aug_file", default=None, type=click.Path(exists=True),
+              help="Path to an augmentation YAML file.")
 @click.option("--resume", default=None,
               help="Path to a checkpoint file to resume training from.")
 def train(
     data_dir, output_dir, from_dir, backbone, epochs, lr,
-    batch_size, input_size, dropout, aug_placement, resume,
+    batch_size, input_size, dropout, aug_file, resume,
 ):
     """Train a model on DATA_DIR.
 
@@ -47,8 +46,11 @@ def train(
         batch_size=batch_size,
         input_size=input_size,
         dropout=dropout,
-        aug_placement=aug_placement,
     )
+
+    if aug_file:
+        from core.config import load_aug_file
+        cfg.augmentation = load_aug_file(aug_file)
 
     # Determine output directory
     if output_dir is not None:

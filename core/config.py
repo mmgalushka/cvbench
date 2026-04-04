@@ -40,7 +40,6 @@ class TransformConfig:
 
 @dataclass
 class AugmentationConfig:
-    placement: str = "outside_model"
     transforms: list = field(default_factory=list)  # list[TransformConfig]
 
 
@@ -124,10 +123,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
         prob = t.get("prob", 1.0)
         params = {k: v for k, v in t.items() if k not in ("name", "prob")}
         transforms.append(TransformConfig(name=name, prob=prob, params=params))
-    cfg.augmentation = AugmentationConfig(
-        placement=aug.get("placement", cfg.augmentation.placement),
-        transforms=transforms,
-    )
+    cfg.augmentation = AugmentationConfig(transforms=transforms)
 
     tr = d.get("training", {})
     intr = tr.get("interrupt", {})
@@ -180,7 +176,6 @@ def build_config(
     batch_size: int | None = None,
     input_size: int | None = None,
     dropout: float | None = None,
-    aug_placement: str | None = None,
 ) -> CVBenchConfig:
     """Build a CVBenchConfig from CLI options.
 
@@ -210,8 +205,6 @@ def build_config(
         cfg.model.input_size = input_size
     if dropout is not None:
         cfg.model.dropout = dropout
-    if aug_placement is not None:
-        cfg.augmentation.placement = aug_placement
 
     return cfg
 
@@ -244,6 +237,20 @@ def load_config(exp_dir: str) -> CVBenchConfig:
     with open(path) as f:
         raw = yaml.safe_load(f) or {}
     return _dict_to_config(raw)
+
+
+def load_aug_file(path: str) -> AugmentationConfig:
+    """Load an augmentation YAML file and return an AugmentationConfig."""
+    with open(path) as f:
+        raw = yaml.safe_load(f) or {}
+    raw_transforms = raw.get("transforms", [])
+    transforms = []
+    for t in raw_transforms:
+        name = t["name"]
+        prob = t.get("prob", 1.0)
+        params = {k: v for k, v in t.items() if k not in ("name", "prob")}
+        transforms.append(TransformConfig(name=name, prob=prob, params=params))
+    return AugmentationConfig(transforms=transforms)
 
 
 def update_run_status(exp_dir: str, **kwargs):

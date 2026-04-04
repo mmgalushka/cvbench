@@ -46,7 +46,7 @@ commands() {
     echo -e "    ${OPT}--epochs <N>${NC}                      number of training epochs;"
     echo -e "    ${OPT}--lr <float>${NC}                      learning rate;"
     echo -e "    ${OPT}--batch-size <N>${NC}                  batch size;"
-    echo -e "    ${OPT}--aug-preset <name>${NC}               augmentation preset;"
+    echo -e "    ${OPT}--augmentation <file>${NC}             augmentation YAML file;"
     echo -e "    ${OPT}--resume <checkpoint>${NC}             resume from a checkpoint;"
     echo -e "  ${CMD}evaluate${OPT} <run_dir> [opts]${NC}          evaluate a trained model;"
     echo -e "    ${OPT}--split val|test${NC}                  dataset split to evaluate on;"
@@ -54,6 +54,11 @@ commands() {
     echo -e "  ${CMD}predict${OPT} [opts]${NC}                     run inference on image(s);"
     echo -e "    ${OPT}--checkpoint <path>${NC}               path to .keras checkpoint;"
     echo -e "    ${OPT}--input <path>${NC}                    image file or folder;"
+    echo
+    echo -e "${BOLD}Augmentation Commands:${NC}"
+    echo -e "  ${CMD}augmentations list${NC}                  list all available transforms with defaults;"
+    echo -e "  ${CMD}augmentations example${OPT} [preset] [--output file]${NC}"
+    echo -e "    ${OPT}preset${NC}                            light | standard | heavy | reference;"
     echo
     echo -e "${BOLD}Experiment Commands:${NC}"
     echo -e "  ${CMD}runs list${OPT}    [dir] [--sort val_accuracy|date|backbone]${NC}"

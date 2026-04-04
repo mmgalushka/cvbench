@@ -22,7 +22,6 @@ def test_build_config_defaults():
     assert cfg.training.epochs == 10
     assert cfg.training.learning_rate == 1e-4
     assert cfg.augmentation.transforms == []
-    assert cfg.augmentation.placement == "outside_model"
 
 
 def test_build_config_cli_overrides():

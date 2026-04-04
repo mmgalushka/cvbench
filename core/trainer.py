@@ -19,7 +19,7 @@ def _print_header(exp_dir: str, cfg: CVBenchConfig):
     print(f" Epochs    : {cfg.training.epochs}")
     print(f" LR        : {cfg.training.learning_rate}")
     n_transforms = len(cfg.augmentation.transforms)
-    print(f" Aug       : {n_transforms} transform(s) ({cfg.augmentation.placement})")
+    print(f" Aug       : {n_transforms} transform(s)")
     print(f" Output    : {exp_dir}")
     print("━" * w)
 
