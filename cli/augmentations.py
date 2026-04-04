@@ -228,15 +228,15 @@ def _reference_yaml() -> str:
         "  # - name: aug_lines_h",
         "  #   prob: 0.3",
         "  #   n_lines: 5",
-        "  #   width_range: [1, 3]",
-        "  #   brightness_range: [0, 255]",
+        "  #   width: [1, 3]",
+        "  #   brightness: [0, 255]",
         "",
         "  # Random vertical lines.",
         "  # - name: aug_lines_v",
         "  #   prob: 0.3",
         "  #   n_lines: 5",
-        "  #   width_range: [1, 3]",
-        "  #   brightness_range: [0, 255]",
+        "  #   width: [1, 3]",
+        "  #   brightness: [0, 255]",
     ]
     return "\n".join(lines) + "\n"
 

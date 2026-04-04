@@ -56,7 +56,17 @@ def _resolve(name: str, params: dict) -> callable:
             raise ValueError(f"Unknown augmentation '{name}'. Available: {available}")
 
         def custom_fn(img, _fn=fn, _params=params):
-            return _fn(img.astype(np.uint8), **_params).astype(np.float32)
+            resolved = {}
+            for k, v in _params.items():
+                if k.endswith("_range") and isinstance(v, (list, tuple)) and len(v) == 2:
+                    lo, hi = v
+                    if isinstance(lo, int) and isinstance(hi, int):
+                        resolved[k[:-6]] = random.randint(lo, hi)
+                    else:
+                        resolved[k[:-6]] = random.uniform(float(lo), float(hi))
+                else:
+                    resolved[k] = v
+            return _fn(img.astype(np.uint8), **resolved).astype(np.float32)
 
         return custom_fn
 

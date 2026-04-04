@@ -77,3 +77,47 @@ def test_empty_transforms_is_identity():
     img = np.arange(16, dtype=np.float32).reshape(4, 4)
     result = pipeline(img)
     np.testing.assert_array_equal(result, img)
+
+
+def test_range_param_varies(monkeypatch):
+    import augmentations as aug_mod
+
+    received = []
+
+    def fake_blur(img, radius=1.0):
+        received.append(radius)
+        return img
+
+    monkeypatch.setattr(aug_mod, "aug_blur", fake_blur)
+
+    t = _transform("aug_blur", prob=1.0, radius_range=[1, 5])
+    pipeline = build_aug_pipeline([t])
+    img = np.full((4, 4), 128, dtype=np.float32)
+    for _ in range(30):
+        pipeline(img)
+
+    assert len(received) == 30
+    assert all(isinstance(r, int) for r in received)
+    assert all(1 <= r <= 5 for r in received)
+    assert len(set(received)) > 1, "expected varied radius values across 30 calls"
+
+
+def test_range_and_fixed_mixed(monkeypatch):
+    import augmentations as aug_mod
+
+    received = []
+
+    def fake_aug(img, radius=1.0, strength=0.5):
+        received.append((radius, strength))
+        return img
+
+    monkeypatch.setattr(aug_mod, "aug_blur", fake_aug)
+
+    t = _transform("aug_blur", prob=1.0, radius_range=[0.5, 2.0], strength=0.9)
+    pipeline = build_aug_pipeline([t])
+    img = np.full((4, 4), 128, dtype=np.float32)
+    for _ in range(10):
+        pipeline(img)
+
+    assert all(s == 0.9 for _, s in received), "fixed param should be unchanged"
+    assert all(0.5 <= r <= 2.0 for r, _ in received), "range param should be in bounds"
