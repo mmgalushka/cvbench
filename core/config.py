@@ -20,6 +20,7 @@ class DataConfig:
     test_dir: str = ""
     classes: list = field(default_factory=list)
     batch_size: int = 16
+    val_split: float = 0.2  # fraction of train used for val when val/ dir is absent
 
 
 @dataclass

@@ -71,7 +71,7 @@ def train(
     save_config(cfg, exp_dir)
 
     # Build datasets
-    train_ds, val_ds, _ = build_datasets(cfg)
+    train_ds, val_ds, _, num_train = build_datasets(cfg)
 
     # Apply augmentation pipeline outside the model via tf.data
     if cfg.augmentation.transforms:
@@ -97,4 +97,5 @@ def train(
         class_names=class_names,
         model=model,
         resume_checkpoint=resume,
+        num_train_samples=num_train,
     )

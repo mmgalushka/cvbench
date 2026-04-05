@@ -32,6 +32,7 @@ def train(
     class_names: list[str],
     model: keras.Model,
     resume_checkpoint: str | None = None,
+    num_train_samples: int | None = None,
 ) -> str:
     """Run the training loop. Returns the experiment directory path."""
 
@@ -78,11 +79,12 @@ def train(
 
     # Steps per epoch (needed because train_ds uses repeat())
     import math
-    import tensorflow as tf
-    n_train = sum(1 for _ in tf.data.Dataset.list_files(
-        str(Path(cfg.data.train_dir) / "*" / "*"), shuffle=False
-    ))
-    steps_per_epoch = math.ceil(n_train / cfg.data.batch_size)
+    if num_train_samples is None:
+        import tensorflow as tf
+        num_train_samples = sum(1 for _ in tf.data.Dataset.list_files(
+            str(Path(cfg.data.train_dir) / "*" / "*"), shuffle=False
+        ))
+    steps_per_epoch = math.ceil(num_train_samples / cfg.data.batch_size)
 
     history = model.fit(
         train_ds,
