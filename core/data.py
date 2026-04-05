@@ -16,6 +16,72 @@ def get_class_names(train_dir: str) -> list[str]:
     return sorted(p.name for p in Path(train_dir).iterdir() if p.is_dir())
 
 
+def get_class_distribution(train_dir: str) -> dict[str, int]:
+    """Count image files per class. Returns {class_name: count} sorted by count descending."""
+    dist = {
+        p.name: sum(1 for f in p.iterdir() if f.is_file())
+        for p in Path(train_dir).iterdir()
+        if p.is_dir()
+    }
+    return dict(sorted(dist.items(), key=lambda x: -x[1]))
+
+
+def compute_auto_weights(
+    class_dist: dict[str, int], class_names: list[str]
+) -> dict[int, float]:
+    """Inverse-frequency class weights keyed by class index for Keras model.fit()."""
+    total = sum(class_dist.values())
+    n = len(class_dist)
+    return {
+        class_names.index(cls): round(total / (n * count), 4)
+        for cls, count in class_dist.items()
+    }
+
+
+def resolve_class_weights(
+    class_weight_cfg,
+    class_dist: dict[str, int],
+    class_names: list[str],
+) -> dict[int, float] | None:
+    """Resolve class_weight config value to a {class_index: weight} dict for Keras, or None."""
+    if class_weight_cfg is None:
+        return None
+    if class_weight_cfg == "auto":
+        return compute_auto_weights(class_dist, class_names)
+    if isinstance(class_weight_cfg, dict):
+        return {class_names.index(cls): float(w) for cls, w in class_weight_cfg.items()}
+    return None
+
+
+def print_class_balance(
+    class_dist: dict[str, int],
+    class_weight_cfg,
+) -> None:
+    """Print per-class sample counts with a bar chart and an imbalance warning when needed."""
+    counts = list(class_dist.values())
+    max_count = max(counts)
+    min_count = min(counts)
+    total = sum(counts)
+    ratio = max_count / min_count if min_count > 0 else float("inf")
+
+    bar_width = 20
+    print(" Class distribution (train):")
+    for cls, count in class_dist.items():
+        bar = "█" * int(count / max_count * bar_width)
+        pct = count / total * 100
+        print(f"   {cls:<12} {count:>5}  {bar:<{bar_width}}  {pct:.1f}%")
+
+    if ratio >= 3.0:
+        print()
+        print(f" ⚠ Imbalance ratio {ratio:.0f}:1 detected")
+        if class_weight_cfg is None:
+            print("   Tip: rerun with --class-weight auto")
+        elif class_weight_cfg == "auto":
+            print("   ✓ class_weight=auto applied")
+        else:
+            print("   ✓ custom class weights applied")
+
+
 def build_dataset(
     directory: str,
     class_names: list[str],

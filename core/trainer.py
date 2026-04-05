@@ -33,6 +33,7 @@ def train(
     model: keras.Model,
     resume_checkpoint: str | None = None,
     num_train_samples: int | None = None,
+    class_weight: dict | None = None,
 ) -> str:
     """Run the training loop. Returns the experiment directory path."""
 
@@ -93,6 +94,7 @@ def train(
         steps_per_epoch=steps_per_epoch,
         validation_data=val_ds,
         callbacks=callbacks,
+        class_weight=class_weight,
         verbose=1,
     )
 

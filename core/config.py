@@ -64,6 +64,7 @@ class CheckpointsConfig:
 class TrainingConfig:
     epochs: int = 10
     learning_rate: float = 1e-4
+    class_weight: Any = None  # null | "auto" | {class_name: weight, ...}
     interrupt: InterruptConfig = field(default_factory=InterruptConfig)
     checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
 
@@ -132,6 +133,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
     cfg.training = TrainingConfig(
         epochs=tr.get("epochs", cfg.training.epochs),
         learning_rate=tr.get("learning_rate", cfg.training.learning_rate),
+        class_weight=tr.get("class_weight", cfg.training.class_weight),
         interrupt=InterruptConfig(
             enabled=intr.get("enabled", cfg.training.interrupt.enabled),
             save_checkpoint=intr.get("save_checkpoint", cfg.training.interrupt.save_checkpoint),
@@ -177,6 +179,7 @@ def build_config(
     batch_size: int | None = None,
     input_size: int | None = None,
     dropout: float | None = None,
+    class_weight: Any = None,
 ) -> CVBenchConfig:
     """Build a CVBenchConfig from CLI options.
 
@@ -206,6 +209,8 @@ def build_config(
         cfg.model.input_size = input_size
     if dropout is not None:
         cfg.model.dropout = dropout
+    if class_weight is not None:
+        cfg.training.class_weight = class_weight
 
     return cfg
 
