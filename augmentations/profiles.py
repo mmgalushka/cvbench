@@ -21,6 +21,7 @@ def aug_random_profile_h(
     profile = np.zeros(w, dtype=np.float32)
     for pos, amp in zip(positions, amplitudes):
         profile += amp * np.exp(-((x - pos) ** 2) / (2 * sigma ** 2))
+    profile = profile.reshape((1, w) + (1,) * (img.ndim - 2))
     return np.clip(img.astype(np.float32) + profile, 0, 255).astype(np.uint8)
 
 
@@ -44,4 +45,5 @@ def aug_random_profile_v(
     profile = np.zeros(h, dtype=np.float32)
     for pos, amp in zip(positions, amplitudes):
         profile += amp * np.exp(-((y - pos) ** 2) / (2 * sigma ** 2))
-    return np.clip(img.astype(np.float32) + profile.reshape(-1, 1), 0, 255).astype(np.uint8)
+    profile = profile.reshape((h, 1) + (1,) * (img.ndim - 2))
+    return np.clip(img.astype(np.float32) + profile, 0, 255).astype(np.uint8)

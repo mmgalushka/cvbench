@@ -21,11 +21,6 @@
 !tests/**/
 !tests/**/*.py
 
-# Except configs
-!configs/
-!configs/**/
-!configs/**/*.yaml
-
 # Except scripts
 !scripts/
 !scripts/**/

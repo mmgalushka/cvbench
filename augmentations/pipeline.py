@@ -43,8 +43,9 @@ def _resolve(name: str, params: dict) -> callable:
         layer = cls(**merged)
 
         def keras_fn(img, _layer=layer):
-            t = _layer(img[None], training=True)
-            return t[0].numpy()
+            if img.ndim == 3:
+                return _layer(img[None], training=True)[0].numpy()
+            return _layer(img, training=True).numpy()
 
         return keras_fn
 
@@ -55,7 +56,7 @@ def _resolve(name: str, params: dict) -> callable:
             available = [n for n in dir(aug_mod) if n.startswith("aug_")]
             raise ValueError(f"Unknown augmentation '{name}'. Available: {available}")
 
-        def custom_fn(img, _fn=fn, _params=params):
+        def _resolve_params(_params):
             resolved = {}
             for k, v in _params.items():
                 if isinstance(v, (list, tuple)) and len(v) >= 2 and all(isinstance(e, str) for e in v):
@@ -68,7 +69,15 @@ def _resolve(name: str, params: dict) -> callable:
                         resolved[k] = random.uniform(float(lo), float(hi))
                 else:
                     resolved[k] = v
-            return _fn(img.astype(np.uint8), **resolved).astype(np.float32)
+            return resolved
+
+        def custom_fn(img, _fn=fn, _params=params):
+            if img.ndim == 4:
+                return np.stack([
+                    _fn(im.astype(np.uint8), **_resolve_params(_params)).astype(np.float32)
+                    for im in img
+                ])
+            return _fn(img.astype(np.uint8), **_resolve_params(_params)).astype(np.float32)
 
         return custom_fn
 

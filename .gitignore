@@ -32,11 +32,6 @@
 !notebooks/**/
 !notebooks/**/*.ipynb
 
-# Except configs
-!configs/
-!configs/**/
-!configs/**/*.yaml
-
 # Except scripts
 !scripts/
 !scripts/**/
