@@ -1,3 +1,9 @@
+## v0.5.1 (2026-04-05)
+
+### Fix
+
+- use deploy.resources for GPU in docker-compose example (#3)
+
 ## v0.5.0 (2026-04-05)
 
 ### Feat
