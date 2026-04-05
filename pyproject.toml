@@ -10,6 +10,7 @@ dependencies = [
     "tensorflow",
     "keras",
     "keras-hub",
+    "tokenizers",
     "click",
     "pyyaml",
     "scikit-learn",
