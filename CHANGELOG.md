@@ -1,3 +1,9 @@
+## v0.5.2 (2026-04-05)
+
+### Fix
+
+- add tokenizers as explicit dependency to resolve keras_hub import error
+
 ## v0.5.1 (2026-04-05)
 
 ### Fix
