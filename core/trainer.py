@@ -9,6 +9,21 @@ from core.checkpoint import build_checkpoint_callback, prune_checkpoints
 from core.config import CVBenchConfig, update_run_status
 
 
+_GREEN = "\033[92m"
+_YELLOW = "\033[93m"
+_RESET = "\033[0m"
+
+
+def _gpu_status_line() -> str:
+    """Return a coloured GPU availability line for the training header."""
+    import tensorflow as tf
+    gpus = tf.config.list_physical_devices("GPU")
+    if gpus:
+        names = ", ".join(g.name for g in gpus)
+        return f"{_GREEN}🟢 GPU      : {len(gpus)} device(s) — {names}{_RESET}"
+    return f"{_YELLOW}⚠️  GPU      : not available — training on CPU{_RESET}"
+
+
 def _print_header(exp_dir: str, cfg: CVBenchConfig):
     w = 55
     print("━" * w)
@@ -21,6 +36,7 @@ def _print_header(exp_dir: str, cfg: CVBenchConfig):
     n_transforms = len(cfg.augmentation.transforms)
     print(f" Aug       : {n_transforms} transform(s)")
     print(f" Output    : {exp_dir}")
+    print(f" {_gpu_status_line()}")
     print("━" * w)
 
 
