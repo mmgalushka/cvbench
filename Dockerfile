@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupadd --gid 1000 cvbench \
  && useradd  --uid 1000 --gid 1000 --create-home --shell /bin/bash cvbench
 
+# ── Suppress TF C++ logging (GPU library warnings, etc.) ─────────────────
+ENV TF_CPP_MIN_LOG_LEVEL=3
+
 # ── Install package into system Python ────────────────────────────────────
 WORKDIR /opt/cvbench
 
