@@ -1,3 +1,9 @@
+## v0.5.3 (2026-04-05)
+
+### Fix
+
+- add sentencepiece as explicit dependency to resolve keras_hub import error
+
 ## v0.5.2 (2026-04-05)
 
 ### Fix
