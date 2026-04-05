@@ -59,16 +59,20 @@ docker run -d \
 
 Save the appropriate file as `~/cvbench/docker-compose.yml` and run `docker compose up -d`.
 
-**With GPU** (`runtime: nvidia` requires NVIDIA Container Toolkit):
+**With GPU** (requires [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)):
 
 ```yaml
 services:
   cvbench:
     image: mmgalushka/cvbench:latest   # pin a release: mmgalushka/cvbench:0.2.0
     container_name: cvbench
-    runtime: nvidia
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     ports:
       - "0.0.0.0:8888:8888"
       - "0.0.0.0:6006:6006"
