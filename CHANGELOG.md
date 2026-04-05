@@ -1,3 +1,13 @@
+## v0.6.0 (2026-04-05)
+
+### Feat
+
+- add GPU status line to training header and suppress TF CUDA warnings
+
+### Fix
+
+- use tensorflow[and-cuda] to include CUDA libraries on Linux GPU installs
+
 ## v0.5.3 (2026-04-05)
 
 ### Fix
