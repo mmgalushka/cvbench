@@ -110,19 +110,30 @@ def train(
     # Build datasets
     train_ds, val_ds, _, num_train = build_datasets(cfg)
 
-    # Apply augmentation pipeline outside the model via tf.data
+    # Apply augmentation pipeline outside the model via tf.data.
+    # Keras preprocessing layers must run in a native tf.data.map — calling them
+    # inside tf.numpy_function strips graph context and causes internal shape errors
+    # (e.g. RandomTranslation rank mismatch).  Custom aug_* functions are numpy-based
+    # and still use numpy_function.
     if cfg.augmentation.transforms:
         import tensorflow as tf
-        from augmentations.pipeline import build_aug_pipeline
+        from augmentations.pipeline import build_keras_aug_fn, build_custom_aug_fn
 
-        aug_fn = build_aug_pipeline(cfg.augmentation.transforms)
+        keras_aug = build_keras_aug_fn(cfg.augmentation.transforms)
+        custom_aug = build_custom_aug_fn(cfg.augmentation.transforms)
 
-        def _aug_map(x, y):
-            x_aug = tf.numpy_function(lambda img: aug_fn(img), [x], tf.float32)
-            x_aug.set_shape(x.shape)
-            return x_aug, y
+        if keras_aug is not None:
+            train_ds = train_ds.map(
+                lambda x, y: (keras_aug(x), y),
+                num_parallel_calls=tf.data.AUTOTUNE,
+            )
 
-        train_ds = train_ds.map(_aug_map, num_parallel_calls=tf.data.AUTOTUNE)
+        if custom_aug is not None:
+            def _custom_aug_map(x, y):
+                x_aug = tf.numpy_function(lambda img: custom_aug(img), [x], tf.float32)
+                x_aug.set_shape(x.shape)
+                return x_aug, y
+            train_ds = train_ds.map(_custom_aug_map, num_parallel_calls=tf.data.AUTOTUNE)
 
     model = build_model(cfg)
 
