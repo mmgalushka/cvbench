@@ -1,3 +1,9 @@
+## v0.6.1 (2026-04-05)
+
+### Fix
+
+- apply keras augmentation layers in native tf.data.map to avoid numpy_function shape errors
+
 ## v0.6.0 (2026-04-05)
 
 ### Feat
