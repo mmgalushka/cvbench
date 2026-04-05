@@ -36,6 +36,65 @@ def build_aug_pipeline(transforms: list) -> callable:
     return apply
 
 
+def build_keras_aug_fn(transforms: list):
+    """
+    Build a tf-graph-compatible function from keras_* transforms only.
+
+    Returns a callable suitable for use directly in tf.data.map (no numpy_function
+    wrapper needed), or None if the list contains no keras_* transforms.
+    Keras preprocessing layers must be applied this way — calling them inside
+    tf.numpy_function strips graph context and causes internal shape errors.
+    """
+    import tensorflow as tf
+
+    keras_steps = []
+    for t in transforms:
+        if t.name in _KERAS_MAP:
+            cls, defaults = _KERAS_MAP[t.name]
+            merged = {**defaults, **t.params}
+            layer = cls(**merged)
+            keras_steps.append((layer, float(t.prob)))
+
+    if not keras_steps:
+        return None
+
+    def apply(x):
+        for layer, prob in keras_steps:
+            x = tf.cond(
+                tf.random.uniform(()) < prob,
+                true_fn=lambda x=x: layer(x, training=True),
+                false_fn=lambda x=x: x,
+            )
+        return x
+
+    return apply
+
+
+def build_custom_aug_fn(transforms: list):
+    """
+    Build a numpy-compatible function from aug_* transforms only.
+
+    Returns apply(img: np.ndarray) -> np.ndarray, or None if the list contains
+    no aug_* transforms.
+    """
+    steps = []
+    for t in transforms:
+        if t.name.startswith("aug_"):
+            fn = _resolve(t.name, t.params)
+            steps.append((fn, t.prob))
+
+    if not steps:
+        return None
+
+    def apply(img):
+        for fn, prob in steps:
+            if random.random() < prob:
+                img = fn(img)
+        return img
+
+    return apply
+
+
 def _resolve(name: str, params: dict) -> callable:
     if name in _KERAS_MAP:
         cls, defaults = _KERAS_MAP[name]
