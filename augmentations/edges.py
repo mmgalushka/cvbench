@@ -8,14 +8,17 @@ def aug_fade_horizontal(
     strength: float = 1.0,
 ) -> np.ndarray:
     """
-    Fade one horizontal side toward fade_to grey value.
-    side: 'left' or 'right'
+    Fade horizontal edge(s) toward fade_to grey value.
+    side: 'left', 'right', or 'both'
     strength: 0=no effect, 1=full fade at edge
     """
     w = img.shape[1]
-    ramp = np.linspace(0, strength, w, dtype=np.float32)
-    if side == 'left':
-        ramp = ramp[::-1]
+    if side == 'both':
+        ramp = np.abs(np.linspace(-strength, strength, w, dtype=np.float32))
+    else:
+        ramp = np.linspace(0, strength, w, dtype=np.float32)
+        if side == 'left':
+            ramp = ramp[::-1]
     out = img.astype(np.float32) * (1 - ramp) + fade_to * ramp
     return np.clip(out, 0, 255).astype(np.uint8)
 
@@ -27,13 +30,16 @@ def aug_fade_vertical(
     strength: float = 1.0,
 ) -> np.ndarray:
     """
-    Fade one vertical side toward fade_to grey value.
-    side: 'top' or 'bottom'
+    Fade vertical edge(s) toward fade_to grey value.
+    side: 'top', 'bottom', or 'both'
     """
     h = img.shape[0]
-    ramp = np.linspace(0, strength, h, dtype=np.float32).reshape(-1, 1)
-    if side == 'top':
-        ramp = ramp[::-1]
+    if side == 'both':
+        ramp = np.abs(np.linspace(-strength, strength, h, dtype=np.float32)).reshape(-1, 1)
+    else:
+        ramp = np.linspace(0, strength, h, dtype=np.float32).reshape(-1, 1)
+        if side == 'top':
+            ramp = ramp[::-1]
     out = img.astype(np.float32) * (1 - ramp) + fade_to * ramp
     return np.clip(out, 0, 255).astype(np.uint8)
 

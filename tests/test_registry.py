@@ -90,7 +90,7 @@ def test_range_param_varies(monkeypatch):
 
     monkeypatch.setattr(aug_mod, "aug_blur", fake_blur)
 
-    t = _transform("aug_blur", prob=1.0, radius_range=[1, 5])
+    t = _transform("aug_blur", prob=1.0, radius=[1, 5])
     pipeline = build_aug_pipeline([t])
     img = np.full((4, 4), 128, dtype=np.float32)
     for _ in range(30):
@@ -113,7 +113,7 @@ def test_range_and_fixed_mixed(monkeypatch):
 
     monkeypatch.setattr(aug_mod, "aug_blur", fake_aug)
 
-    t = _transform("aug_blur", prob=1.0, radius_range=[0.5, 2.0], strength=0.9)
+    t = _transform("aug_blur", prob=1.0, radius=[0.5, 2.0], strength=0.9)
     pipeline = build_aug_pipeline([t])
     img = np.full((4, 4), 128, dtype=np.float32)
     for _ in range(10):

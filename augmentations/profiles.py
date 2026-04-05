@@ -5,7 +5,7 @@ def aug_random_profile_h(
     img: np.ndarray,
     n_changes: int = 5,
     max_delta: float = 60.0,
-    seed: int = 0,
+    seed: int = None,
 ) -> np.ndarray:
     """
     Apply a random smooth brightness profile along the horizontal axis.
@@ -28,7 +28,7 @@ def aug_random_profile_v(
     img: np.ndarray,
     n_changes: int = 5,
     max_delta: float = 60.0,
-    seed: int = 0,
+    seed: int = None,
 ) -> np.ndarray:
     """
     Apply a random smooth brightness profile along the vertical axis.

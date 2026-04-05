@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def aug_salt_pepper(img: np.ndarray, density: float, seed: int = 0) -> np.ndarray:
+def aug_salt_pepper(img: np.ndarray, density: float, seed: int = None) -> np.ndarray:
     """Replace `density` fraction of pixels with 0 or 255 (50/50 split)."""
     rng = np.random.default_rng(seed)
     out = img.copy()
