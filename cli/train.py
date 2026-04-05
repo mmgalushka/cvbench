@@ -1,14 +1,35 @@
+import json
+
 import click
 
 from core.config import build_config, save_config
-from core.data import build_datasets, get_class_names
+from core.data import (
+    build_datasets,
+    get_class_distribution,
+    get_class_names,
+    print_class_balance,
+    resolve_class_weights,
+)
 from core.model import build_model
-from core.registry import resolve_aug
 from core.runs import make_run_name, make_unique_dir
 from core import trainer as _trainer
 
-# Import builtin augmentations to trigger registration
-import augmentations  # noqa: F401
+
+def _parse_class_weight(value: str | None):
+    """Parse --class-weight CLI value: null → None, auto → 'auto', JSON → dict."""
+    if value is None or value.lower() in ("null", "none"):
+        return None
+    if value.lower() == "auto":
+        return "auto"
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+    raise click.BadParameter(
+        f"Expected null, auto, or a JSON dict like '{{\"cat\": 1.0, \"dog\": 2.5}}', got: {value!r}"
+    )
 
 
 _DEFAULT_EXPERIMENTS_DIR = "experiments"
@@ -26,15 +47,15 @@ _DEFAULT_EXPERIMENTS_DIR = "experiments"
 @click.option("--batch-size", default=None, type=int, help="Batch size.")
 @click.option("--input-size", default=None, type=int, help="Image input size in pixels.")
 @click.option("--dropout", default=None, type=float, help="Dropout rate.")
-@click.option("--aug-preset", default=None, help="Augmentation preset name.")
-@click.option("--aug-placement", default=None,
-              type=click.Choice(["inside_model", "outside_model"]),
-              help="Augmentation placement.")
+@click.option("--augmentation", "aug_file", default=None, type=click.Path(exists=True),
+              help="Path to an augmentation YAML file.")
 @click.option("--resume", default=None,
               help="Path to a checkpoint file to resume training from.")
+@click.option("--class-weight", "class_weight_raw", default=None,
+              help="Class weighting: null | auto | '{\"cat\": 1.0, \"dog\": 2.5}'")
 def train(
     data_dir, output_dir, from_dir, backbone, epochs, lr,
-    batch_size, input_size, dropout, aug_preset, aug_placement, resume,
+    batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
 ):
     """Train a model on DATA_DIR.
 
@@ -42,6 +63,8 @@ def train(
     All parameters have sensible defaults and can be overridden individually.
     """
     from datetime import date
+
+    class_weight_cfg = _parse_class_weight(class_weight_raw)
 
     cfg = build_config(
         data_dir=data_dir,
@@ -52,9 +75,12 @@ def train(
         batch_size=batch_size,
         input_size=input_size,
         dropout=dropout,
-        aug_preset=aug_preset,
-        aug_placement=aug_placement,
+        class_weight=class_weight_cfg,
     )
+
+    if aug_file:
+        from core.config import load_aug_file
+        cfg.augmentation = load_aug_file(aug_file)
 
     # Determine output directory
     if output_dir is not None:
@@ -67,6 +93,13 @@ def train(
     class_names = get_class_names(cfg.data.train_dir)
     cfg.data.classes = class_names
     cfg.model.num_classes = len(class_names)
+
+    # Class balance report + resolve weights
+    class_dist = get_class_distribution(cfg.data.train_dir)
+    print_class_balance(class_dist, cfg.training.class_weight)
+    resolved_weights = resolve_class_weights(
+        cfg.training.class_weight, class_dist, class_names
+    )
     cfg.run.name = exp_dir.rstrip("/").split("/")[-1]
     cfg.run.date = date.today().strftime("%Y-%m-%d")
     cfg.run.status = "running"
@@ -74,22 +107,24 @@ def train(
     # Write config.yaml before training starts — single source of truth
     save_config(cfg, exp_dir)
 
-    # Build augmentation layer
-    aug_layer = resolve_aug(cfg.augmentation.preset, cfg.augmentation.params)
-
     # Build datasets
-    train_ds, val_ds, _ = build_datasets(cfg)
+    train_ds, val_ds, _, num_train = build_datasets(cfg)
 
-    # For outside_model, pass None so the model graph is aug-free
-    inside_aug = aug_layer if cfg.augmentation.placement == "inside_model" else None
-    model = build_model(cfg, aug_layer=inside_aug)
-
-    if cfg.augmentation.placement == "outside_model":
+    # Apply augmentation pipeline outside the model via tf.data
+    if cfg.augmentation.transforms:
         import tensorflow as tf
-        train_ds = train_ds.map(
-            lambda x, y: (aug_layer(x, training=True), y),
-            num_parallel_calls=tf.data.AUTOTUNE,
-        )
+        from augmentations.pipeline import build_aug_pipeline
+
+        aug_fn = build_aug_pipeline(cfg.augmentation.transforms)
+
+        def _aug_map(x, y):
+            x_aug = tf.numpy_function(lambda img: aug_fn(img), [x], tf.float32)
+            x_aug.set_shape(x.shape)
+            return x_aug, y
+
+        train_ds = train_ds.map(_aug_map, num_parallel_calls=tf.data.AUTOTUNE)
+
+    model = build_model(cfg)
 
     _trainer.train(
         cfg=cfg,
@@ -99,4 +134,6 @@ def train(
         class_names=class_names,
         model=model,
         resume_checkpoint=resume,
+        num_train_samples=num_train,
+        class_weight=resolved_weights,
     )

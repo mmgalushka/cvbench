@@ -57,8 +57,6 @@ def _read_entry(exp_dir: Path) -> dict | None:
         "dir": str(exp_dir),
         "backbone": cfg.model.backbone,
         "lr": cfg.training.learning_rate,
-        "aug_preset": cfg.augmentation.preset,
-        "aug_placement": cfg.augmentation.placement,
         "epochs": cfg.training.epochs,
         "val_accuracy": cfg.run.val_accuracy,
         "test_accuracy": cfg.run.test_accuracy,

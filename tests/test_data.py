@@ -56,5 +56,5 @@ def test_build_datasets_returns_class_names(image_dir):
     cfg.data.train_dir = str(image_dir / "train")
     cfg.data.val_dir = str(image_dir / "val")
 
-    _, _, class_names = build_datasets(cfg)
+    _, _, class_names, _ = build_datasets(cfg)
     assert class_names == ["cat", "dog"]

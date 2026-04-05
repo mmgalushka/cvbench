@@ -20,6 +20,7 @@ class DataConfig:
     test_dir: str = ""
     classes: list = field(default_factory=list)
     batch_size: int = 16
+    val_split: float = 0.2  # fraction of train used for val when val/ dir is absent
 
 
 @dataclass
@@ -32,10 +33,15 @@ class ModelConfig:
 
 
 @dataclass
-class AugmentationConfig:
-    preset: str = "light"
-    placement: str = "inside_model"
+class TransformConfig:
+    name: str
+    prob: float = 1.0
     params: dict = field(default_factory=dict)
+
+
+@dataclass
+class AugmentationConfig:
+    transforms: list = field(default_factory=list)  # list[TransformConfig]
 
 
 @dataclass
@@ -58,6 +64,7 @@ class CheckpointsConfig:
 class TrainingConfig:
     epochs: int = 10
     learning_rate: float = 1e-4
+    class_weight: Any = None  # null | "auto" | {class_name: weight, ...}
     interrupt: InterruptConfig = field(default_factory=InterruptConfig)
     checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
 
@@ -111,11 +118,14 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
     )
 
     aug = d.get("augmentation", {})
-    cfg.augmentation = AugmentationConfig(
-        preset=aug.get("preset", cfg.augmentation.preset),
-        placement=aug.get("placement", cfg.augmentation.placement),
-        params=aug.get("params", cfg.augmentation.params),
-    )
+    raw_transforms = aug.get("transforms", [])
+    transforms = []
+    for t in raw_transforms:
+        name = t["name"]
+        prob = t.get("prob", 1.0)
+        params = {k: v for k, v in t.items() if k not in ("name", "prob")}
+        transforms.append(TransformConfig(name=name, prob=prob, params=params))
+    cfg.augmentation = AugmentationConfig(transforms=transforms)
 
     tr = d.get("training", {})
     intr = tr.get("interrupt", {})
@@ -123,6 +133,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
     cfg.training = TrainingConfig(
         epochs=tr.get("epochs", cfg.training.epochs),
         learning_rate=tr.get("learning_rate", cfg.training.learning_rate),
+        class_weight=tr.get("class_weight", cfg.training.class_weight),
         interrupt=InterruptConfig(
             enabled=intr.get("enabled", cfg.training.interrupt.enabled),
             save_checkpoint=intr.get("save_checkpoint", cfg.training.interrupt.save_checkpoint),
@@ -168,8 +179,7 @@ def build_config(
     batch_size: int | None = None,
     input_size: int | None = None,
     dropout: float | None = None,
-    aug_preset: str | None = None,
-    aug_placement: str | None = None,
+    class_weight: Any = None,
 ) -> CVBenchConfig:
     """Build a CVBenchConfig from CLI options.
 
@@ -199,10 +209,8 @@ def build_config(
         cfg.model.input_size = input_size
     if dropout is not None:
         cfg.model.dropout = dropout
-    if aug_preset is not None:
-        cfg.augmentation.preset = aug_preset
-    if aug_placement is not None:
-        cfg.augmentation.placement = aug_placement
+    if class_weight is not None:
+        cfg.training.class_weight = class_weight
 
     return cfg
 
@@ -213,8 +221,14 @@ def save_config(cfg: CVBenchConfig, exp_dir: str):
     path.parent.mkdir(parents=True, exist_ok=True)
 
     def _to_dict(obj):
+        if isinstance(obj, TransformConfig):
+            d = {"name": obj.name, "prob": obj.prob}
+            d.update(obj.params)
+            return d
         if dataclasses.is_dataclass(obj):
-            return {k: _to_dict(v) for k, v in dataclasses.asdict(obj).items()}
+            return {f.name: _to_dict(getattr(obj, f.name)) for f in dataclasses.fields(obj)}
+        if isinstance(obj, list):
+            return [_to_dict(item) for item in obj]
         return obj
 
     with open(path, "w") as f:
@@ -229,6 +243,20 @@ def load_config(exp_dir: str) -> CVBenchConfig:
     with open(path) as f:
         raw = yaml.safe_load(f) or {}
     return _dict_to_config(raw)
+
+
+def load_aug_file(path: str) -> AugmentationConfig:
+    """Load an augmentation YAML file and return an AugmentationConfig."""
+    with open(path) as f:
+        raw = yaml.safe_load(f) or {}
+    raw_transforms = raw.get("transforms", [])
+    transforms = []
+    for t in raw_transforms:
+        name = t["name"]
+        prob = t.get("prob", 1.0)
+        params = {k: v for k, v in t.items() if k not in ("name", "prob")}
+        transforms.append(TransformConfig(name=name, prob=prob, params=params))
+    return AugmentationConfig(transforms=transforms)
 
 
 def update_run_status(exp_dir: str, **kwargs):

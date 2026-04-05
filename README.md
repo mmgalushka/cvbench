@@ -16,7 +16,7 @@ GPU-enabled computer vision training sandbox. Keras + TensorFlow + JupyterLab in
 Create a directory to hold your data, configs, and outputs. `~/cvbench` is a convenient default:
 
 ```bash
-mkdir -p ~/cvbench/{data,augmentations,configs,experiments}
+mkdir -p ~/cvbench/{data,configs,experiments}
 cd ~/cvbench
 ```
 
@@ -33,7 +33,6 @@ docker run -d \
   -p 0.0.0.0:8888:8888 \
   -p 0.0.0.0:6006:6006 \
   -v ~/cvbench/data:/home/cvbench/data \
-  -v ~/cvbench/augmentations:/home/cvbench/augmentations \
   -v ~/cvbench/configs:/home/cvbench/configs \
   -v ~/cvbench/experiments:/home/cvbench/experiments \
   --restart unless-stopped \
@@ -48,7 +47,6 @@ docker run -d \
   -p 0.0.0.0:8888:8888 \
   -p 0.0.0.0:6006:6006 \
   -v ~/cvbench/data:/home/cvbench/data \
-  -v ~/cvbench/augmentations:/home/cvbench/augmentations \
   -v ~/cvbench/configs:/home/cvbench/configs \
   -v ~/cvbench/experiments:/home/cvbench/experiments \
   --restart unless-stopped \
@@ -76,7 +74,6 @@ services:
       - "0.0.0.0:6006:6006"
     volumes:
       - ~/cvbench/data:/home/cvbench/data
-      - ~/cvbench/augmentations:/home/cvbench/augmentations
       - ~/cvbench/configs:/home/cvbench/configs
       - ~/cvbench/experiments:/home/cvbench/experiments
     restart: unless-stopped
@@ -94,7 +91,6 @@ services:
       - "0.0.0.0:6006:6006"
     volumes:
       - ~/cvbench/data:/home/cvbench/data
-      - ~/cvbench/augmentations:/home/cvbench/augmentations
       - ~/cvbench/configs:/home/cvbench/configs
       - ~/cvbench/experiments:/home/cvbench/experiments
     restart: unless-stopped
@@ -147,14 +143,16 @@ docker exec cvbench tensorboard --logdir /home/cvbench/experiments --host 0.0.0.
 ## CLI reference
 
 ```
-train     <data_dir> [--epochs N] [--backbone NAME] [--lr FLOAT] [--batch-size N]
-                     [--aug-preset NAME] [--resume CHECKPOINT] [--output DIR]
-evaluate  <run_dir>  [--split val|test] [--output-dir PATH]
-predict   --checkpoint <path> --input <image-or-folder>
-runs      list       [dir] [--sort val_accuracy|date|backbone]
-runs      compare    <run_a_dir> <run_b_dir>
-runs      best       [dir] [--metric val_accuracy|val_loss|test_accuracy]
-generate  [out_dir]  [--train N] [--val N] [--test N] [--image-size N]
+train         <data_dir> [--epochs N] [--backbone NAME] [--lr FLOAT] [--batch-size N]
+                         [--augmentation FILE] [--resume CHECKPOINT] [--output DIR]
+evaluate      <run_dir>  [--split val|test] [--output-dir PATH]
+predict       --checkpoint <path> --input <image-or-folder>
+runs          list       [dir] [--sort val_accuracy|date|backbone]
+runs          compare    <run_a_dir> <run_b_dir>
+runs          best       [dir] [--metric val_accuracy|val_loss|test_accuracy]
+generate      [out_dir]  [--train N] [--val N] [--test N] [--image-size N]
+augmentations list
+augmentations example    [light|standard|heavy|reference] [--output FILE]
 ```
 
 ---
@@ -164,29 +162,32 @@ generate  [out_dir]  [--train N] [--val N] [--test N] [--image-size N]
 | Host path                    | Container path                   | Notes                             |
 |------------------------------|----------------------------------|-----------------------------------|
 | `~/cvbench/data`             | `/home/cvbench/data`             | Image datasets (real + synthetic) |
-| `~/cvbench/augmentations`    | `/home/cvbench/augmentations`    | Custom augmentation Python files  |
-| `~/cvbench/configs`          | `/home/cvbench/configs`          | YAML experiment configs           |
+| `~/cvbench/configs`          | `/home/cvbench/configs`          | YAML configs and augmentation files |
 | `~/cvbench/experiments`      | `/home/cvbench/experiments`      | Experiment directories            |
 
 ---
 
-## Custom augmentations
+## Augmentation
 
-Place a Python file in `~/cvbench/augmentations/` and reference it in your config:
+Augmentation is configured via a standalone YAML file and passed to `train` with `--augmentation`.
 
-```python
-# augmentations/my_aug.py
-from core.registry import register_aug
-import keras
-
-@register_aug("my_aug")
-def build(params: dict) -> keras.Sequential:
-    return keras.Sequential([
-        keras.layers.RandomFlip("horizontal"),
-        keras.layers.RandomRotation(params.get("rotation", 0.1)),
-    ])
-```
+**Discover what's available:**
 
 ```bash
-train data --aug-preset my_aug
+augmentations list                          # all transforms + default params
+augmentations example                       # list presets (light / standard / heavy / reference)
+```
+
+**Generate a starting config:**
+
+```bash
+augmentations example standard --output configs/my_aug.yaml
+# edit configs/my_aug.yaml as needed
+train data/ --augmentation configs/my_aug.yaml --epochs 30
+```
+
+**`reference` preset** generates a commented-out file showing every available transform — open it in an editor and uncomment what you want:
+
+```bash
+augmentations example reference --output configs/aug_ref.yaml
 ```

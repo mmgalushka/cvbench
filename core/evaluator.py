@@ -9,10 +9,9 @@ import numpy as np
 
 def evaluate(
     model: keras.Model,
-    dataset,
+    test_ds,
     class_names: list[str],
     run_dir: str,
-    split: str = "test",
     output_dir: str | None = None,
 ) -> dict:
     """Run evaluation, print report, write eval_report.json and confusion_matrix.png.
@@ -24,7 +23,7 @@ def evaluate(
 
     # Collect predictions and ground truth
     y_true, y_pred = [], []
-    for images, labels in dataset:
+    for images, labels in test_ds:
         preds = model.predict(images, verbose=0)
         y_pred.extend(np.argmax(preds, axis=1))
         y_true.extend(np.argmax(labels.numpy(), axis=1))
@@ -39,7 +38,7 @@ def evaluate(
     top3_acc = None
     if model.output_shape[-1] >= 3:
         all_preds = []
-        for images, _ in dataset:
+        for images, _ in test_ds:
             all_preds.append(model.predict(images, verbose=0))
         all_preds = np.concatenate(all_preds, axis=0)
         top3 = np.argsort(all_preds, axis=1)[:, -3:]
@@ -66,7 +65,7 @@ def evaluate(
     _save_confusion_matrix(y_true, y_pred, class_names, out_dir / "confusion_matrix.png")
 
     report = {
-        "split": split,
+        "split": "test",
         "n_images": n,
         "overall_accuracy": round(overall_acc, 4),
         "top3_accuracy": round(top3_acc, 4) if top3_acc is not None else None,
@@ -77,7 +76,7 @@ def evaluate(
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
 
-    _print_report(report, class_names, run_dir, split, out_dir)
+    _print_report(report, class_names, run_dir, out_dir)
     return report
 
 
@@ -111,13 +110,13 @@ def _save_confusion_matrix(y_true, y_pred, class_names, path: Path):
     plt.close(fig)
 
 
-def _print_report(report: dict, class_names: list[str], run_dir: str, split: str, out_dir: Path):
+def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: Path):
     run_name = Path(run_dir).name
     w = 55
     print("━" * w)
     print(f" CVBench — evaluate  |  run: {run_name}")
     print("━" * w)
-    print(f" Split             : {split}")
+    print(f" Split             : test")
     print(f" Images evaluated  : {report['n_images']}")
     print(f" Overall accuracy  : {report['overall_accuracy'] * 100:.1f}%")
     if report["top3_accuracy"] is not None:
