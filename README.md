@@ -13,10 +13,10 @@ GPU-enabled computer vision training sandbox. Keras + TensorFlow + JupyterLab in
 
 ### Prepare a workspace
 
-Create a directory to hold your data, configs, and outputs. `~/cvbench` is a convenient default:
+Create a directory to hold your data, workspace files, and outputs. `~/cvbench` is a convenient default:
 
 ```bash
-mkdir -p ~/cvbench/{data,configs,experiments}
+mkdir -p ~/cvbench/{data,workspace,experiments}
 cd ~/cvbench
 ```
 
@@ -33,7 +33,7 @@ docker run -d \
   -p 0.0.0.0:8888:8888 \
   -p 0.0.0.0:6006:6006 \
   -v ~/cvbench/data:/home/cvbench/data \
-  -v ~/cvbench/configs:/home/cvbench/configs \
+  -v ~/cvbench/workspace:/home/cvbench/workspace \
   -v ~/cvbench/experiments:/home/cvbench/experiments \
   --restart unless-stopped \
   mmgalushka/cvbench:latest
@@ -47,7 +47,7 @@ docker run -d \
   -p 0.0.0.0:8888:8888 \
   -p 0.0.0.0:6006:6006 \
   -v ~/cvbench/data:/home/cvbench/data \
-  -v ~/cvbench/configs:/home/cvbench/configs \
+  -v ~/cvbench/workspace:/home/cvbench/workspace \
   -v ~/cvbench/experiments:/home/cvbench/experiments \
   --restart unless-stopped \
   mmgalushka/cvbench:latest
@@ -78,7 +78,7 @@ services:
       - "0.0.0.0:6006:6006"
     volumes:
       - ~/cvbench/data:/home/cvbench/data
-      - ~/cvbench/configs:/home/cvbench/configs
+      - ~/cvbench/workspace:/home/cvbench/workspace
       - ~/cvbench/experiments:/home/cvbench/experiments
     restart: unless-stopped
 ```
@@ -95,7 +95,7 @@ services:
       - "0.0.0.0:6006:6006"
     volumes:
       - ~/cvbench/data:/home/cvbench/data
-      - ~/cvbench/configs:/home/cvbench/configs
+      - ~/cvbench/workspace:/home/cvbench/workspace
       - ~/cvbench/experiments:/home/cvbench/experiments
     restart: unless-stopped
 ```
@@ -166,7 +166,7 @@ augmentations example    [light|standard|heavy|reference] [--output FILE]
 | Host path                    | Container path                   | Notes                             |
 |------------------------------|----------------------------------|-----------------------------------|
 | `~/cvbench/data`             | `/home/cvbench/data`             | Image datasets (real + synthetic) |
-| `~/cvbench/configs`          | `/home/cvbench/configs`          | YAML configs and augmentation files |
+| `~/cvbench/workspace`        | `/home/cvbench/workspace`        | Augmentation configs, user notebooks, and other working files |
 | `~/cvbench/experiments`      | `/home/cvbench/experiments`      | Experiment directories            |
 
 ---
@@ -185,13 +185,13 @@ augmentations example                       # list presets (light / standard / h
 **Generate a starting config:**
 
 ```bash
-augmentations example standard --output configs/my_aug.yaml
-# edit configs/my_aug.yaml as needed
-train data/ --augmentation configs/my_aug.yaml --epochs 30
+augmentations example standard --output workspace/my_aug.yaml
+# edit workspace/my_aug.yaml as needed
+train data/ --augmentation workspace/my_aug.yaml --epochs 30
 ```
 
 **`reference` preset** generates a commented-out file showing every available transform — open it in an editor and uncomment what you want:
 
 ```bash
-augmentations example reference --output configs/aug_ref.yaml
+augmentations example reference --output workspace/aug_ref.yaml
 ```
