@@ -44,48 +44,62 @@ feat!: rename --from flag to --baseline in train CLI
 
 The scope is optional but useful for larger projects: `feat(trainer): ...`
 
-## What happens automatically
+## CI pipeline — when it runs
 
-**On every push / PR:**
-The CI pipeline runs `pytest -m 'not tf'` on GitHub Actions. A green check is required
-before merging.
+The CI pipeline runs `pytest -m 'not tf'` automatically in two situations:
 
-**On every merge to `main`:**
-The release pipeline runs `cz bump`, which:
-1. Reads all commits since the last release tag
-2. Determines the next version number from the commit prefixes
-3. Updates `version` in `pyproject.toml`
-4. Appends an entry to `CHANGELOG.md`
-5. Creates a git commit and tag (e.g. `v0.2.0`), then pushes both back to the repo
+- **When you open or update a pull request** targeting `main`
+- **When a commit lands directly on `main`** (e.g. the version bump commit from a release)
 
-If no releasable commits are present (only `chore:`, `docs:`, etc.), the pipeline skips
-the bump silently — no version change, no tag.
+A green CI check is required before a PR can be merged. CI does **not** run on every
+push to a feature branch — only when the PR is opened or updated against `main`.
 
-## Previewing the next version bump
+## Versioning
 
-Before opening a PR, you can see what version would be bumped and what the CHANGELOG
-entry would look like:
+CVBench uses automated versioning — you never edit version numbers or changelogs by hand.
+
+**How the version number is determined:**
+
+When a release is triggered, [Commitizen](https://commitizen-tools.github.io/commitizen/)
+scans **all commits since the last release tag** and picks the highest applicable bump:
+
+| Commits present since last release | Version bump |
+|------------------------------------|--------------|
+| Only `chore:`, `docs:`, `refactor:`, `test:` | none — release is skipped |
+| At least one `fix:` | patch: `0.7.0 → 0.7.1` |
+| At least one `feat:` | minor: `0.7.0 → 0.8.0` |
+| At least one `feat!:` or `BREAKING CHANGE` | minor: `0.7.0 → 0.8.0` (until v1.0.0) |
+
+This means you can accumulate many commits across multiple merged PRs — fixes, features,
+chores — and the version is calculated from all of them together when you decide to release.
+A single `feat:` among ten `fix:` commits still produces a minor bump.
+
+**To preview what version would be bumped before releasing:**
 
 ```bash
 ./helper.sh release --dry-run
 ```
 
-## Publishing to Docker Hub
+## Making a release
 
-Docker images are published automatically — you never need to push manually.
+Releases are **manual** — nothing is published automatically on merge. You decide when
+to release after accumulating the changes you want.
 
-**How it works:**
+**Steps:**
 
-1. Merge a `feat:` or `fix:` commit to `main`
-2. The Release pipeline runs `cz bump`, creates a version tag (e.g. `v0.2.3`), and pushes it
-3. The Docker job in the same pipeline immediately builds and pushes to Docker Hub:
-   - `mmgalushka/cvbench:0.2.3`
-   - `mmgalushka/cvbench:latest`
+1. Merge all the PRs you want to include into `main`
+2. Go to GitHub → **Actions** → **Release** → **Run workflow** → **Run workflow**
+3. The pipeline will:
+   - Run `cz bump` to calculate the next version from all commits since the last tag
+   - Update `version` in `pyproject.toml` and append an entry to `CHANGELOG.md`
+   - Create a version commit and tag (e.g. `v0.8.0`) and push both to the repo
+   - Create a GitHub Release at the new tag, populated with the changelog
+   - Build and push the Docker image to Docker Hub:
+     - `mmgalushka/cvbench:0.8.0`
+     - `mmgalushka/cvbench:latest`
 
-**To force-publish the current version without bumping** (e.g. after fixing a pipeline bug):
-
-1. Go to GitHub → **Actions** → **Release**
-2. Click **Run workflow** → leave "Push current version to Docker Hub" checked → **Run workflow**
+If there are no releasable commits (only `chore:`, `docs:`, etc.), `cz bump` skips
+the bump and the Docker build is also skipped — nothing is published.
 
 **Required repository secrets** (GitHub → Settings → Secrets and variables → Actions):
 
@@ -96,6 +110,7 @@ Docker images are published automatically — you never need to push manually.
 
 ## What NOT to do
 
-- **Do not manually edit `CHANGELOG.md`** — it is generated automatically by the pipeline.
-- **Do not manually edit the `version` field in `pyproject.toml`** — the pipeline owns it.
+- **Do not manually edit `CHANGELOG.md`** — it is generated automatically on release.
+- **Do not manually edit the `version` field in `pyproject.toml`** — the release pipeline owns it.
 - **Do not push directly to `main`** — always go through a PR so CI runs first.
+- **Do not create tags manually** — the release pipeline creates and pushes the version tag.
