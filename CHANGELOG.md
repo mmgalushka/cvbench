@@ -1,3 +1,9 @@
+## v0.7.0 (2026-04-06)
+
+### Feat
+
+- replace configs mount with workspace directory
+
 ## v0.6.1 (2026-04-05)
 
 ### Fix
