@@ -64,8 +64,13 @@ def evaluate(
             "support": support,
         }
 
-    # Confusion matrix PNG
-    _save_confusion_matrix(y_true, y_pred, class_names, out_dir / "confusion_matrix.png")
+    # Confusion matrix
+    n_cls = len(class_names)
+    cm = np.zeros((n_cls, n_cls), dtype=int)
+    for t, p in zip(y_true, y_pred):
+        cm[t, p] += 1
+
+    _save_confusion_matrix(cm, class_names, out_dir / "confusion_matrix.png")
 
     report = {
         "split": "test",
@@ -79,20 +84,16 @@ def evaluate(
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
 
-    _print_report(report, class_names, run_dir, out_dir)
+    _print_report(report, class_names, run_dir, out_dir, cm)
     return report
 
 
-def _save_confusion_matrix(y_true, y_pred, class_names, path: Path):
+def _save_confusion_matrix(cm: np.ndarray, class_names: list[str], path: Path):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     n = len(class_names)
-    cm = np.zeros((n, n), dtype=int)
-    for t, p in zip(y_true, y_pred):
-        cm[t, p] += 1
-
     fig, ax = plt.subplots(figsize=(max(6, n), max(5, n)))
     im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
     fig.colorbar(im)
@@ -113,7 +114,92 @@ def _save_confusion_matrix(y_true, y_pred, class_names, path: Path):
     plt.close(fig)
 
 
-def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: Path):
+def _print_confusion_matrix(cm: np.ndarray, class_names: list[str]):
+    """Print a colour-coded confusion matrix to the terminal using ANSI 256 colours.
+
+    Uses the normal layout (horizontal column headers) when the matrix fits the
+    terminal width, otherwise falls back to the staircase layout where column
+    labels are right-aligned and connected by L-shaped pseudo-graphic lines.
+    """
+    import shutil
+
+    n = len(class_names)
+    label_w = max(len(cls) for cls in class_names)
+    max_val = int(cm.max()) if cm.max() > 0 else 1
+    term_w = shutil.get_terminal_size((80, 24)).columns
+
+    # ANSI 256-colour blue ramp: white → pure blue (no cyan tint)
+    # 231=#ffffff  189=#d7d7ff  147=#afafff  105=#8787ff  63=#5f5fff  21=#0000ff
+    _BLUE_RAMP = [231, 189, 147, 105, 63, 21]
+    _RESET = "\033[0m"
+
+    def _fmt_cell(val: int, is_diag: bool, cell_w: int) -> str:
+        idx = min(int(val / max_val * (len(_BLUE_RAMP) - 1)), len(_BLUE_RAMP) - 1)
+        bg = f"\033[48;5;{_BLUE_RAMP[idx]}m"
+        fg = "\033[30m" if idx < 3 else "\033[97m"
+        bold = "\033[1m" if is_diag else ""
+        return f"{bg}{fg}{bold}{val:^{cell_w}}{_RESET}"
+
+    # --- measure whether normal layout fits ---
+    # Cells use 1-space padding each side; 1 space between columns.
+    # In normal layout cells must also be wide enough for the column label.
+    num_w = len(str(max_val)) + 2            # digits + 1-space padding each side
+    normal_cell_w = max(num_w, label_w)      # wide enough for label above cell
+    row_prefix_w = 3 + label_w + 3          # "   " + label + " | "
+    grid_w = n * normal_cell_w + (n - 1)    # cells + 1-space separators
+    normal_fits = (row_prefix_w + grid_w) <= term_w
+
+    print(" Confusion matrix (rows = true, cols = predicted):")
+
+    if normal_fits:
+        # ── normal layout ──────────────────────────────────────────────
+        pad = " " * (label_w + 3)
+        col_header = " ".join(f"{cls:^{normal_cell_w}}" for cls in class_names)
+        print(f"   {pad}{col_header}")
+        for i, true_cls in enumerate(class_names):
+            cells = " ".join(_fmt_cell(int(cm[i, j]), i == j, normal_cell_w) for j in range(n))
+            print(f"   {true_cls:<{label_w}} | {cells}")
+    else:
+        # ── staircase layout ───────────────────────────────────────────
+        # Cells only need to fit the number — labels live in the staircase.
+        # Always use the minimum width: digits + 1-space padding each side.
+        cell_w = num_w
+
+        # Left edge of each column within the data grid
+        col_offsets = [row_prefix_w + j * (cell_w + 1) + cell_w // 2
+                       for j in range(n)]
+
+        # Labels are left-aligned: all first characters start at align_col,
+        # which is just past the last column's corner (┌ + 1 dash + space).
+        align_col = col_offsets[-1] + 3
+
+        # Staircase header rows — one per class
+        for i, cls in enumerate(class_names):
+            line = " " * col_offsets[0]          # spaces up to first column
+            for j in range(i):                   # vertical bars for open columns
+                gap = col_offsets[j + 1] - col_offsets[j] - 1
+                line += "│" + " " * gap
+            # Corner + dashes reaching to align_col, then label
+            n_dashes = align_col - col_offsets[i] - 2
+            line += "┌" + "─" * n_dashes + " " + cls
+            print(line)
+
+        # Connector row — vertical bar under every column
+        vert_row = ""
+        for j in range(n):
+            vert_row = vert_row.ljust(col_offsets[j]) + "│"
+        print(vert_row)
+
+        # Data rows
+        for i, true_cls in enumerate(class_names):
+            cells = " ".join(_fmt_cell(int(cm[i, j]), i == j, cell_w) for j in range(n))
+            print(f"   {true_cls:<{label_w}} | {cells}")
+
+    print()
+
+
+def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: Path,
+                  cm: np.ndarray | None = None):
     run_name = Path(run_dir).name
     w = 55
     print("━" * w)
@@ -130,6 +216,8 @@ def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: P
         print(f"   {cls:<10} P: {m['precision']:.2f}  R: {m['recall']:.2f}  "
               f"F1: {m['f1']:.2f}  ({m['support']} samples)")
     print()
+    if cm is not None:
+        _print_confusion_matrix(cm, class_names)
     print(f" Saved:")
     print(f"   {out_dir / 'eval_report.json'}")
     print(f"   {out_dir / 'confusion_matrix.png'}")
