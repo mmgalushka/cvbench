@@ -19,6 +19,18 @@ from core import evaluator as _evaluator
 @click.option("--output-dir", default=None, help="Where to write eval outputs (default: run_dir).")
 def evaluate(run_dir, output_dir):
     """Evaluate a trained model in RUN_DIR on the held-out test split."""
+    import tensorflow as tf
+    tf.get_logger().setLevel("ERROR")
+    import absl.logging
+    absl.logging.set_verbosity(absl.logging.ERROR)
+
+    gpus = tf.config.list_physical_devices("GPU")
+    if gpus:
+        names = ", ".join(g.name for g in gpus)
+        print(f"\033[92m🟢 GPU      : {len(gpus)} device(s) — {names}\033[0m")
+    else:
+        print(f"\033[93m⚠️  GPU      : not available — evaluating on CPU\033[0m")
+
     cfg = load_config(run_dir)
 
     class_names = get_class_names(cfg.data.train_dir)
@@ -27,11 +39,6 @@ def evaluate(run_dir, output_dir):
 
     n_test = sum(1 for _ in Path(cfg.data.test_dir).glob("*/*"))
     print(f" Found {n_test} files for evaluation ({len(class_names)} classes).")
-
-    import tensorflow as tf
-    tf.get_logger().setLevel("ERROR")
-    import absl.logging
-    absl.logging.set_verbosity(absl.logging.ERROR)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")

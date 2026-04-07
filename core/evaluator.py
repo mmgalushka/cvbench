@@ -8,20 +8,6 @@ import numpy as np
 import tqdm
 
 
-_GREEN = "\033[92m"
-_YELLOW = "\033[93m"
-_RESET = "\033[0m"
-
-
-def _device_status_line() -> str:
-    """Return a coloured GPU/CPU availability line for the evaluation header."""
-    import tensorflow as tf
-    gpus = tf.config.list_physical_devices("GPU")
-    if gpus:
-        names = ", ".join(g.name for g in gpus)
-        return f"{_GREEN}🟢 GPU      : {len(gpus)} device(s) — {names}{_RESET}"
-    return f"{_YELLOW}⚠️  GPU      : not available — evaluating on CPU{_RESET}"
-
 
 def evaluate(
     model: keras.Model,
@@ -133,7 +119,6 @@ def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: P
     print("━" * w)
     print(f" CVBench — evaluate  |  run: {run_name}")
     print("━" * w)
-    print(f" {_device_status_line()}")
     print(f" Split             : test")
     print(f" Images evaluated  : {report['n_images']}")
     print(f" Overall accuracy  : {report['overall_accuracy'] * 100:.1f}%")
