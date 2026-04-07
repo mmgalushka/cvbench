@@ -17,6 +17,7 @@ dependencies = [
     "scikit-learn",
     "matplotlib",
     "pandas",
+    "tqdm",
 ]
 
 [project.optional-dependencies]

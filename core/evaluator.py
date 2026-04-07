@@ -5,6 +5,22 @@ from pathlib import Path
 
 import keras
 import numpy as np
+import tqdm
+
+
+_GREEN = "\033[92m"
+_YELLOW = "\033[93m"
+_RESET = "\033[0m"
+
+
+def _device_status_line() -> str:
+    """Return a coloured GPU/CPU availability line for the evaluation header."""
+    import tensorflow as tf
+    gpus = tf.config.list_physical_devices("GPU")
+    if gpus:
+        names = ", ".join(g.name for g in gpus)
+        return f"{_GREEN}🟢 GPU      : {len(gpus)} device(s) — {names}{_RESET}"
+    return f"{_YELLOW}⚠️  GPU      : not available — evaluating on CPU{_RESET}"
 
 
 def evaluate(
@@ -21,10 +37,14 @@ def evaluate(
     out_dir = Path(output_dir or run_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Collect predictions and ground truth
-    y_true, y_pred = [], []
-    for images, labels in test_ds:
+    # Single pass: collect predictions, ground truth, and raw scores for top-3
+    n_batches = test_ds.cardinality().numpy()
+    total = int(n_batches) if n_batches > 0 else None
+
+    y_true, y_pred, all_preds = [], [], []
+    for images, labels in tqdm.tqdm(test_ds, total=total, desc=" Evaluating", unit="batch"):
         preds = model.predict(images, verbose=0)
+        all_preds.append(preds)
         y_pred.extend(np.argmax(preds, axis=1))
         y_true.extend(np.argmax(labels.numpy(), axis=1))
 
@@ -34,15 +54,12 @@ def evaluate(
     n = len(y_true)
     overall_acc = float(np.mean(y_true == y_pred))
 
-    # Top-3 accuracy (if num_classes >= 3)
+    # Top-3 accuracy (if num_classes >= 3) — reuse already-collected scores
     top3_acc = None
     if model.output_shape[-1] >= 3:
-        all_preds = []
-        for images, _ in test_ds:
-            all_preds.append(model.predict(images, verbose=0))
-        all_preds = np.concatenate(all_preds, axis=0)
-        top3 = np.argsort(all_preds, axis=1)[:, -3:]
-        top3_acc = float(np.mean([y_true[i] in top3[i] for i in range(len(y_true))]))
+        all_preds_np = np.concatenate(all_preds, axis=0)
+        top3 = np.argsort(all_preds_np, axis=1)[:, -3:]
+        top3_acc = float(np.mean([y_true[i] in top3[i] for i in range(n)]))
 
     # Per-class P / R / F1
     per_class = {}
@@ -116,6 +133,7 @@ def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: P
     print("━" * w)
     print(f" CVBench — evaluate  |  run: {run_name}")
     print("━" * w)
+    print(f" {_device_status_line()}")
     print(f" Split             : test")
     print(f" Images evaluated  : {report['n_images']}")
     print(f" Overall accuracy  : {report['overall_accuracy'] * 100:.1f}%")

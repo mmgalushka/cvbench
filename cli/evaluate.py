@@ -1,7 +1,10 @@
 import contextlib
 import io
+import os
 import warnings
 from pathlib import Path
+
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
 import click
 import keras
@@ -24,6 +27,11 @@ def evaluate(run_dir, output_dir):
 
     n_test = sum(1 for _ in Path(cfg.data.test_dir).glob("*/*"))
     print(f" Found {n_test} files for evaluation ({len(class_names)} classes).")
+
+    import tensorflow as tf
+    tf.get_logger().setLevel("ERROR")
+    import absl.logging
+    absl.logging.set_verbosity(absl.logging.ERROR)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
