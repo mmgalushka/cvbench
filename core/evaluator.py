@@ -64,8 +64,13 @@ def evaluate(
             "support": support,
         }
 
-    # Confusion matrix PNG
-    _save_confusion_matrix(y_true, y_pred, class_names, out_dir / "confusion_matrix.png")
+    # Confusion matrix
+    n_cls = len(class_names)
+    cm = np.zeros((n_cls, n_cls), dtype=int)
+    for t, p in zip(y_true, y_pred):
+        cm[t, p] += 1
+
+    _save_confusion_matrix(cm, class_names, out_dir / "confusion_matrix.png")
 
     report = {
         "split": "test",
@@ -79,20 +84,16 @@ def evaluate(
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
 
-    _print_report(report, class_names, run_dir, out_dir)
+    _print_report(report, class_names, run_dir, out_dir, cm)
     return report
 
 
-def _save_confusion_matrix(y_true, y_pred, class_names, path: Path):
+def _save_confusion_matrix(cm: np.ndarray, class_names: list[str], path: Path):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     n = len(class_names)
-    cm = np.zeros((n, n), dtype=int)
-    for t, p in zip(y_true, y_pred):
-        cm[t, p] += 1
-
     fig, ax = plt.subplots(figsize=(max(6, n), max(5, n)))
     im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
     fig.colorbar(im)
@@ -113,7 +114,36 @@ def _save_confusion_matrix(y_true, y_pred, class_names, path: Path):
     plt.close(fig)
 
 
-def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: Path):
+def _print_confusion_matrix(cm: np.ndarray, class_names: list[str]):
+    """Print a colour-coded confusion matrix to the terminal using ANSI 256 colours."""
+    n = len(class_names)
+    label_w = max(len(cls) for cls in class_names)
+    cell_w = max(label_w, 5)
+    max_val = int(cm.max()) if cm.max() > 0 else 1
+
+    # ANSI 256-colour blue ramp: white → dark blue
+    _BLUE_RAMP = [231, 195, 153, 111, 69, 27]
+    _RESET = "\033[0m"
+
+    def _fmt_cell(val: int, is_diag: bool) -> str:
+        idx = min(int(val / max_val * (len(_BLUE_RAMP) - 1)), len(_BLUE_RAMP) - 1)
+        bg = f"\033[48;5;{_BLUE_RAMP[idx]}m"
+        fg = "\033[30m" if idx < 3 else "\033[97m"
+        bold = "\033[1m" if is_diag else ""
+        return f"{bg}{fg}{bold}{val:^{cell_w}}{_RESET}"
+
+    pad = " " * (label_w + 5)
+    col_header = "  ".join(f"{cls:^{cell_w}}" for cls in class_names)
+    print(f" Confusion matrix (rows = true, cols = predicted):")
+    print(f"   {pad}{col_header}")
+    for i, true_cls in enumerate(class_names):
+        cells = "  ".join(_fmt_cell(int(cm[i, j]), i == j) for j in range(n))
+        print(f"   {true_cls:<{label_w}}  |  {cells}")
+    print()
+
+
+def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: Path,
+                  cm: np.ndarray | None = None):
     run_name = Path(run_dir).name
     w = 55
     print("━" * w)
@@ -130,6 +160,8 @@ def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: P
         print(f"   {cls:<10} P: {m['precision']:.2f}  R: {m['recall']:.2f}  "
               f"F1: {m['f1']:.2f}  ({m['support']} samples)")
     print()
+    if cm is not None:
+        _print_confusion_matrix(cm, class_names)
     print(f" Saved:")
     print(f"   {out_dir / 'eval_report.json'}")
     print(f"   {out_dir / 'confusion_matrix.png'}")
