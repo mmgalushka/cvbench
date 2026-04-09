@@ -11,14 +11,22 @@ import keras
 
 from core.config import load_config
 from core.data import build_dataset, get_class_names
+from core.runs import resolve_run_dir
 from core import evaluator as _evaluator
 
 
 @click.command()
-@click.argument("run_dir", type=click.Path(exists=True))
-@click.option("--output-dir", default=None, help="Where to write eval outputs (default: run_dir).")
-def evaluate(run_dir, output_dir):
-    """Evaluate a trained model in RUN_DIR on the held-out test split."""
+@click.argument("experiment")
+@click.option("--output-dir", default=None, help="Where to write eval outputs (default: run dir).")
+def evaluate(experiment, output_dir):
+    """Evaluate a trained model on the held-out test split.
+
+    EXPERIMENT is the run name (e.g. effnet_b3_lr5e5_cutmix_trial_2024_01_21)
+    or a full path to the run directory. If a bare name is given, it is resolved
+    under experiments/.
+    """
+    run_dir = resolve_run_dir(experiment)
+
     import tensorflow as tf
     tf.get_logger().setLevel("ERROR")
     import absl.logging

@@ -1,10 +1,10 @@
 import click
 
-from core.runs import scan_experiments, best_experiment
+from core.runs import scan_experiments, best_experiment, resolve_run_dir, EXPERIMENTS_DIR
 from core.config import load_config
 
 
-_DEFAULT_EXPERIMENTS_DIR = "experiments"
+_DEFAULT_EXPERIMENTS_DIR = EXPERIMENTS_DIR
 
 
 @click.group()
@@ -36,10 +36,16 @@ def list_runs(experiments_dir, sort):
 
 
 @runs.command()
-@click.argument("run_a", type=click.Path(exists=True))
-@click.argument("run_b", type=click.Path(exists=True))
-def compare(run_a, run_b):
-    """Compare two experiment directories side by side."""
+@click.argument("experiment_a")
+@click.argument("experiment_b")
+def compare(experiment_a, experiment_b):
+    """Compare two experiments side by side.
+
+    EXPERIMENT_A and EXPERIMENT_B are run names (e.g. effnet_b3_lr5e5_trial_2024_01_21)
+    or full paths to run directories. Bare names are resolved under experiments/.
+    """
+    run_a = resolve_run_dir(experiment_a)
+    run_b = resolve_run_dir(experiment_b)
     try:
         a_cfg = load_config(run_a)
     except FileNotFoundError:

@@ -3,7 +3,30 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+import click
+
 from core.config import CVBenchConfig, load_config
+
+
+EXPERIMENTS_DIR = "experiments"
+
+
+def resolve_run_dir(name: str) -> str:
+    """Resolve a run name or path to an existing directory.
+
+    Accepts a full path (experiments/my_run) or a bare run name (my_run).
+    If the given value does not exist as-is, looks under EXPERIMENTS_DIR.
+    """
+    p = Path(name)
+    if p.exists():
+        return str(p)
+    candidate = Path(EXPERIMENTS_DIR) / name
+    if candidate.exists():
+        return str(candidate)
+    raise click.BadParameter(
+        f"Run directory not found: '{name}' (also tried '{candidate}')",
+        param_hint="EXPERIMENT",
+    )
 
 
 # ---------------------------------------------------------------------------

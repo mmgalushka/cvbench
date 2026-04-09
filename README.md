@@ -149,10 +149,10 @@ docker exec cvbench tensorboard --logdir /home/cvbench/experiments --host 0.0.0.
 ```
 train         <data_dir> [--epochs N] [--backbone NAME] [--lr FLOAT] [--batch-size N]
                          [--augmentation FILE] [--resume CHECKPOINT] [--output DIR]
-evaluate      <run_dir>  [--split val|test] [--output-dir PATH]
+evaluate      <experiment>  [--output-dir PATH]
 predict       --checkpoint <path> --input <image-or-folder>
 runs          list       [dir] [--sort val_accuracy|date|backbone]
-runs          compare    <run_a_dir> <run_b_dir>
+runs          compare    <experiment_a> <experiment_b>
 runs          best       [dir] [--metric val_accuracy|val_loss|test_accuracy]
 generate      [out_dir]  [--train N] [--val N] [--test N] [--image-size N]
 augmentations list
