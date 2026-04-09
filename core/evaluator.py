@@ -8,22 +8,74 @@ import numpy as np
 import tqdm
 
 
+_MAX_SAMPLES_PER_CELL = 20
+
+
+def _collect_test_paths(test_dir: str, class_names: list[str]) -> list[tuple[str, int]]:
+    """Return (relative_path, class_idx) pairs in the same order image_dataset_from_directory uses.
+
+    Order matches: sorted class_names, then sorted filenames within each class.
+    Paths are relative to test_dir.
+    """
+    result = []
+    test_root = Path(test_dir)
+    for idx, cls in enumerate(class_names):
+        cls_dir = test_root / cls
+        if cls_dir.is_dir():
+            for f in sorted(cls_dir.iterdir()):
+                if f.is_file():
+                    result.append((str(f.relative_to(test_root)), idx))
+    return result
+
+
+def _collect_samples(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    all_preds_np: np.ndarray,
+    paths: list[tuple[str, int]],
+    class_names: list[str],
+) -> list[dict]:
+    """Collect up to _MAX_SAMPLES_PER_CELL samples per confusion matrix cell.
+
+    Returns a flat list of dicts with path (relative to test_dir), true_class,
+    predicted_class, and confidence (score for the predicted class).
+    """
+    n_cls = len(class_names)
+    cells: dict[tuple[int, int], list[int]] = {
+        (t, p): [] for t in range(n_cls) for p in range(n_cls)
+    }
+    for i in range(len(y_true)):
+        cells[(int(y_true[i]), int(y_pred[i]))].append(i)
+
+    samples = []
+    for (t, p), indices in cells.items():
+        for i in indices[:_MAX_SAMPLES_PER_CELL]:
+            path, _ = paths[i]
+            samples.append({
+                "path": path,
+                "true_class": class_names[t],
+                "predicted_class": class_names[p],
+                "confidence": round(float(all_preds_np[i][p]), 4),
+            })
+    return samples
+
 
 def evaluate(
     model: keras.Model,
     test_ds,
     class_names: list[str],
     run_dir: str,
+    test_dir: str,
     output_dir: str | None = None,
 ) -> dict:
-    """Run evaluation, print report, write eval_report.json and confusion_matrix.png.
+    """Run evaluation, print report, write eval_report.json.
 
     Returns the report dict.
     """
     out_dir = Path(output_dir or run_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Single pass: collect predictions, ground truth, and raw scores for top-3
+    # Single pass: collect predictions, ground truth, and raw scores
     n_batches = test_ds.cardinality().numpy()
     total = int(n_batches) if n_batches > 0 else None
 
@@ -36,14 +88,14 @@ def evaluate(
 
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
+    all_preds_np = np.concatenate(all_preds, axis=0)
 
     n = len(y_true)
     overall_acc = float(np.mean(y_true == y_pred))
 
-    # Top-3 accuracy (if num_classes >= 3) — reuse already-collected scores
+    # Top-3 accuracy (if num_classes >= 3)
     top3_acc = None
     if model.output_shape[-1] >= 3:
-        all_preds_np = np.concatenate(all_preds, axis=0)
         top3 = np.argsort(all_preds_np, axis=1)[:, -3:]
         top3_acc = float(np.mean([y_true[i] in top3[i] for i in range(n)]))
 
@@ -70,7 +122,9 @@ def evaluate(
     for t, p in zip(y_true, y_pred):
         cm[t, p] += 1
 
-    _save_confusion_matrix(cm, class_names, out_dir / "confusion_matrix.png")
+    # Samples per confusion matrix cell
+    paths = _collect_test_paths(test_dir, class_names)
+    samples = _collect_samples(y_true, y_pred, all_preds_np, paths, class_names)
 
     report = {
         "split": "test",
@@ -78,6 +132,11 @@ def evaluate(
         "overall_accuracy": round(overall_acc, 4),
         "top3_accuracy": round(top3_acc, 4) if top3_acc is not None else None,
         "per_class": per_class,
+        "confusion_matrix": {
+            "classes": class_names,
+            "matrix": cm.tolist(),
+        },
+        "samples": samples,
     }
 
     report_path = out_dir / "eval_report.json"
@@ -86,32 +145,6 @@ def evaluate(
 
     _print_report(report, class_names, run_dir, out_dir, cm)
     return report
-
-
-def _save_confusion_matrix(cm: np.ndarray, class_names: list[str], path: Path):
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    n = len(class_names)
-    fig, ax = plt.subplots(figsize=(max(6, n), max(5, n)))
-    im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
-    fig.colorbar(im)
-    ax.set(
-        xticks=range(n), yticks=range(n),
-        xticklabels=class_names, yticklabels=class_names,
-        xlabel="Predicted", ylabel="True",
-        title="Confusion Matrix",
-    )
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
-    thresh = cm.max() / 2.0
-    for i in range(n):
-        for j in range(n):
-            ax.text(j, i, str(cm[i, j]), ha="center", va="center",
-                    color="white" if cm[i, j] > thresh else "black")
-    fig.tight_layout()
-    fig.savefig(path, dpi=120)
-    plt.close(fig)
 
 
 def _print_confusion_matrix(cm: np.ndarray, class_names: list[str]):
@@ -141,12 +174,10 @@ def _print_confusion_matrix(cm: np.ndarray, class_names: list[str]):
         return f"{bg}{fg}{bold}{val:^{cell_w}}{_RESET}"
 
     # --- measure whether normal layout fits ---
-    # Cells use 1-space padding each side; 1 space between columns.
-    # In normal layout cells must also be wide enough for the column label.
-    num_w = len(str(max_val)) + 2            # digits + 1-space padding each side
-    normal_cell_w = max(num_w, label_w)      # wide enough for label above cell
-    row_prefix_w = 3 + label_w + 3          # "   " + label + " | "
-    grid_w = n * normal_cell_w + (n - 1)    # cells + 1-space separators
+    num_w = len(str(max_val)) + 2
+    normal_cell_w = max(num_w, label_w)
+    row_prefix_w = 3 + label_w + 3
+    grid_w = n * normal_cell_w + (n - 1)
     normal_fits = (row_prefix_w + grid_w) <= term_w
 
     print(" Confusion matrix (rows = true, cols = predicted):")
@@ -161,36 +192,27 @@ def _print_confusion_matrix(cm: np.ndarray, class_names: list[str]):
             print(f"   {true_cls:<{label_w}} | {cells}")
     else:
         # ── staircase layout ───────────────────────────────────────────
-        # Cells only need to fit the number — labels live in the staircase.
-        # Always use the minimum width: digits + 1-space padding each side.
         cell_w = num_w
 
-        # Left edge of each column within the data grid
         col_offsets = [row_prefix_w + j * (cell_w + 1) + cell_w // 2
                        for j in range(n)]
 
-        # Labels are left-aligned: all first characters start at align_col,
-        # which is just past the last column's corner (┌ + 1 dash + space).
         align_col = col_offsets[-1] + 3
 
-        # Staircase header rows — one per class
         for i, cls in enumerate(class_names):
-            line = " " * col_offsets[0]          # spaces up to first column
-            for j in range(i):                   # vertical bars for open columns
+            line = " " * col_offsets[0]
+            for j in range(i):
                 gap = col_offsets[j + 1] - col_offsets[j] - 1
                 line += "│" + " " * gap
-            # Corner + dashes reaching to align_col, then label
             n_dashes = align_col - col_offsets[i] - 2
             line += "┌" + "─" * n_dashes + " " + cls
             print(line)
 
-        # Connector row — vertical bar under every column
         vert_row = ""
         for j in range(n):
             vert_row = vert_row.ljust(col_offsets[j]) + "│"
         print(vert_row)
 
-        # Data rows
         for i, true_cls in enumerate(class_names):
             cells = " ".join(_fmt_cell(int(cm[i, j]), i == j, cell_w) for j in range(n))
             print(f"   {true_cls:<{label_w}} | {cells}")
@@ -220,5 +242,4 @@ def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: P
         _print_confusion_matrix(cm, class_names)
     print(f" Saved:")
     print(f"   {out_dir / 'eval_report.json'}")
-    print(f"   {out_dir / 'confusion_matrix.png'}")
     print("━" * w)

@@ -57,5 +57,6 @@ def evaluate(experiment, output_dir):
         test_ds=test_ds,
         class_names=class_names,
         run_dir=run_dir,
+        test_dir=cfg.data.test_dir,
         output_dir=output_dir,
     )
