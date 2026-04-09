@@ -11,7 +11,7 @@ from core.data import (
     resolve_class_weights,
 )
 from core.model import build_model
-from core.runs import make_run_name, make_unique_dir
+from core.runs import make_run_name, make_unique_dir, EXPERIMENTS_DIR
 from core import trainer as _trainer
 
 
@@ -30,9 +30,6 @@ def _parse_class_weight(value: str | None):
     raise click.BadParameter(
         f"Expected null, auto, or a JSON dict like '{{\"cat\": 1.0, \"dog\": 2.5}}', got: {value!r}"
     )
-
-
-_DEFAULT_EXPERIMENTS_DIR = "experiments"
 
 
 @click.command()
@@ -95,7 +92,7 @@ def train(
         exp_dir = output_dir
     else:
         run_name = make_run_name(cfg)
-        exp_dir = str(make_unique_dir(_DEFAULT_EXPERIMENTS_DIR, run_name))
+        exp_dir = str(make_unique_dir(EXPERIMENTS_DIR, run_name))
 
     # Detect classes and fill derived fields before saving config
     class_names = get_class_names(cfg.data.train_dir)

@@ -1,25 +1,10 @@
 import click
-from pathlib import Path
 
-from core.runs import scan_experiments, best_experiment
+from core.runs import scan_experiments, best_experiment, resolve_run_dir, EXPERIMENTS_DIR
 from core.config import load_config
 
 
-_DEFAULT_EXPERIMENTS_DIR = "experiments"
-
-
-def _resolve_run_dir(name: str) -> str:
-    """Resolve a run name or path to an existing directory."""
-    p = Path(name)
-    if p.exists():
-        return str(p)
-    candidate = Path(_DEFAULT_EXPERIMENTS_DIR) / name
-    if candidate.exists():
-        return str(candidate)
-    raise click.BadParameter(
-        f"Run directory not found: '{name}' (also tried '{candidate}')",
-        param_hint="RUN_DIR",
-    )
+_DEFAULT_EXPERIMENTS_DIR = EXPERIMENTS_DIR
 
 
 @click.group()
@@ -59,8 +44,8 @@ def compare(experiment_a, experiment_b):
     EXPERIMENT_A and EXPERIMENT_B are run names (e.g. effnet_b3_lr5e5_trial_2024_01_21)
     or full paths to run directories. Bare names are resolved under experiments/.
     """
-    run_a = _resolve_run_dir(experiment_a)
-    run_b = _resolve_run_dir(experiment_b)
+    run_a = resolve_run_dir(experiment_a)
+    run_b = resolve_run_dir(experiment_b)
     try:
         a_cfg = load_config(run_a)
     except FileNotFoundError:

@@ -11,27 +11,8 @@ import keras
 
 from core.config import load_config
 from core.data import build_dataset, get_class_names
+from core.runs import resolve_run_dir
 from core import evaluator as _evaluator
-
-_EXPERIMENTS_DIR = "experiments"
-
-
-def _resolve_run_dir(name: str) -> str:
-    """Resolve a run name or path to an existing directory.
-
-    Accepts either a full path (experiments/my_run) or just the run name (my_run).
-    If the given value does not exist as-is, looks under 'experiments/'.
-    """
-    p = Path(name)
-    if p.exists():
-        return str(p)
-    candidate = Path(_EXPERIMENTS_DIR) / name
-    if candidate.exists():
-        return str(candidate)
-    raise click.BadParameter(
-        f"Run directory not found: '{name}' (also tried '{candidate}')",
-        param_hint="RUN_DIR",
-    )
 
 
 @click.command()
@@ -44,7 +25,7 @@ def evaluate(experiment, output_dir):
     or a full path to the run directory. If a bare name is given, it is resolved
     under experiments/.
     """
-    run_dir = _resolve_run_dir(experiment)
+    run_dir = resolve_run_dir(experiment)
 
     import tensorflow as tf
     tf.get_logger().setLevel("ERROR")
