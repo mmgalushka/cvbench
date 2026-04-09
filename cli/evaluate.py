@@ -13,12 +13,37 @@ from core.config import load_config
 from core.data import build_dataset, get_class_names
 from core import evaluator as _evaluator
 
+_EXPERIMENTS_DIR = "experiments"
+
+
+def _resolve_run_dir(name: str) -> str:
+    """Resolve a run name or path to an existing directory.
+
+    Accepts either a full path (experiments/my_run) or just the run name (my_run).
+    If the given value does not exist as-is, looks under 'experiments/'.
+    """
+    p = Path(name)
+    if p.exists():
+        return str(p)
+    candidate = Path(_EXPERIMENTS_DIR) / name
+    if candidate.exists():
+        return str(candidate)
+    raise click.BadParameter(
+        f"Run directory not found: '{name}' (also tried '{candidate}')",
+        param_hint="RUN_DIR",
+    )
+
 
 @click.command()
-@click.argument("run_dir", type=click.Path(exists=True))
+@click.argument("run_dir")
 @click.option("--output-dir", default=None, help="Where to write eval outputs (default: run_dir).")
 def evaluate(run_dir, output_dir):
-    """Evaluate a trained model in RUN_DIR on the held-out test split."""
+    """Evaluate a trained model in RUN_DIR on the held-out test split.
+
+    RUN_DIR can be a full path (experiments/my_run) or just the run name (my_run).
+    """
+    run_dir = _resolve_run_dir(run_dir)
+
     import tensorflow as tf
     tf.get_logger().setLevel("ERROR")
     import absl.logging
