@@ -51,15 +51,16 @@ def list_runs(experiments_dir, sort):
 
 
 @runs.command()
-@click.argument("run_a")
-@click.argument("run_b")
-def compare(run_a, run_b):
-    """Compare two experiment directories side by side.
+@click.argument("experiment_a")
+@click.argument("experiment_b")
+def compare(experiment_a, experiment_b):
+    """Compare two experiments side by side.
 
-    RUN_A and RUN_B can be full paths or bare run names.
+    EXPERIMENT_A and EXPERIMENT_B are run names (e.g. effnet_b3_lr5e5_trial_2024_01_21)
+    or full paths to run directories. Bare names are resolved under experiments/.
     """
-    run_a = _resolve_run_dir(run_a)
-    run_b = _resolve_run_dir(run_b)
+    run_a = _resolve_run_dir(experiment_a)
+    run_b = _resolve_run_dir(experiment_b)
     try:
         a_cfg = load_config(run_a)
     except FileNotFoundError:

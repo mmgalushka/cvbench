@@ -35,14 +35,16 @@ def _resolve_run_dir(name: str) -> str:
 
 
 @click.command()
-@click.argument("run_dir")
-@click.option("--output-dir", default=None, help="Where to write eval outputs (default: run_dir).")
-def evaluate(run_dir, output_dir):
-    """Evaluate a trained model in RUN_DIR on the held-out test split.
+@click.argument("experiment")
+@click.option("--output-dir", default=None, help="Where to write eval outputs (default: run dir).")
+def evaluate(experiment, output_dir):
+    """Evaluate a trained model on the held-out test split.
 
-    RUN_DIR can be a full path (experiments/my_run) or just the run name (my_run).
+    EXPERIMENT is the run name (e.g. effnet_b3_lr5e5_cutmix_trial_2024_01_21)
+    or a full path to the run directory. If a bare name is given, it is resolved
+    under experiments/.
     """
-    run_dir = _resolve_run_dir(run_dir)
+    run_dir = _resolve_run_dir(experiment)
 
     import tensorflow as tf
     tf.get_logger().setLevel("ERROR")
