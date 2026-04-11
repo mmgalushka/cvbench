@@ -2,19 +2,19 @@
 import numpy as np
 import pytest
 
-from augmentations.blur import aug_blur
-from augmentations.edges import (
+from cvbench.augmentations.blur import aug_blur
+from cvbench.augmentations.edges import (
     aug_brighten_edges_h,
     aug_brighten_edges_v,
     aug_fade_horizontal,
     aug_fade_vertical,
 )
-from augmentations.lines import aug_lines_h, aug_lines_v
-from augmentations.noise import aug_salt_pepper
-from augmentations.pipeline import build_aug_pipeline
-from augmentations.profiles import aug_random_profile_h, aug_random_profile_v
-from augmentations.tone import aug_fog, aug_gamma
-from core.config import TransformConfig
+from cvbench.augmentations.lines import aug_lines_h, aug_lines_v
+from cvbench.augmentations.noise import aug_salt_pepper
+from cvbench.augmentations.pipeline import build_aug_pipeline
+from cvbench.augmentations.profiles import aug_random_profile_h, aug_random_profile_v
+from cvbench.augmentations.tone import aug_fog, aug_gamma
+from cvbench.core.config import TransformConfig
 
 
 # TF's image_dataset_from_directory always produces explicit channel dim:

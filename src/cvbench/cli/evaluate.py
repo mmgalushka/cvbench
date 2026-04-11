@@ -9,10 +9,10 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 import click
 import keras
 
-from core.config import load_config
-from core.data import build_dataset, get_class_names
-from core.runs import resolve_run_dir
-from core import evaluator as _evaluator
+from cvbench.core.config import load_config
+from cvbench.core.data import build_dataset, get_class_names
+from cvbench.core.runs import resolve_run_dir
+from cvbench.core import evaluator as _evaluator
 
 
 @click.command()

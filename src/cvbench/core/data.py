@@ -8,7 +8,7 @@ from pathlib import Path
 
 import tensorflow as tf
 
-from core.config import CVBenchConfig
+from cvbench.core.config import CVBenchConfig
 
 
 def get_class_names(train_dir: str) -> list[str]:

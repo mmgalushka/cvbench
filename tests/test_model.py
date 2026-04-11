@@ -6,7 +6,7 @@ pytestmark = pytest.mark.tf
 
 @pytest.fixture
 def minimal_cfg():
-    from core.config import CVBenchConfig
+    from cvbench.core.config import CVBenchConfig
     cfg = CVBenchConfig()
     cfg.model.backbone = "efficientnet_b0"
     cfg.model.input_size = 224
@@ -18,14 +18,14 @@ def minimal_cfg():
 
 
 def test_build_model_output_shape(minimal_cfg):
-    from core.model import build_model
+    from cvbench.core.model import build_model
 
     model = build_model(minimal_cfg)
     assert model.output_shape == (None, 3)
 
 
 def test_build_model_unknown_backbone(minimal_cfg):
-    from core.model import build_model
+    from cvbench.core.model import build_model
     minimal_cfg.model.backbone = "resnet_99"
     with pytest.raises(ValueError, match="Unknown backbone"):
         build_model(minimal_cfg)

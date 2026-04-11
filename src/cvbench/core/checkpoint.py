@@ -5,7 +5,7 @@ from pathlib import Path
 
 import keras
 
-from core.config import CVBenchConfig
+from cvbench.core.config import CVBenchConfig
 
 
 def build_checkpoint_callback(cfg: CVBenchConfig, run_dir: str) -> keras.callbacks.ModelCheckpoint | None:

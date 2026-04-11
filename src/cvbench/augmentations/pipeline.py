@@ -109,7 +109,7 @@ def _resolve(name: str, params: dict) -> callable:
         return keras_fn
 
     if name.startswith("aug_"):
-        import augmentations as aug_mod
+        import cvbench.augmentations as aug_mod
         fn = getattr(aug_mod, name, None)
         if fn is None:
             available = [n for n in dir(aug_mod) if n.startswith("aug_")]
@@ -140,5 +140,5 @@ def _resolve(name: str, params: dict) -> callable:
 
         return custom_fn
 
-    known = list(_KERAS_MAP) + [n for n in dir(__import__("augmentations")) if n.startswith("aug_")]
+    known = list(_KERAS_MAP) + [n for n in dir(__import__("cvbench.augmentations", fromlist=["cvbench"])) if n.startswith("aug_")]
     raise ValueError(f"Unknown transform '{name}'. Known: {known}")

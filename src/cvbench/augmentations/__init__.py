@@ -1,0 +1,6 @@
+from cvbench.augmentations.tone     import *    # noqa: F401, F403
+from cvbench.augmentations.noise    import *    # noqa: F401, F403
+from cvbench.augmentations.lines    import *    # noqa: F401, F403
+from cvbench.augmentations.edges    import *    # noqa: F401, F403
+from cvbench.augmentations.blur     import *    # noqa: F401, F403
+from cvbench.augmentations.profiles import *    # noqa: F401, F403

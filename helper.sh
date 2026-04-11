@@ -118,7 +118,7 @@ action_test(){
     while getopts ":m:c" opt; do
         case $opt in
             m) OPTS+=(-m "$OPTARG") ;;
-            c) OPTS+=(--cov=core --cov=cli --cov=augmentations --cov-report=term-missing) ;;
+            c) OPTS+=(--cov=cvbench --cov-report=term-missing) ;;
             \?) echo "Invalid option: -$OPTARG"; exit 1 ;;
         esac
     done

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from core.config import (
+from cvbench.core.config import (
     CVBenchConfig,
     build_config,
     load_config,

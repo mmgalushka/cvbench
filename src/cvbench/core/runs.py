@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from core.config import CVBenchConfig, load_config
+from cvbench.core.config import CVBenchConfig, load_config
 
 
 EXPERIMENTS_DIR = "experiments"

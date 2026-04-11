@@ -5,8 +5,8 @@ from pathlib import Path
 
 import keras
 
-from core.checkpoint import build_checkpoint_callback, prune_checkpoints
-from core.config import CVBenchConfig, update_run_status
+from cvbench.core.checkpoint import build_checkpoint_callback, prune_checkpoints
+from cvbench.core.config import CVBenchConfig, update_run_status
 
 
 def _print_header(exp_dir: str, cfg: CVBenchConfig):

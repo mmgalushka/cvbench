@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from core.checkpoint import prune_checkpoints
-from core.config import CVBenchConfig
+from cvbench.core.checkpoint import prune_checkpoints
+from cvbench.core.config import CVBenchConfig
 
 
 def _make_cfg(strategy="best_only", keep_last_n=3, every_n=5):
@@ -58,7 +58,7 @@ def test_prune_all_when_keep_zero(tmp_path):
 
 
 def test_build_checkpoint_callback_best_only(tmp_path):
-    from core.checkpoint import build_checkpoint_callback
+    from cvbench.core.checkpoint import build_checkpoint_callback
     cfg = _make_cfg(strategy="best_only")
     cb = build_checkpoint_callback(cfg, str(tmp_path))
     assert cb is not None
@@ -66,7 +66,7 @@ def test_build_checkpoint_callback_best_only(tmp_path):
 
 
 def test_build_checkpoint_callback_every_epoch(tmp_path):
-    from core.checkpoint import build_checkpoint_callback
+    from cvbench.core.checkpoint import build_checkpoint_callback
     import keras
     cfg = _make_cfg(strategy="every_epoch")
     cb = build_checkpoint_callback(cfg, str(tmp_path))
@@ -76,7 +76,7 @@ def test_build_checkpoint_callback_every_epoch(tmp_path):
 
 
 def test_build_checkpoint_callback_unknown_strategy(tmp_path):
-    from core.checkpoint import build_checkpoint_callback
+    from cvbench.core.checkpoint import build_checkpoint_callback
     cfg = _make_cfg(strategy="unknown_strategy")
     with pytest.raises(ValueError, match="Unknown checkpoint strategy"):
         build_checkpoint_callback(cfg, str(tmp_path))

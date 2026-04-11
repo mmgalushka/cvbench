@@ -7,20 +7,10 @@
 !.github/**/
 !.github/**/*.yaml
 
-# Except core framework
-!core/
-!core/**/
-!core/**/*.py
-
-# Except CLI
-!cli/
-!cli/**/
-!cli/**/*.py
-
-# Except augmentations
-!augmentations/
-!augmentations/**/
-!augmentations/**/*.py
+# Except source package
+!src/
+!src/**/
+!src/**/*.py
 
 # Except tests
 !tests/

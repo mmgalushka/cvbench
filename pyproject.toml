@@ -34,16 +34,15 @@ dev = [
 ]
 
 [project.scripts]
-train        = "cli.train:train"
-evaluate     = "cli.evaluate:evaluate"
-predict      = "cli.predict:predict"
-runs         = "cli.runs:runs"
-generate     = "cli.generate:generate"
-augmentations = "cli.augmentations:augmentations"
+train        = "cvbench.cli.train:train"
+evaluate     = "cvbench.cli.evaluate:evaluate"
+predict      = "cvbench.cli.predict:predict"
+runs         = "cvbench.cli.runs:runs"
+generate     = "cvbench.cli.generate:generate"
+augmentations = "cvbench.cli.augmentations:augmentations"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["core*", "cli*", "augmentations*"]
+where = ["src"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
