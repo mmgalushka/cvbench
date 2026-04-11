@@ -1,3 +1,25 @@
+## v0.8.0 (2026-04-11)
+
+### Feat
+
+- add samples and raw confusion matrix to eval_report.json, drop confusion_matrix.png
+- rename CLI args to EXPERIMENT for clarity in evaluate and runs compare
+- accept bare run name in evaluate and runs compare, resolving under experiments/
+- add terminal confusion matrix with auto staircase layout for wide matrices
+- render confusion matrix in terminal after evaluate
+- add progress bar, GPU/CPU indicator, and suppress TF logs in evaluate and train
+- add progress bar, GPU indicator, and suppress TF logs in evaluate
+- make release manual-only, remove docker PR build, add GitHub Release creation
+
+### Fix
+
+- pin all dependencies to exact versions, resolve keras/keras-hub incompatibility
+
+### Refactor
+
+- adopt src/ layout and cvbench package namespace
+- centralise EXPERIMENTS_DIR and resolve_run_dir in core/runs, sync README and helper.sh
+
 ## v0.7.0 (2026-04-06)
 
 ### Feat
