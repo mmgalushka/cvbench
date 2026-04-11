@@ -3,7 +3,7 @@ from __future__ import annotations
 import keras
 import keras_hub
 
-from core.config import CVBenchConfig
+from cvbench.core.config import CVBenchConfig
 
 # Map config backbone names to keras-hub preset identifiers
 _BACKBONE_PRESETS = {

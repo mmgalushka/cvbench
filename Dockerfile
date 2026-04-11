@@ -17,9 +17,7 @@ ENV TF_CPP_MIN_LOG_LEVEL=3
 WORKDIR /opt/cvbench
 
 COPY pyproject.toml README.md ./
-COPY core/ ./core/
-COPY cli/ ./cli/
-COPY augmentations/ ./augmentations/
+COPY src/ ./src/
 
 # Non-editable install — entry points land in /usr/local/bin
 RUN pip install --no-cache-dir . jupyterlab tensorboard

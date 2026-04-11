@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from augmentations.pipeline import build_aug_pipeline
-from core.config import TransformConfig
+from cvbench.augmentations.pipeline import build_aug_pipeline
+from cvbench.core.config import TransformConfig
 
 
 def _transform(name, prob=1.0, **params):
@@ -22,7 +22,7 @@ def test_unknown_aug_raises_at_build_time():
 
 
 def test_custom_aug_applied(monkeypatch):
-    import augmentations as aug_mod
+    import cvbench.augmentations as aug_mod
 
     def fake_blur(img, radius=1.0):
         return (img * 0).astype(np.uint8)
@@ -38,7 +38,7 @@ def test_custom_aug_applied(monkeypatch):
 
 
 def test_prob_zero_skips_transform(monkeypatch):
-    import augmentations as aug_mod
+    import cvbench.augmentations as aug_mod
     called = []
 
     def fake_blur(img, radius=1.0):
@@ -55,7 +55,7 @@ def test_prob_zero_skips_transform(monkeypatch):
 
 
 def test_prob_one_always_applies(monkeypatch):
-    import augmentations as aug_mod
+    import cvbench.augmentations as aug_mod
     called = []
 
     def fake_blur(img, radius=1.0):
@@ -80,7 +80,7 @@ def test_empty_transforms_is_identity():
 
 
 def test_range_param_varies(monkeypatch):
-    import augmentations as aug_mod
+    import cvbench.augmentations as aug_mod
 
     received = []
 
@@ -103,7 +103,7 @@ def test_range_param_varies(monkeypatch):
 
 
 def test_range_and_fixed_mixed(monkeypatch):
-    import augmentations as aug_mod
+    import cvbench.augmentations as aug_mod
 
     received = []
 

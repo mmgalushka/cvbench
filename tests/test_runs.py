@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from core.config import CVBenchConfig, build_config, save_config
-from core.runs import (
+from cvbench.core.config import CVBenchConfig, build_config, save_config
+from cvbench.core.runs import (
     best_experiment,
     make_run_name,
     make_unique_dir,

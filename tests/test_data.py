@@ -24,14 +24,14 @@ def image_dir(tmp_path):
 
 
 def test_get_class_names(image_dir):
-    from core.data import get_class_names
+    from cvbench.core.data import get_class_names
     names = get_class_names(str(image_dir / "train"))
     assert names == ["cat", "dog"]
 
 
 def test_build_dataset_shape(image_dir):
-    from core.config import CVBenchConfig
-    from core.data import build_dataset, get_class_names
+    from cvbench.core.config import CVBenchConfig
+    from cvbench.core.data import build_dataset, get_class_names
 
     cfg = CVBenchConfig()
     cfg.model.input_size = 64
@@ -47,8 +47,8 @@ def test_build_dataset_shape(image_dir):
 
 
 def test_build_datasets_returns_class_names(image_dir):
-    from core.config import CVBenchConfig
-    from core.data import build_datasets
+    from cvbench.core.config import CVBenchConfig
+    from cvbench.core.data import build_datasets
 
     cfg = CVBenchConfig()
     cfg.model.input_size = 64

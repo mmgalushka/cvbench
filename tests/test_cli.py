@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from cli.runs import runs
-from core.config import build_config, save_config
+from cvbench.cli.runs import runs
+from cvbench.core.config import build_config, save_config
 
 
 # ---------------------------------------------------------------------------

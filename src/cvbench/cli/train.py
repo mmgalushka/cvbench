@@ -2,17 +2,17 @@ import json
 
 import click
 
-from core.config import build_config, save_config
-from core.data import (
+from cvbench.core.config import build_config, save_config
+from cvbench.core.data import (
     build_datasets,
     get_class_distribution,
     get_class_names,
     print_class_balance,
     resolve_class_weights,
 )
-from core.model import build_model
-from core.runs import make_run_name, make_unique_dir, EXPERIMENTS_DIR
-from core import trainer as _trainer
+from cvbench.core.model import build_model
+from cvbench.core.runs import make_run_name, make_unique_dir, EXPERIMENTS_DIR
+from cvbench.core import trainer as _trainer
 
 
 def _parse_class_weight(value: str | None):
@@ -84,7 +84,7 @@ def train(
     )
 
     if aug_file:
-        from core.config import load_aug_file
+        from cvbench.core.config import load_aug_file
         cfg.augmentation = load_aug_file(aug_file)
 
     # Determine output directory
@@ -122,7 +122,7 @@ def train(
     # and still use numpy_function.
     if cfg.augmentation.transforms:
         import tensorflow as tf
-        from augmentations.pipeline import build_keras_aug_fn, build_custom_aug_fn
+        from cvbench.augmentations.pipeline import build_keras_aug_fn, build_custom_aug_fn
 
         keras_aug = build_keras_aug_fn(cfg.augmentation.transforms)
         custom_aug = build_custom_aug_fn(cfg.augmentation.transforms)

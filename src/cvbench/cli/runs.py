@@ -1,7 +1,7 @@
 import click
 
-from core.runs import scan_experiments, best_experiment, resolve_run_dir, EXPERIMENTS_DIR
-from core.config import load_config
+from cvbench.core.runs import scan_experiments, best_experiment, resolve_run_dir, EXPERIMENTS_DIR
+from cvbench.core.config import load_config
 
 
 _DEFAULT_EXPERIMENTS_DIR = EXPERIMENTS_DIR
@@ -55,7 +55,7 @@ def compare(experiment_a, experiment_b):
     except FileNotFoundError:
         raise click.ClickException(f"No config.yaml in: {run_b}")
 
-    from core.runs import _read_entry
+    from cvbench.core.runs import _read_entry
     from pathlib import Path
     a = _read_entry(Path(run_a))
     b = _read_entry(Path(run_b))
