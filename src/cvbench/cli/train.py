@@ -65,9 +65,9 @@ def train(
     gpus = tf.config.list_physical_devices("GPU")
     if gpus:
         names = ", ".join(g.name for g in gpus)
-        print(f"\033[92m🟢 GPU      : {len(gpus)} device(s) — {names}\033[0m")
+        print(f"\033[92m🟢 GPU detected: {len(gpus)} device(s) — {names}\033[0m")
     else:
-        print(f"\033[93m⚠️  GPU      : not available — training on CPU\033[0m")
+        print(f"\033[93m⚠️ GPU not available, training on CPU\033[0m")
 
     class_weight_cfg = _parse_class_weight(class_weight_raw)
 
