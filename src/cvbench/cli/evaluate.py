@@ -35,9 +35,9 @@ def evaluate(experiment, output_dir):
     gpus = tf.config.list_physical_devices("GPU")
     if gpus:
         names = ", ".join(g.name for g in gpus)
-        print(f"\033[92m🟢 GPU      : {len(gpus)} device(s) — {names}\033[0m")
+        print(f"\033[92m🟢 GPU detected: {len(gpus)} device(s) — {names}\033[0m")
     else:
-        print(f"\033[93m⚠️  GPU      : not available — evaluating on CPU\033[0m")
+        print(f"\033[93m⚠️ GPU not available, evaluating on CPU\033[0m")
 
     cfg = load_config(run_dir)
 
