@@ -1,3 +1,13 @@
+## v0.9.0 (2026-04-16)
+
+### Feat
+
+- polish CLI output — full-width rules, color hierarchy, table formatting
+
+### Fix
+
+- opt into Node.js 24 for GitHub Actions and clean up GPU status messages
+
 ## v0.8.0 (2026-04-11)
 
 ### Feat
