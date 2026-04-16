@@ -1,7 +1,18 @@
 import click
 
+from cvbench.core import _fmt
 from cvbench.core.runs import scan_experiments, best_experiment, resolve_run_dir, EXPERIMENTS_DIR
 from cvbench.core.config import load_config
+
+
+def _fit(s: str, width: int) -> str:
+    """Fit string to width using a middle ellipsis, preserving start and end."""
+    if len(s) <= width:
+        return s
+    keep = width - 1  # 1 char for the ellipsis
+    head = keep // 2
+    tail = keep - head
+    return s[:head] + "…" + s[-tail:]
 
 
 _DEFAULT_EXPERIMENTS_DIR = EXPERIMENTS_DIR
@@ -24,15 +35,16 @@ def list_runs(experiments_dir, sort):
         print(f" No experiments found in '{experiments_dir}'.")
         return
 
-    w = 80
-    print("━" * w)
+    tr = _fmt.rule(76, "white")
+    print(tr)
     print(f" {'Run':<45} {'Status':<12} {'Val Acc':>8}  {'Epochs':>6}")
-    print("━" * w)
+    print(tr)
     for r in entries:
         acc = r.get("val_accuracy")
         acc_str = f"{acc:.4f}" if acc is not None else "  —   "
-        print(f" {r['name']:<45} {r.get('status', '?'):<12} {acc_str:>8}  {r.get('epochs_run', '?'):>6}")
-    print("━" * w)
+        name = _fit(r['name'], 45)
+        print(f" {name:<45} {r.get('status', '?'):<12} {acc_str:>8}  {r.get('epochs_run', '?'):>6}")
+    print(tr)
 
 
 @runs.command()
@@ -67,16 +79,17 @@ def compare(experiment_a, experiment_b):
     name_a = a.get("name", run_a)
     name_b = b.get("name", run_b)
 
-    w = 75
-    print("━" * w)
-    print(f" {'Field':<22} {name_a[:24]:<26} {name_b[:24]:<26}")
-    print("━" * w)
+    col_w = 26
+    tr = _fmt.rule(79, "white")
+    print(tr)
+    print(f" {'Field':<22}  {_fit(name_a, col_w):<{col_w}}  {_fit(name_b, col_w):<{col_w}}")
+    print(tr)
     for f in fields:
         va = str(a.get(f, "—"))
         vb = str(b.get(f, "—"))
         diff = " ◀" if va != vb else ""
-        print(f" {f:<22} {va:<26} {vb:<26}{diff}")
-    print("━" * w)
+        print(f" {f:<22}  {va:<26}  {vb:<26}{diff}")
+    print(tr)
 
 
 @runs.command()
@@ -91,10 +104,9 @@ def best(experiments_dir, metric):
         print(f" No experiments with metric '{metric}' found in '{experiments_dir}'.")
         return
 
-    w = 55
-    print("━" * w)
-    print(f" CVBench — best run by {metric}")
-    print("━" * w)
+    print(_fmt.rule())
+    print(f" {_fmt.bold(f'CVBench — best run by {metric}')}")
+    print(_fmt.rule())
     for k, v in run.items():
         print(f" {k:<22}: {v}")
-    print("━" * w)
+    print(_fmt.rule())

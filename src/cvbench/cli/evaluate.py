@@ -9,6 +9,7 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 import click
 import keras
 
+from cvbench.core import _fmt
 from cvbench.core.config import load_config
 from cvbench.core.data import build_dataset, get_class_names
 from cvbench.core.runs import resolve_run_dir
@@ -35,9 +36,9 @@ def evaluate(experiment, output_dir):
     gpus = tf.config.list_physical_devices("GPU")
     if gpus:
         names = ", ".join(g.name for g in gpus)
-        print(f"\033[92m🟢 GPU detected: {len(gpus)} device(s) — {names}\033[0m")
+        print(_fmt.green(f"🟢 GPU detected: {len(gpus)} device(s) — {names}"))
     else:
-        print(f"\033[93m⚠️ GPU not available, evaluating on CPU\033[0m")
+        print(_fmt.yellow("⚠️  GPU not available, evaluating on CPU"))
 
     cfg = load_config(run_dir)
 
@@ -46,7 +47,7 @@ def evaluate(experiment, output_dir):
         test_ds = build_dataset(cfg.data.test_dir, class_names, cfg, training=False)
 
     n_test = sum(1 for _ in Path(cfg.data.test_dir).glob("*/*"))
-    print(f" Found {n_test} files for evaluation ({len(class_names)} classes).")
+    print(_fmt.dim(f" Found {n_test} files for evaluation ({len(class_names)} classes)."))
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")

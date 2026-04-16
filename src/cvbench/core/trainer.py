@@ -7,21 +7,22 @@ import keras
 
 from cvbench.core.checkpoint import build_checkpoint_callback, prune_checkpoints
 from cvbench.core.config import CVBenchConfig, update_run_status
+from cvbench.core import _fmt
 
 
 def _print_header(exp_dir: str, cfg: CVBenchConfig):
-    w = 55
-    print("━" * w)
-    print(f" CVBench — train")
-    print("━" * w)
-    print(f" Data      : {cfg.data.data_dir}")
+    print(_fmt.rule())
+    print(f" {_fmt.bold('CVBench — train')}")
+    print(_fmt.rule())
+    print(f" Data      : {_fmt.dim(cfg.data.data_dir)}")
     print(f" Backbone  : {cfg.model.backbone}")
     print(f" Epochs    : {cfg.training.epochs}")
     print(f" LR        : {cfg.training.learning_rate}")
     n_transforms = len(cfg.augmentation.transforms)
     print(f" Aug       : {n_transforms} transform(s)")
-    print(f" Output    : {exp_dir}")
-    print("━" * w)
+    print(f" Output    : {_fmt.dim(exp_dir)}")
+    print(_fmt.rule())
+    print()  # breathing room before epoch output
 
 
 def train(
@@ -65,7 +66,7 @@ def train(
     _stop_flag = {"value": False}
 
     def _sigint_handler(signum, frame):
-        print("\n\n Interrupt received — finishing current batch then saving...\n")
+        print(f"\r\033[K\n {_fmt.yellow('⚠️  Interrupt received')} — finishing current batch then saving...\n")
         _stop_flag["value"] = True
 
     if cfg.training.interrupt.enabled:
@@ -107,7 +108,7 @@ def train(
         ckpt_name = f"interrupt_epoch{last_epoch:03d}.keras"
         interrupt_ckpt = str(run_dir / ckpt_name)
         model.save(interrupt_ckpt)
-        print(f"\n Checkpoint saved → {interrupt_ckpt}")
+        print(f"\n {_fmt.green('Checkpoint saved')} → {_fmt.dim(interrupt_ckpt)}")
         print(
             f" To resume: train {cfg.data.data_dir}"
             f" --from {exp_dir}"
@@ -136,12 +137,16 @@ def train(
         resume_checkpoint=interrupt_ckpt,
     )
 
-    w = 55
-    print("━" * w)
-    print(f" Training {'interrupted' if interrupted else 'complete'}")
-    for k, v in final_metrics.items():
-        print(f"   {k}: {v}")
-    print(f" Run directory → {run_dir}")
-    print("━" * w)
+    status_label = "interrupted" if interrupted else "complete"
+    status_color = _fmt.yellow if interrupted else _fmt.green
+    print()  # breathing room after last epoch line
+    print(_fmt.rule())
+    print(f" {_fmt.bold(f'Training {status_color(status_label)}')}")
+    if final_metrics:
+        max_k = max(len(k) for k in final_metrics)
+        for k, v in final_metrics.items():
+            print(f"   {_fmt.bold(f'{k:<{max_k}}')} : {v:.4f}")
+    print(f" Run directory → {_fmt.dim(str(run_dir))}")
+    print(_fmt.rule())
 
     return str(run_dir)
