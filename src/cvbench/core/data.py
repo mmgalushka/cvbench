@@ -9,6 +9,7 @@ from pathlib import Path
 import tensorflow as tf
 
 from cvbench.core.config import CVBenchConfig
+from cvbench.core import _fmt
 
 
 def get_class_names(train_dir: str) -> list[str]:
@@ -63,23 +64,27 @@ def print_class_balance(
     min_count = min(counts)
     total = sum(counts)
     ratio = max_count / min_count if min_count > 0 else float("inf")
+    uniform = all(c == counts[0] for c in counts)
 
     bar_width = 20
     print(" Class distribution (train):")
     for cls, count in class_dist.items():
-        bar = "█" * int(count / max_count * bar_width)
         pct = count / total * 100
-        print(f"   {cls:<12} {count:>5}  {bar:<{bar_width}}  {pct:.1f}%")
+        if uniform:
+            print(f"   {cls:<12} {count:>5}  {pct:.1f}%")
+        else:
+            bar = "█" * int(count / max_count * bar_width)
+            print(f"   {cls:<12} {count:>5}  {bar:<{bar_width}}  {pct:.1f}%")
 
     if ratio >= 3.0:
         print()
-        print(f" ⚠ Imbalance ratio {ratio:.0f}:1 detected")
+        print(f" {_fmt.yellow(f'⚠ Imbalance ratio {ratio:.0f}:1 detected')}")
         if class_weight_cfg is None:
-            print("   Tip: rerun with --class-weight auto")
+            print(f"   {_fmt.dim('Tip: rerun with --class-weight auto')}")
         elif class_weight_cfg == "auto":
-            print("   ✓ class_weight=auto applied")
+            print(f"   {_fmt.green('✓ class_weight=auto applied')}")
         else:
-            print("   ✓ custom class weights applied")
+            print(f"   {_fmt.green('✓ custom class weights applied')}")
 
 
 def build_dataset(
@@ -141,8 +146,8 @@ def build_datasets(
         with contextlib.redirect_stdout(io.StringIO()):
             train_ds = build_dataset(cfg.data.train_dir, class_names, cfg, training=True)
             val_ds = build_dataset(cfg.data.val_dir, class_names, cfg, training=False)
-        print(f" Found {total_train} files for training ({len(class_names)} classes).")
-        print(f" Found {n_val} files for validation ({len(class_names)} classes).")
+        print(_fmt.dim(f" Found {total_train} files for training ({len(class_names)} classes)."))
+        print(_fmt.dim(f" Found {n_val} files for validation ({len(class_names)} classes)."))
         num_train_samples = total_train
     else:
         split = cfg.data.val_split
@@ -174,11 +179,11 @@ def build_datasets(
             )
         num_train_samples = math.floor(total_train * (1 - split))
         n_val_samples = total_train - num_train_samples
-        print(
+        print(_fmt.dim(
             f" Found {total_train} files belonging to {len(class_names)} classes"
             f" — auto-splitting ({pct_train}/{pct_val})"
-        )
-        print(f"   ├─ {num_train_samples} for training")
-        print(f"   └─ {n_val_samples} for validation")
+        ))
+        print(_fmt.dim(f"   ├─ {num_train_samples} for training"))
+        print(_fmt.dim(f"   └─ {n_val_samples} for validation"))
 
     return train_ds, val_ds, class_names, num_train_samples

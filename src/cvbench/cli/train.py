@@ -2,6 +2,7 @@ import json
 
 import click
 
+from cvbench.core import _fmt
 from cvbench.core.config import build_config, save_config
 from cvbench.core.data import (
     build_datasets,
@@ -65,9 +66,9 @@ def train(
     gpus = tf.config.list_physical_devices("GPU")
     if gpus:
         names = ", ".join(g.name for g in gpus)
-        print(f"\033[92m🟢 GPU detected: {len(gpus)} device(s) — {names}\033[0m")
+        print(_fmt.green(f"🟢 GPU detected: {len(gpus)} device(s) — {names}"))
     else:
-        print(f"\033[93m⚠️ GPU not available, training on CPU\033[0m")
+        print(_fmt.yellow("⚠️  GPU not available, training on CPU"))
 
     class_weight_cfg = _parse_class_weight(class_weight_raw)
 
