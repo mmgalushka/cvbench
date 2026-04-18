@@ -1,3 +1,9 @@
+## v0.10.2 (2026-04-18)
+
+### Fix
+
+- expose --fine-tune-from-layer CLI option for backbone fine-tuning control
+
 ## v0.10.1 (2026-04-18)
 
 ### Fix
