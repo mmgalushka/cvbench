@@ -122,7 +122,7 @@ action_augmentations(){
 
 action_serve(){
     action_activate
-    serve "$@"
+    python -c "from cvbench.web.app import main; main()" "$@"
 }
 
 action_test(){

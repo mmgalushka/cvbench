@@ -1,0 +1,504 @@
+/* ── Pico CSS overrides — pull the base size down to ~13 px ─────────────────
+   Google Cloud Console / Workspace use 13–14 px Roboto for data-dense UIs.
+   Pico defaults to 16 px with 1 rem spacing everywhere; we trim both.       */
+
+:root {
+  --pico-font-size: 81.25%;          /* 13 px from 16 px root               */
+  --pico-line-height: 1.45;
+  --pico-spacing: 0.75rem;
+  --pico-typography-spacing-vertical: 0.75rem;
+  --pico-block-spacing-vertical: 0.75rem;
+  --pico-block-spacing-horizontal: 1rem;
+  --pico-table-cell-padding: 0.35rem 0.75rem;
+  --pico-form-element-spacing-vertical: 0.4rem;
+  --pico-form-element-spacing-horizontal: 0.75rem;
+
+  /* App tokens */
+  --sidebar-w: 196px;
+  --brand-color: #6366f1;
+  --section-label-size: 0.692rem;   /* 9 px — tight uppercase labels        */
+}
+
+/* Headings: Pico's defaults are huge for a dashboard. Set explicit px.      */
+h1 { font-size: 1.25rem; }          /* ~16 px */
+h2 { font-size: 1.077rem; }         /* ~14 px */
+h3 { font-size: 1rem; }
+h4 { font-size: 0.923rem; }         /* ~12 px */
+h5 { font-size: 0.846rem; }         /* ~11 px */
+
+body { margin: 0; }
+
+/* ── Layout ────────────────────────────────────────────────────────────────── */
+
+.app-layout { display: flex; min-height: 100vh; }
+
+/* ── Sidebar ───────────────────────────────────────────────────────────────── */
+
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--pico-card-background-color, var(--card-background-color));
+  border-right: 1px solid var(--pico-card-border-color, var(--card-border-color));
+  padding: 1rem 0.625rem;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding: 0 0.25rem;
+}
+
+.brand-name {
+  font-size: 0.923rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.625rem;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--pico-color, var(--color));
+  font-size: 0.846rem;
+  font-weight: 500;
+  transition: background 0.1s, color 0.1s;
+}
+
+.nav-link:hover  { background: var(--pico-card-sectioning-background-color, var(--card-sectionning-background-color)); }
+.nav-link.active { background: var(--brand-color); color: #fff; }
+
+.sidebar-footer {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--pico-card-border-color, var(--card-border-color));
+}
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.769rem;
+  color: var(--pico-muted-color, var(--muted-color));
+  cursor: pointer;
+}
+
+.theme-toggle input { margin: 0; width: 0.9rem; height: 0.9rem; }
+
+/* ── Main content ──────────────────────────────────────────────────────────── */
+
+.main-content {
+  flex: 1;
+  padding: 1.5rem 2rem;
+  overflow-x: hidden;
+  min-width: 0;
+}
+
+/* ── Page header ───────────────────────────────────────────────────────────── */
+
+.page-header { margin-bottom: 1rem; }
+
+.page-header h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.back-link {
+  display: inline-block;
+  font-size: 0.769rem;
+  color: var(--pico-muted-color, var(--muted-color));
+  text-decoration: none;
+  margin-bottom: 0.2rem;
+}
+
+.back-link:hover { color: var(--pico-color, var(--color)); }
+
+/* ── Status badges ─────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-block;
+  padding: 0.1em 0.5em;
+  border-radius: 9999px;
+  font-size: 0.692rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+}
+
+.badge-done        { background: #c8e6c9; color: #1b5e20; }
+.badge-running     { background: #bbdefb; color: #0d47a1; }
+.badge-interrupted { background: #ffe8b2; color: #6d3a00; }
+.badge-failed      { background: #ffcdd2; color: #b71c1c; }
+
+[data-theme="dark"] .badge-done        { background: #1b3d28; color: #81c995; }
+[data-theme="dark"] .badge-running     { background: #0d2d5a; color: #82b1f5; }
+[data-theme="dark"] .badge-interrupted { background: #3d2200; color: #f5a623; }
+[data-theme="dark"] .badge-failed      { background: #4a1010; color: #f48a8a; }
+
+/* ── Metric cards ──────────────────────────────────────────────────────────── */
+
+.metric-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.metric-card {
+  text-align: center;
+  padding: 0.625rem 0.5rem;
+  margin: 0;
+}
+
+.metric-card small {
+  display: block;
+  color: var(--pico-muted-color, var(--muted-color));
+  font-size: var(--section-label-size);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 0.2rem;
+  white-space: nowrap;
+}
+
+.metric-card strong {
+  font-size: 1.231rem;    /* ~16 px — prominent but not giant */
+  font-weight: 600;
+  word-break: break-all;
+}
+
+/* ── Section label (reusable) ──────────────────────────────────────────────── */
+
+.section-label {
+  font-size: var(--section-label-size);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 600;
+  margin: 0 0 0.625rem;
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--pico-card-border-color, var(--card-border-color));
+  margin-bottom: 1rem;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 0.45rem 1rem;
+  font-size: 0.846rem;
+  font-weight: 500;
+  color: var(--pico-muted-color, var(--muted-color));
+  cursor: pointer;
+  border-radius: 0;
+  transition: color 0.12s, border-color 0.12s;
+  box-shadow: none;
+}
+
+.tab-btn:hover:not(:disabled) { color: inherit !important; background: none !important; }
+.tab-btn.active  { color: var(--brand-color); border-bottom-color: var(--brand-color); }
+.tab-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Config grid (training tab) ────────────────────────────────────────────── */
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.625rem;
+  margin-bottom: 0.75rem;
+}
+
+.config-grid article { margin: 0; padding: 0.75rem 0.875rem; }
+
+/* Chart spans all columns — same width as the tile row above it */
+.config-grid-full { grid-column: 1 / -1; }
+
+.config-grid h4 {
+  margin: 0 0 0.5rem;
+  font-size: var(--section-label-size);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 600;
+}
+
+.config-grid dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.75rem;
+  margin: 0;
+  font-size: 0.846rem;
+}
+
+.config-grid dt { color: var(--pico-muted-color, var(--muted-color)); white-space: nowrap; }
+.config-grid dd { margin: 0; font-weight: 500; word-break: break-word; }
+
+#chart-container { padding: 0.75rem 0.875rem; }
+#chart-container h4 {
+  margin: 0 0 0.75rem;
+  font-size: var(--section-label-size);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 600;
+}
+#chart-container canvas { max-height: 240px; }
+
+/* ── Evaluation layout — stacked: metric cards → table → CM + gallery ──────── */
+
+.eval-table-card {
+  margin: 0 0 0.625rem;
+  padding: 0.875rem;
+}
+
+.eval-table-card h4,
+.cm-card h4 {
+  margin: 0 0 0.625rem;
+  font-size: var(--section-label-size);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 600;
+}
+
+.eval-table-card table { font-size: 0.846rem; }
+.eval-table-card th,
+.eval-table-card td { padding: 0.3rem 0.6rem; }
+
+/* Confusion matrix + gallery: side by side, stacks on narrow screens */
+
+.cm-gallery-layout {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.625rem;
+  align-items: start;
+}
+
+@media (max-width: 700px) {
+  .cm-gallery-layout { grid-template-columns: 1fr; }
+}
+
+.cm-card {
+  margin: 0;
+  padding: 0.875rem;
+  width: fit-content;
+  min-width: 0;
+}
+
+.cm-hint {
+  font-weight: 400;
+  font-size: 0.769rem;
+  color: var(--pico-muted-color, var(--muted-color));
+}
+
+/* ── Confusion matrix ──────────────────────────────────────────────────────── */
+
+.cm-wrap { overflow-x: auto; }
+
+.cm-axis-label {
+  font-size: 0.692rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--pico-muted-color, var(--muted-color));
+  text-align: center;
+  margin-bottom: 0.2rem;
+}
+
+.cm-grid {
+  display: grid;
+  gap: 2px;
+  width: fit-content;
+}
+
+.cm-corner { background: transparent; }
+
+.cm-col-header {
+  font-size: 0.692rem;
+  font-weight: 600;
+  text-align: center;
+  padding: 3px 5px;
+  background: var(--pico-card-sectioning-background-color, var(--card-sectionning-background-color));
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.cm-row-header {
+  font-size: 0.692rem;
+  font-weight: 600;
+  text-align: right;
+  padding: 3px 6px 3px 3px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
+  background: var(--pico-card-sectioning-background-color, var(--card-sectionning-background-color));
+  border-radius: 3px;
+}
+
+.cm-cell {
+  min-width: 40px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.769rem;
+  font-weight: 700;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  user-select: none;
+}
+
+.cm-cell:hover {
+  transform: scale(1.12);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 2;
+  position: relative;
+}
+
+.cm-cell.cm-zero { cursor: default; opacity: 0.15; }
+.cm-cell.cm-zero:hover { transform: none; box-shadow: none; }
+[data-theme="dark"] .cm-cell.cm-zero { opacity: 0.1; }
+
+.cm-legend {
+  font-size: 0.692rem;
+  color: var(--pico-muted-color, var(--muted-color));
+  margin-top: 0.375rem;
+}
+
+/* ── Gallery panel ─────────────────────────────────────────────────────────── */
+
+.gallery-panel {
+  padding: 0.875rem;
+  background: var(--pico-card-background-color, var(--card-background-color));
+  border: 1px solid var(--pico-card-border-color, var(--card-border-color));
+  border-radius: var(--pico-border-radius, 8px);
+}
+
+.gallery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.625rem;
+}
+
+.gallery-header h5 { margin: 0; font-size: 0.846rem; }
+
+.gallery-header button { padding: 0.15rem 0.5rem; font-size: 0.769rem; }
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 0.4rem;
+}
+
+.gallery-thumb { margin: 0; text-align: center; }
+
+.gallery-thumb img {
+  width: 100%;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 5px;
+  border: 1px solid var(--pico-card-border-color, var(--card-border-color));
+  transition: border-color 0.1s;
+  cursor: zoom-in;
+}
+
+.gallery-thumb img:hover { border-color: var(--brand-color); }
+
+.gallery-thumb figcaption {
+  font-size: 0.692rem;
+  color: var(--pico-muted-color, var(--muted-color));
+  margin-top: 0.15rem;
+}
+
+.gallery-empty { color: var(--pico-muted-color, var(--muted-color)); font-size: 0.846rem; }
+
+/* ── Compare tab ───────────────────────────────────────────────────────────── */
+
+.compare-diff td { background: rgba(245,158,11,0.1); }
+[data-theme="dark"] .compare-diff td { background: rgba(245,158,11,0.08); }
+.compare-diff-note { font-size: 0.769rem; color: var(--pico-muted-color, var(--muted-color)); margin-top: 0.375rem; }
+
+/* ── Runs table ────────────────────────────────────────────────────────────── */
+
+.runs-table { font-size: 0.846rem; }
+.runs-table th { font-size: 0.692rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.runs-table td, .runs-table th { padding: 0.35rem 0.75rem; }
+
+.runs-table tbody tr {
+  cursor: pointer;
+  transition: background 0.08s;
+}
+.runs-table tbody tr:hover td {
+  background: var(--pico-card-sectioning-background-color, var(--card-sectionning-background-color));
+}
+
+.overflow-x { overflow-x: auto; }
+
+/* ── Error ─────────────────────────────────────────────────────────────────── */
+
+.error-msg {
+  color: #dc2626;
+  padding: 0.75rem 1rem;
+  background: #fee2e2;
+  border-radius: 6px;
+  font-size: 0.846rem;
+}
+
+[data-theme="dark"] .error-msg { background: #450a0a; color: #fca5a5; }
+
+/* ── Modal ─────────────────────────────────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.modal-box {
+  background: var(--pico-card-background-color, var(--card-background-color));
+  border-radius: 10px;
+  padding: 1rem;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.modal-box img {
+  max-width: 100%;
+  max-height: 75vh;
+  border-radius: 6px;
+  display: block;
+}

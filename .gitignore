@@ -11,6 +11,9 @@
 !src/
 !src/**/
 !src/**/*.py
+!src/**/*.html
+!src/**/*.css
+!src/**/*.js
 
 # Except tests
 !tests/
