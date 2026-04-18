@@ -57,6 +57,11 @@ action_usage(){
     echo -e "  ${CMD}runs compare${OPT} <experiment_a> <experiment_b>${NC}"
     echo -e "  ${CMD}runs best${OPT} [dir] [--metric val_accuracy|val_loss|test_accuracy]${NC}"
     echo -e ""
+    echo -e "${BOLD}WebUI Commands:${NC}"
+    echo -e "  ${CMD}serve${OPT} [opts]${NC}                launch the CVBench WebUI;"
+    echo -e "    ${OPT}--host <host>${NC}              bind host (default: 127.0.0.1);"
+    echo -e "    ${OPT}--port <N>${NC}                 bind port (default: 8000);"
+    echo -e ""
     echo -e "${BOLD}Test Commands:${NC}"
     echo -e "  ${CMD}test${OPT} [opts]${NC}                 run test suite;"
     echo -e "    ${OPT}-m <mark>${NC}                 run tests matching a mark (e.g. -m 'not tf');"
@@ -74,7 +79,7 @@ action_init(){
     python3 -m venv .venv
     source .venv/bin/activate
     pip install --upgrade pip -q
-    pip install -e ".[dev]"
+    pip install -e ".[dev,web]"
 }
 
 action_activate(){
@@ -113,6 +118,11 @@ action_runs(){
 action_augmentations(){
     action_activate
     augmentations "$@"
+}
+
+action_serve(){
+    action_activate
+    serve "$@"
 }
 
 action_test(){
@@ -162,6 +172,9 @@ case $1 in
         ;;
     augmentations)
         action_augmentations ${@:2}
+        ;;
+    serve)
+        action_serve ${@:2}
         ;;
     test)
         action_test ${@:2}

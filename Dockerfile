@@ -20,7 +20,8 @@ COPY pyproject.toml README.md ./
 COPY src/ ./src/
 
 # Non-editable install — entry points land in /usr/local/bin
-RUN pip install --no-cache-dir . jupyterlab tensorboard
+# cvbench[web] adds fastapi + uvicorn for the WebUI (served by `serve` command)
+RUN pip install --no-cache-dir ".[web]" jupyterlab tensorboard
 
 # ── Suppress TF banner and ldconfig error from /etc/bash.bashrc ──────────
 RUN echo '# cleared by CVBench' > /etc/bash.bashrc
@@ -40,13 +41,15 @@ RUN chown cvbench:cvbench /home/cvbench/.bashrc
 USER cvbench
 WORKDIR /home/cvbench
 
-EXPOSE 8888 6006
+# 8000 — CVBench WebUI (serve)
+# 8888 — JupyterLab (start manually: jupyter lab --ip=0.0.0.0 --no-browser)
+# 6006 — TensorBoard (start manually: tensorboard --logdir experiments/)
+EXPOSE 8000 8888 6006
 
-CMD ["jupyter", "lab", \
-     "--ip=0.0.0.0", \
-     "--port=8888", \
-     "--no-browser", \
-     "--notebook-dir=/home/cvbench"]
+# WebUI starts automatically — same pattern as JupyterLab / TensorBoard.
+# JupyterLab and TensorBoard remain available but must be started manually
+# inside the container when needed.
+CMD ["serve", "--host", "0.0.0.0", "--port", "8000"]
 
 # ── Dev stage — adds test tools and editable reinstall ────────────────────
 FROM prod AS dev
