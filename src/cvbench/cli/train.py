@@ -51,9 +51,16 @@ def _parse_class_weight(value: str | None):
               help="Path to a checkpoint file to resume training from.")
 @click.option("--class-weight", "class_weight_raw", default=None,
               help="Class weighting: null | auto | '{\"cat\": 1.0, \"dog\": 2.5}'")
+@click.option("--lr-patience", default=None, type=int,
+              help="Enable ReduceLROnPlateau: reduce LR after N epochs with no improvement.")
+@click.option("--lr-factor", default=None, type=float,
+              help="LR reduction factor (default 0.5). Requires --lr-patience.")
+@click.option("--lr-min", default=None, type=float,
+              help="Minimum LR floor (default 1e-7). Requires --lr-patience.")
 def train(
     data_dir, output_dir, from_dir, backbone, epochs, lr,
     batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
+    lr_patience, lr_factor, lr_min,
 ):
     """Train a model on DATA_DIR.
 
@@ -82,6 +89,9 @@ def train(
         input_size=input_size,
         dropout=dropout,
         class_weight=class_weight_cfg,
+        lr_patience=lr_patience,
+        lr_factor=lr_factor,
+        lr_min=lr_min,
     )
 
     if aug_file:

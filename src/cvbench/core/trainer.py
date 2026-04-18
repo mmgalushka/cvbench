@@ -17,7 +17,11 @@ def _print_header(exp_dir: str, cfg: CVBenchConfig):
     print(f" Data      : {_fmt.dim(cfg.data.data_dir)}")
     print(f" Backbone  : {cfg.model.backbone}")
     print(f" Epochs    : {cfg.training.epochs}")
-    print(f" LR        : {cfg.training.learning_rate}")
+    lrs = cfg.training.lr_scheduler
+    if lrs.patience > 0:
+        print(f" LR        : {cfg.training.learning_rate}  →  reduce by {lrs.factor}x after {lrs.patience} flat epoch(s) (min {lrs.min_lr})")
+    else:
+        print(f" LR        : {cfg.training.learning_rate}")
     n_transforms = len(cfg.augmentation.transforms)
     print(f" Aug       : {n_transforms} transform(s)")
     print(f" Output    : {_fmt.dim(exp_dir)}")
@@ -61,6 +65,16 @@ def train(
     ckpt_cb = build_checkpoint_callback(cfg, str(run_dir))
     if ckpt_cb:
         callbacks.append(ckpt_cb)
+
+    lrs = cfg.training.lr_scheduler
+    if lrs.patience > 0:
+        callbacks.append(keras.callbacks.ReduceLROnPlateau(
+            monitor=lrs.monitor,
+            factor=lrs.factor,
+            patience=lrs.patience,
+            min_lr=lrs.min_lr,
+            verbose=1,
+        ))
 
     # Graceful interrupt
     _stop_flag = {"value": False}
