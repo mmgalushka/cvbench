@@ -2,18 +2,7 @@ import json
 
 import click
 
-from cvbench.core import _fmt
-from cvbench.core.config import build_config, save_config
-from cvbench.core.data import (
-    build_datasets,
-    get_class_distribution,
-    get_class_names,
-    print_class_balance,
-    resolve_class_weights,
-)
-from cvbench.core.model import build_model
-from cvbench.core.runs import make_run_name, make_unique_dir, EXPERIMENTS_DIR
-from cvbench.core import trainer as _trainer
+from cvbench.services.training import run_training
 
 
 def _parse_class_weight(value: str | None):
@@ -67,20 +56,10 @@ def train(
     DATA_DIR must contain train/, val/, and test/ subdirectories.
     All parameters have sensible defaults and can be overridden individually.
     """
-    from datetime import date
-
-    import tensorflow as tf
-    gpus = tf.config.list_physical_devices("GPU")
-    if gpus:
-        names = ", ".join(g.name for g in gpus)
-        print(_fmt.green(f"🟢 GPU detected: {len(gpus)} device(s) — {names}"))
-    else:
-        print(_fmt.yellow("⚠️  GPU not available, training on CPU"))
-
-    class_weight_cfg = _parse_class_weight(class_weight_raw)
-
-    cfg = build_config(
+    class_weight = _parse_class_weight(class_weight_raw)
+    run_training(
         data_dir=data_dir,
+        output_dir=output_dir,
         from_dir=from_dir,
         backbone=backbone,
         epochs=epochs,
@@ -88,79 +67,10 @@ def train(
         batch_size=batch_size,
         input_size=input_size,
         dropout=dropout,
-        class_weight=class_weight_cfg,
+        aug_file=aug_file,
+        resume=resume,
+        class_weight=class_weight,
         lr_patience=lr_patience,
         lr_factor=lr_factor,
         lr_min=lr_min,
-    )
-
-    if aug_file:
-        from cvbench.core.config import load_aug_file
-        cfg.augmentation = load_aug_file(aug_file)
-
-    # Determine output directory
-    if output_dir is not None:
-        exp_dir = output_dir
-    else:
-        run_name = make_run_name(cfg)
-        exp_dir = str(make_unique_dir(EXPERIMENTS_DIR, run_name))
-
-    # Detect classes and fill derived fields before saving config
-    class_names = get_class_names(cfg.data.train_dir)
-    cfg.data.classes = class_names
-    cfg.model.num_classes = len(class_names)
-
-    # Class balance report + resolve weights
-    class_dist = get_class_distribution(cfg.data.train_dir)
-    print_class_balance(class_dist, cfg.training.class_weight)
-    resolved_weights = resolve_class_weights(
-        cfg.training.class_weight, class_dist, class_names
-    )
-    cfg.run.name = exp_dir.rstrip("/").split("/")[-1]
-    cfg.run.date = date.today().strftime("%Y-%m-%d")
-    cfg.run.status = "running"
-
-    # Write config.yaml before training starts — single source of truth
-    save_config(cfg, exp_dir)
-
-    # Build datasets
-    train_ds, val_ds, _, num_train = build_datasets(cfg)
-
-    # Apply augmentation pipeline outside the model via tf.data.
-    # Keras preprocessing layers must run in a native tf.data.map — calling them
-    # inside tf.numpy_function strips graph context and causes internal shape errors
-    # (e.g. RandomTranslation rank mismatch).  Custom aug_* functions are numpy-based
-    # and still use numpy_function.
-    if cfg.augmentation.transforms:
-        import tensorflow as tf
-        from cvbench.augmentations.pipeline import build_keras_aug_fn, build_custom_aug_fn
-
-        keras_aug = build_keras_aug_fn(cfg.augmentation.transforms)
-        custom_aug = build_custom_aug_fn(cfg.augmentation.transforms)
-
-        if keras_aug is not None:
-            train_ds = train_ds.map(
-                lambda x, y: (keras_aug(x), y),
-                num_parallel_calls=tf.data.AUTOTUNE,
-            )
-
-        if custom_aug is not None:
-            def _custom_aug_map(x, y):
-                x_aug = tf.numpy_function(lambda img: custom_aug(img), [x], tf.float32)
-                x_aug.set_shape(x.shape)
-                return x_aug, y
-            train_ds = train_ds.map(_custom_aug_map, num_parallel_calls=tf.data.AUTOTUNE)
-
-    model = build_model(cfg)
-
-    _trainer.train(
-        cfg=cfg,
-        exp_dir=exp_dir,
-        train_ds=train_ds,
-        val_ds=val_ds,
-        class_names=class_names,
-        model=model,
-        resume_checkpoint=resume,
-        num_train_samples=num_train,
-        class_weight=resolved_weights,
     )

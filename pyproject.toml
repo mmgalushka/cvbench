@@ -27,6 +27,10 @@ gpu-mac = [
 gpu-linux = [
     "tensorflow[and-cuda]==2.16.2",
 ]
+web = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+]
 dev = [
     "pytest==9.0.3",
     "pytest-cov==7.1.0",
@@ -40,6 +44,7 @@ predict      = "cvbench.cli.predict:predict"
 runs         = "cvbench.cli.runs:runs"
 generate     = "cvbench.cli.generate:generate"
 augmentations = "cvbench.cli.augmentations:augmentations"
+serve         = "cvbench.web.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
