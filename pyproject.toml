@@ -49,6 +49,9 @@ serve         = "cvbench.web.app:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+cvbench = ["web/static/**/*"]
+
 [tool.commitizen]
 name = "cz_conventional_commits"
 tag_format = "v$version"
