@@ -1,3 +1,9 @@
+## v0.10.1 (2026-04-18)
+
+### Fix
+
+- include web/static files in package data so non-editable installs serve the WebUI
+
 ## v0.10.0 (2026-04-18)
 
 ### Feat
