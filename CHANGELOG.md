@@ -1,3 +1,11 @@
+## v0.10.0 (2026-04-18)
+
+### Feat
+
+- implement WebUI experiments explorer with interactive confusion matrix
+- lay WebUI foundation — services layer, REST API skeleton, serve command
+- add ReduceLROnPlateau support via --lr-patience/--lr-factor/--lr-min
+
 ## v0.9.0 (2026-04-16)
 
 ### Feat
