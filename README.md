@@ -149,7 +149,8 @@ docker exec cvbench tensorboard --logdir /home/cvbench/experiments --host 0.0.0.
 ```
 train         <data_dir> [--epochs N] [--backbone NAME] [--lr FLOAT] [--batch-size N]
                          [--lr-patience N] [--lr-factor F] [--lr-min F]
-                         [--augmentation FILE] [--resume CHECKPOINT] [--output DIR]
+                         [--fine-tune-from-layer N] [--augmentation FILE]
+                         [--resume CHECKPOINT] [--output DIR]
 evaluate      <experiment>  [--output-dir PATH]
 predict       --checkpoint <path> --input <image-or-folder>
 runs          list       [dir] [--sort val_accuracy|date|backbone]

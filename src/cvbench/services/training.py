@@ -51,6 +51,7 @@ def run_training(
     lr_patience: int | None = None,
     lr_factor: float | None = None,
     lr_min: float | None = None,
+    fine_tune_from_layer: int | None = None,
 ) -> str:
     """Orchestrate a full training run.
 
@@ -81,6 +82,7 @@ def run_training(
         lr_patience=lr_patience,
         lr_factor=lr_factor,
         lr_min=lr_min,
+        fine_tune_from_layer=fine_tune_from_layer,
     )
 
     if aug_file:

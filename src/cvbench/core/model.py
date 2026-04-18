@@ -40,10 +40,18 @@ def build_model(cfg: CVBenchConfig) -> keras.Model:
     x = keras.layers.Rescaling(1.0 / 255.0)(x)
 
     # Backbone (frozen by default; fine-tune top layers if configured)
+    # fine_tune_from_layer == 0  → fully frozen
+    # fine_tune_from_layer == -1 → fully unfrozen
+    # fine_tune_from_layer >  0  → layers[:N] frozen, rest trainable
     backbone = keras_hub.models.EfficientNetBackbone.from_preset(preset)
-    backbone.trainable = cfg.model.fine_tune_from_layer > 0
-    if backbone.trainable:
-        for layer in backbone.layers[: cfg.model.fine_tune_from_layer]:
+    ftl = cfg.model.fine_tune_from_layer
+    if ftl == 0:
+        backbone.trainable = False
+    elif ftl == -1:
+        backbone.trainable = True
+    else:
+        backbone.trainable = True
+        for layer in backbone.layers[:ftl]:
             layer.trainable = False
 
     x = backbone(x)

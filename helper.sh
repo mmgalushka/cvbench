@@ -39,6 +39,7 @@ action_usage(){
     echo -e "    ${OPT}--lr-min <float>${NC}           minimum LR floor (default 1e-7);"
     echo -e "    ${OPT}--batch-size <N>${NC}           batch size;"
     echo -e "    ${OPT}--augmentation <file>${NC}      augmentation YAML file;"
+    echo -e "    ${OPT}--fine-tune-from-layer <N>${NC}  unfreeze backbone from layer N (0=frozen, -1=all);"
     echo -e "    ${OPT}--resume <checkpoint>${NC}      resume from a checkpoint;"
     echo -e "  ${CMD}evaluate${OPT} <experiment> [opts]${NC}  evaluate a trained model (bare name or full path);"
     echo -e "    ${OPT}--split val|test${NC}           dataset split to evaluate on;"

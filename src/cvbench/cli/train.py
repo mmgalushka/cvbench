@@ -46,10 +46,12 @@ def _parse_class_weight(value: str | None):
               help="LR reduction factor (default 0.5). Requires --lr-patience.")
 @click.option("--lr-min", default=None, type=float,
               help="Minimum LR floor (default 1e-7). Requires --lr-patience.")
+@click.option("--fine-tune-from-layer", default=None, type=int,
+              help="Unfreeze backbone from this layer index onward (0=frozen, -1=all layers).")
 def train(
     data_dir, output_dir, from_dir, backbone, epochs, lr,
     batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
-    lr_patience, lr_factor, lr_min,
+    lr_patience, lr_factor, lr_min, fine_tune_from_layer,
 ):
     """Train a model on DATA_DIR.
 
@@ -73,4 +75,5 @@ def train(
         lr_patience=lr_patience,
         lr_factor=lr_factor,
         lr_min=lr_min,
+        fine_tune_from_layer=fine_tune_from_layer,
     )

@@ -199,6 +199,7 @@ def build_config(
     lr_patience: int | None = None,
     lr_factor: float | None = None,
     lr_min: float | None = None,
+    fine_tune_from_layer: int | None = None,
 ) -> CVBenchConfig:
     """Build a CVBenchConfig from CLI options.
 
@@ -236,6 +237,8 @@ def build_config(
         cfg.training.lr_scheduler.factor = lr_factor
     if lr_min is not None:
         cfg.training.lr_scheduler.min_lr = lr_min
+    if fine_tune_from_layer is not None:
+        cfg.model.fine_tune_from_layer = fine_tune_from_layer
 
     return cfg
 
