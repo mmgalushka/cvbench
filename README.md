@@ -148,6 +148,7 @@ docker exec cvbench tensorboard --logdir /home/cvbench/experiments --host 0.0.0.
 
 ```
 train         <data_dir> [--epochs N] [--backbone NAME] [--lr FLOAT] [--batch-size N]
+                         [--lr-patience N] [--lr-factor F] [--lr-min F]
                          [--augmentation FILE] [--resume CHECKPOINT] [--output DIR]
 evaluate      <experiment>  [--output-dir PATH]
 predict       --checkpoint <path> --input <image-or-folder>
@@ -168,6 +169,28 @@ augmentations example    [light|standard|heavy|reference] [--output FILE]
 | `~/cvbench/data`             | `/home/cvbench/data`             | Image datasets (real + synthetic) |
 | `~/cvbench/workspace`        | `/home/cvbench/workspace`        | Augmentation configs, user notebooks, and other working files |
 | `~/cvbench/experiments`      | `/home/cvbench/experiments`      | Experiment directories            |
+
+---
+
+## Learning rate scheduling
+
+By default the learning rate is fixed for the entire training run. Use `--lr-patience` to enable **ReduceLROnPlateau** — the LR is multiplied by `--lr-factor` whenever `val_loss` fails to improve for N consecutive epochs.
+
+```bash
+# Reduce LR by 0.5x after 5 flat epochs (default factor and floor)
+train data/ --lr 1e-3 --lr-patience 5
+
+# Aggressive decay: cut to 20% after 3 flat epochs, floor at 1e-6
+train data/ --lr 1e-3 --lr-patience 3 --lr-factor 0.2 --lr-min 1e-6
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--lr-patience N` | disabled | Epochs with no `val_loss` improvement before reducing LR |
+| `--lr-factor F` | `0.5` | Multiplicative reduction factor |
+| `--lr-min F` | `1e-7` | Minimum LR floor |
+
+The scheduler settings are saved to `config.yaml` and applied automatically when resuming a run.
 
 ---
 

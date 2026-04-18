@@ -61,10 +61,19 @@ class CheckpointsConfig:
 
 
 @dataclass
+class LRSchedulerConfig:
+    patience: int = 0       # 0 = disabled; >0 enables ReduceLROnPlateau
+    factor: float = 0.5
+    min_lr: float = 1e-7
+    monitor: str = "val_loss"
+
+
+@dataclass
 class TrainingConfig:
     epochs: int = 10
     learning_rate: float = 1e-4
     class_weight: Any = None  # null | "auto" | {class_name: weight, ...}
+    lr_scheduler: LRSchedulerConfig = field(default_factory=LRSchedulerConfig)
     interrupt: InterruptConfig = field(default_factory=InterruptConfig)
     checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
 
@@ -130,10 +139,17 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
     tr = d.get("training", {})
     intr = tr.get("interrupt", {})
     ckpt = tr.get("checkpoints", {})
+    lrs = tr.get("lr_scheduler", {})
     cfg.training = TrainingConfig(
         epochs=tr.get("epochs", cfg.training.epochs),
         learning_rate=tr.get("learning_rate", cfg.training.learning_rate),
         class_weight=tr.get("class_weight", cfg.training.class_weight),
+        lr_scheduler=LRSchedulerConfig(
+            patience=lrs.get("patience", cfg.training.lr_scheduler.patience),
+            factor=lrs.get("factor", cfg.training.lr_scheduler.factor),
+            min_lr=lrs.get("min_lr", cfg.training.lr_scheduler.min_lr),
+            monitor=lrs.get("monitor", cfg.training.lr_scheduler.monitor),
+        ),
         interrupt=InterruptConfig(
             enabled=intr.get("enabled", cfg.training.interrupt.enabled),
             save_checkpoint=intr.get("save_checkpoint", cfg.training.interrupt.save_checkpoint),
@@ -180,6 +196,9 @@ def build_config(
     input_size: int | None = None,
     dropout: float | None = None,
     class_weight: Any = None,
+    lr_patience: int | None = None,
+    lr_factor: float | None = None,
+    lr_min: float | None = None,
 ) -> CVBenchConfig:
     """Build a CVBenchConfig from CLI options.
 
@@ -211,6 +230,12 @@ def build_config(
         cfg.model.dropout = dropout
     if class_weight is not None:
         cfg.training.class_weight = class_weight
+    if lr_patience is not None:
+        cfg.training.lr_scheduler.patience = lr_patience
+    if lr_factor is not None:
+        cfg.training.lr_scheduler.factor = lr_factor
+    if lr_min is not None:
+        cfg.training.lr_scheduler.min_lr = lr_min
 
     return cfg
 
