@@ -1,3 +1,9 @@
+## v0.11.0 (2026-04-19)
+
+### Feat
+
+- add data group with generate and explore subcommands for class and brightness analysis
+
 ## v0.10.2 (2026-04-18)
 
 ### Fix
