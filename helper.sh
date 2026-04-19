@@ -21,11 +21,13 @@ action_usage(){
     echo -e "  ${CMD}init${NC}                         create .venv and install all dependencies;"
     echo -e ""
     echo -e "${BOLD}Data Commands:${NC}"
-    echo -e "  ${CMD}generate${OPT} [opts]${NC}             generate synthetic shapes dataset;"
-    echo -e "    ${OPT}--output <dir>${NC}             destination directory (default: data/);"
-    echo -e "    ${OPT}--train/--val/--test <N>${NC}   images per class per split;"
-    echo -e "    ${OPT}--image-size <N>${NC}           image size in pixels (default: 64);"
-    echo -e "    ${OPT}--overwrite${NC}                replace existing output directory;"
+    echo -e "  ${CMD}data generate${OPT} [out_dir] [opts]${NC}  generate synthetic shapes dataset;"
+    echo -e "    ${OPT}--train/--val/--test <N>${NC}         images per class per split;"
+    echo -e "    ${OPT}--image-size <N>${NC}                 image size in pixels (default: 64);"
+    echo -e "    ${OPT}--overwrite${NC}                      replace existing output directory;"
+    echo -e "  ${CMD}data explore${OPT} <data_dir> [opts]${NC}  analyze per-class brightness distribution;"
+    echo -e "    ${OPT}--split <name>${NC}                   split to analyse (default: train);"
+    echo -e "    ${OPT}--threshold <N>${NC}                  bias warning threshold in 0-255 scale (default: 20);"
     echo -e ""
     echo -e "${BOLD}Training Commands:${NC}"
     echo -e "  ${CMD}train${OPT} <data_dir> [opts]${NC}      run training;"
@@ -91,9 +93,9 @@ action_activate(){
     source .venv/bin/activate
 }
 
-action_generate(){
+action_data(){
     action_activate
-    generate "$@"
+    data "$@"
 }
 
 action_train(){
@@ -156,8 +158,8 @@ case $1 in
     init)
         action_init
         ;;
-    generate)
-        action_generate ${@:2}
+    data)
+        action_data ${@:2}
         ;;
     train)
         action_train ${@:2}

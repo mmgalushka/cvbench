@@ -112,7 +112,7 @@ After starting:
 ### Generate a synthetic dataset (smoke-test)
 
 ```bash
-docker exec cvbench generate --train 200 --val 50 --test 50
+docker exec cvbench data generate --train 200 --val 50 --test 50
 ```
 
 This writes to `data/synthetic/` by default. Point training at it immediately:
@@ -156,7 +156,8 @@ predict       --checkpoint <path> --input <image-or-folder>
 runs          list       [dir] [--sort val_accuracy|date|backbone]
 runs          compare    <experiment_a> <experiment_b>
 runs          best       [dir] [--metric val_accuracy|val_loss|test_accuracy]
-generate      [out_dir]  [--train N] [--val N] [--test N] [--image-size N]
+data          generate   [out_dir]  [--train N] [--val N] [--test N] [--image-size N]
+data          explore    <data_dir> [--split train|val|test] [--threshold N]
 augmentations list
 augmentations example    [light|standard|heavy|reference] [--output FILE]
 ```

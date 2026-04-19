@@ -42,7 +42,7 @@ train        = "cvbench.cli.train:train"
 evaluate     = "cvbench.cli.evaluate:evaluate"
 predict      = "cvbench.cli.predict:predict"
 runs         = "cvbench.cli.runs:runs"
-generate     = "cvbench.cli.generate:generate"
+data          = "cvbench.cli.data:data"
 augmentations = "cvbench.cli.augmentations:augmentations"
 serve         = "cvbench.web.app:main"
 
