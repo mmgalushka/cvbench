@@ -7,7 +7,7 @@ from cvbench.core.data import (
     build_datasets,
     get_class_distribution,
     get_class_names,
-    print_class_balance,
+    print_imbalance_warning,
     resolve_class_weights,
 )
 from cvbench.core.model import build_model
@@ -100,7 +100,7 @@ def run_training(
     cfg.model.num_classes = len(class_names)
 
     class_dist = get_class_distribution(cfg.data.train_dir)
-    print_class_balance(class_dist, cfg.training.class_weight)
+    print_imbalance_warning(class_dist, cfg.training.class_weight)
     resolved_weights = resolve_class_weights(
         cfg.training.class_weight, class_dist, class_names
     )

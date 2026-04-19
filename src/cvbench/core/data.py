@@ -54,31 +54,43 @@ def resolve_class_weights(
     return None
 
 
-def print_class_balance(
-    class_dist: dict[str, int],
-    class_weight_cfg,
-) -> None:
-    """Print per-class sample counts with a bar chart and an imbalance warning when needed."""
+def print_class_distribution(class_dist: dict[str, int]) -> None:
+    """Print per-class sample counts with a bar chart."""
     counts = list(class_dist.values())
     max_count = max(counts)
     min_count = min(counts)
     total = sum(counts)
     ratio = max_count / min_count if min_count > 0 else float("inf")
     uniform = all(c == counts[0] for c in counts)
+    max_cls = max(len(cls) for cls in class_dist)
 
     bar_width = 20
-    print(" Class distribution (train):")
+    print(f" {_fmt.bold('Class distribution:')}")
+    print(_fmt.dim(f"   {'Class':<{max_cls}}  {'Images':>6}  {'':^{bar_width}}  {'%':>5}"))
     for cls, count in class_dist.items():
         pct = count / total * 100
         if uniform:
-            print(f"   {cls:<12} {count:>5}  {pct:.1f}%")
+            print(f"   {cls:<{max_cls}}  {count:>6}  {'':^{bar_width}}  {pct:.1f}%")
         else:
             bar = "█" * int(count / max_count * bar_width)
-            print(f"   {cls:<12} {count:>5}  {bar:<{bar_width}}  {pct:.1f}%")
+            print(f"   {cls:<{max_cls}}  {count:>6}  {bar:<{bar_width}}  {pct:.1f}%")
+
+    std_counts = (sum((c - total / len(counts)) ** 2 for c in counts) / len(counts)) ** 0.5
+    imbalanced = std_counts > 0 and any(abs(c - total / len(counts)) > std_counts for c in counts)
+    if imbalanced:
+        print()
+        print(_fmt.yellow(f" ⚠️  Imbalance ratio {ratio:.0f}:1 detected"))
+
+
+def print_imbalance_warning(class_dist: dict[str, int], class_weight_cfg) -> None:
+    """Print an imbalance warning with class-weight tip when ratio >= 3:1."""
+    counts = list(class_dist.values())
+    max_count = max(counts)
+    min_count = min(counts) if min(counts) > 0 else 1
+    ratio = max_count / min_count
 
     if ratio >= 3.0:
-        print()
-        print(f" {_fmt.yellow(f'⚠ Imbalance ratio {ratio:.0f}:1 detected')}")
+        print(_fmt.yellow(f" ⚠️  Imbalance ratio {ratio:.0f}:1 detected"))
         if class_weight_cfg is None:
             print(f"   {_fmt.dim('Tip: rerun with --class-weight auto')}")
         elif class_weight_cfg == "auto":
