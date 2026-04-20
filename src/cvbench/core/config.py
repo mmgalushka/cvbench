@@ -30,6 +30,9 @@ class ModelConfig:
     num_classes: int = 0
     dropout: float = 0.2
     fine_tune_from_layer: int = 0
+    use_lcn: bool = False
+    lcn_kernel_size: int = 32
+    lcn_epsilon: float = 1e-3
 
 
 @dataclass
@@ -124,6 +127,9 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
         num_classes=m.get("num_classes", cfg.model.num_classes),
         dropout=m.get("dropout", cfg.model.dropout),
         fine_tune_from_layer=m.get("fine_tune_from_layer", cfg.model.fine_tune_from_layer),
+        use_lcn=m.get("use_lcn", cfg.model.use_lcn),
+        lcn_kernel_size=m.get("lcn_kernel_size", cfg.model.lcn_kernel_size),
+        lcn_epsilon=m.get("lcn_epsilon", cfg.model.lcn_epsilon),
     )
 
     aug = d.get("augmentation", {})
@@ -200,6 +206,9 @@ def build_config(
     lr_factor: float | None = None,
     lr_min: float | None = None,
     fine_tune_from_layer: int | None = None,
+    use_lcn: bool | None = None,
+    lcn_kernel_size: int | None = None,
+    lcn_epsilon: float | None = None,
 ) -> CVBenchConfig:
     """Build a CVBenchConfig from CLI options.
 
@@ -239,6 +248,12 @@ def build_config(
         cfg.training.lr_scheduler.min_lr = lr_min
     if fine_tune_from_layer is not None:
         cfg.model.fine_tune_from_layer = fine_tune_from_layer
+    if use_lcn is not None:
+        cfg.model.use_lcn = use_lcn
+    if lcn_kernel_size is not None:
+        cfg.model.lcn_kernel_size = lcn_kernel_size
+    if lcn_epsilon is not None:
+        cfg.model.lcn_epsilon = lcn_epsilon
 
     return cfg
 
