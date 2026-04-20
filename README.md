@@ -150,6 +150,7 @@ docker exec cvbench tensorboard --logdir /home/cvbench/experiments --host 0.0.0.
 train         <data_dir> [--epochs N] [--backbone NAME] [--lr FLOAT] [--batch-size N]
                          [--lr-patience N] [--lr-factor F] [--lr-min F]
                          [--fine-tune-from-layer N] [--augmentation FILE]
+                         [--use-lcn] [--lcn-kernel-size N] [--lcn-epsilon F]
                          [--resume CHECKPOINT] [--output DIR]
 evaluate      <experiment>  [--output-dir PATH]
 predict       --checkpoint <path> --input <image-or-folder>
@@ -220,3 +221,27 @@ train data/ --augmentation workspace/my_aug.yaml --epochs 30
 ```bash
 augmentations example reference --output workspace/aug_ref.yaml
 ```
+
+---
+
+## Local Contrast Normalization (LCN)
+
+Use `--use-lcn` when your images come from sensors with different brightness levels or sensitivities (e.g. time-frequency waterfall images from multiple sensors). LCN inserts a preprocessing layer inside the model that removes local mean and normalizes by local standard deviation, making the model respond to *pattern structure* rather than absolute pixel intensity.
+
+The layer is saved as part of the model — no separate preprocessing is needed at inference.
+
+```bash
+# Enable LCN with defaults (kernel=32px, epsilon=1e-3)
+train data/ --use-lcn --epochs 30
+
+# Tune neighbourhood size and stability constant
+train data/ --use-lcn --lcn-kernel-size 48 --lcn-epsilon 0.01 --epochs 30
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--use-lcn` | off | Enable Local Contrast Normalization before the backbone |
+| `--lcn-kernel-size N` | `32` | Gaussian neighbourhood size in pixels |
+| `--lcn-epsilon F` | `1e-3` | Stability constant — increase if flat/noisy regions produce artefacts |
+
+**Kernel size guidance:** for 224×224 images, `32` covers ~14% of the image width — appropriate for fine-grained patterns. Use `48`–`64` for coarser structures or if weak signals appear on a noisy background.
