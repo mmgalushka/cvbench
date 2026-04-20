@@ -1,3 +1,9 @@
+## v0.12.0 (2026-04-20)
+
+### Feat
+
+- add --use-lcn flag for brightness-invariant training via Local Contrast Normalization
+
 ## v0.11.0 (2026-04-19)
 
 ### Feat
