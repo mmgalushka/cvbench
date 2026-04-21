@@ -151,7 +151,7 @@ train         <data_dir> [--epochs N] [--backbone NAME] [--lr FLOAT] [--batch-si
                          [--lr-patience N] [--lr-factor F] [--lr-min F]
                          [--fine-tune-from-layer N] [--augmentation FILE]
                          [--use-lcn] [--lcn-kernel-size N] [--lcn-epsilon F]
-                         [--resume CHECKPOINT] [--output DIR]
+                         [--val-split FLOAT] [--resume CHECKPOINT] [--output DIR]
 evaluate      <experiment>  [--output-dir PATH]
 predict       --checkpoint <path> --input <image-or-folder>
 runs          list       [dir] [--sort val_accuracy|date|backbone]

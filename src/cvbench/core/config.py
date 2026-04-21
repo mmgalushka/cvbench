@@ -21,6 +21,7 @@ class DataConfig:
     classes: list = field(default_factory=list)
     batch_size: int = 16
     val_split: float = 0.2  # fraction of train used for val when val/ dir is absent
+    val_split_explicit: bool = False  # True when val_split was passed explicitly by the user
 
 
 @dataclass
@@ -209,6 +210,7 @@ def build_config(
     use_lcn: bool | None = None,
     lcn_kernel_size: int | None = None,
     lcn_epsilon: float | None = None,
+    val_split: float | None = None,
 ) -> CVBenchConfig:
     """Build a CVBenchConfig from CLI options.
 
@@ -254,6 +256,9 @@ def build_config(
         cfg.model.lcn_kernel_size = lcn_kernel_size
     if lcn_epsilon is not None:
         cfg.model.lcn_epsilon = lcn_epsilon
+    if val_split is not None:
+        cfg.data.val_split = val_split
+        cfg.data.val_split_explicit = True
 
     return cfg
 

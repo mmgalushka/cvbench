@@ -54,11 +54,13 @@ def _parse_class_weight(value: str | None):
               help="LCN neighbourhood size in pixels (default: 32).")
 @click.option("--lcn-epsilon", default=None, type=float,
               help="LCN stability constant for division (default: 1e-3).")
+@click.option("--val-split", default=None, type=float,
+              help="Fraction of train set to use for validation when no val/ directory exists (default: 0.2).")
 def train(
     data_dir, output_dir, from_dir, backbone, epochs, lr,
     batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
     lr_patience, lr_factor, lr_min, fine_tune_from_layer,
-    use_lcn, lcn_kernel_size, lcn_epsilon,
+    use_lcn, lcn_kernel_size, lcn_epsilon, val_split,
 ):
     """Train a model on DATA_DIR.
 
@@ -86,4 +88,5 @@ def train(
         use_lcn=use_lcn or None,
         lcn_kernel_size=lcn_kernel_size,
         lcn_epsilon=lcn_epsilon,
+        val_split=val_split,
     )

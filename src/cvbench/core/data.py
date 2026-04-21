@@ -154,6 +154,11 @@ def build_datasets(
     total_train = sum(1 for _ in Path(cfg.data.train_dir).glob("*/*"))
 
     if os.path.isdir(cfg.data.val_dir):
+        if cfg.data.val_split_explicit:
+            print(_fmt.yellow(
+                f"⚠️  --val-split ignored: a val/ directory was found at {cfg.data.val_dir!r}."
+                " Remove val/ or omit --val-split to silence this warning."
+            ))
         n_val = sum(1 for _ in Path(cfg.data.val_dir).glob("*/*"))
         with contextlib.redirect_stdout(io.StringIO()):
             train_ds = build_dataset(cfg.data.train_dir, class_names, cfg, training=True)
