@@ -1,3 +1,9 @@
+## v0.13.0 (2026-04-21)
+
+### Feat
+
+- add --val-split flag to split train set when no val/ directory exists
+
 ## v0.12.0 (2026-04-20)
 
 ### Feat
