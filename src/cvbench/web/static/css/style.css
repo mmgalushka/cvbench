@@ -414,28 +414,50 @@ body { margin: 0; }
 
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  gap: 0.4rem;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
 }
 
 .gallery-thumb { margin: 0; text-align: center; }
 
+.gallery-thumb .thumb-img-wrap { width: 100%; }
+
 .gallery-thumb img {
   width: 100%;
-  height: 72px;
+  height: 130px;
   object-fit: cover;
   border-radius: 5px;
   border: 1px solid var(--pico-card-border-color, var(--card-border-color));
-  transition: border-color 0.1s;
+  transition: border-color 0.15s;
   cursor: zoom-in;
 }
 
 .gallery-thumb img:hover { border-color: var(--brand-color); }
 
 .gallery-thumb figcaption {
-  font-size: 0.692rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
   color: var(--pico-muted-color, var(--muted-color));
-  margin-top: 0.15rem;
+  margin-top: 0.25rem;
+  gap: 0.25rem;
+}
+
+.explain-btn {
+  font-size: 0.7rem !important;
+  padding: 0.1rem 0.4rem !important;
+  margin: 0 !important;
+  line-height: 1.4 !important;
+  border-radius: 3px !important;
+  white-space: nowrap;
+}
+
+.explain-error {
+  display: block;
+  font-size: 0.615rem;
+  color: var(--pico-del-color, #c0392b);
+  margin-top: 0.1rem;
 }
 
 .gallery-empty { color: var(--pico-muted-color, var(--muted-color)); font-size: 0.846rem; }
