@@ -157,6 +157,7 @@ predict       --checkpoint <path> --input <image-or-folder>
 runs          list       [dir] [--sort val_accuracy|date|backbone]
 runs          compare    <experiment_a> <experiment_b>
 runs          best       [dir] [--metric val_accuracy|val_loss|test_accuracy]
+runs          export     <experiment> --format tflite|onnx|plan [--quantize none|float16|int8] [--output DIR]
 data          generate   [out_dir]  [--train N] [--val N] [--test N] [--image-size N]
 data          explore    <data_dir> [--split train|val|test] [--threshold N]
 augmentations list

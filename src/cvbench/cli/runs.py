@@ -3,6 +3,7 @@ import click
 from cvbench.core import _fmt
 from cvbench.core.runs import scan_experiments, best_experiment, resolve_run_dir, EXPERIMENTS_DIR
 from cvbench.core.config import load_config
+from cvbench.services.export import run_export
 
 
 def _fit(s: str, width: int) -> str:
@@ -90,6 +91,30 @@ def compare(experiment_a, experiment_b):
         diff = " ◀" if va != vb else ""
         print(f" {f:<22}  {va:<26}  {vb:<26}{diff}")
     print(tr)
+
+
+@runs.command()
+@click.argument("experiment")
+@click.option("--format", "fmt", required=True,
+              type=click.Choice(["tflite", "onnx", "plan"]),
+              help="Export format (plan prints Jetson TensorRT instructions).")
+@click.option("--quantize", default="none",
+              type=click.Choice(["none", "float16", "int8"]),
+              show_default=True,
+              help="TFLite quantization mode (ignored for ONNX and plan).")
+@click.option("--output", "output_dir", default=None,
+              help="Output directory (default: <experiment>/export/). Ignored for plan.")
+def export(experiment, fmt, quantize, output_dir):
+    """Export the best checkpoint of EXPERIMENT to TFLite or ONNX, or print Jetson deployment instructions (plan).
+
+    EXPERIMENT is a run name or full path to a run directory.
+    """
+    try:
+        run_export(experiment, format=fmt, quantize=quantize, output_dir=output_dir)
+    except FileNotFoundError as e:
+        raise click.ClickException(str(e))
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
 
 
 @runs.command()

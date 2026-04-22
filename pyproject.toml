@@ -31,6 +31,10 @@ web = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
 ]
+export = [
+    "tf2onnx==1.17.0",
+    "onnx==1.16.2",
+]
 dev = [
     "pytest==9.0.3",
     "pytest-cov==7.1.0",

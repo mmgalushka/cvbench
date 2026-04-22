@@ -63,6 +63,7 @@ action_usage(){
     echo -e "  ${CMD}runs list${OPT} [dir] [--sort val_accuracy|date|backbone]${NC}"
     echo -e "  ${CMD}runs compare${OPT} <experiment_a> <experiment_b>${NC}"
     echo -e "  ${CMD}runs best${OPT} [dir] [--metric val_accuracy|val_loss|test_accuracy]${NC}"
+    echo -e "  ${CMD}runs export${OPT} <experiment> --format tflite|onnx|plan [--quantize none|float16|int8] [--output dir]${NC}"
     echo -e ""
     echo -e "${BOLD}WebUI Commands:${NC}"
     echo -e "  ${CMD}serve${OPT} [opts]${NC}                launch the CVBench WebUI;"
@@ -89,9 +90,9 @@ action_init(){
 
     if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
         echo "Apple Silicon detected — installing tensorflow-metal for GPU acceleration"
-        pip install -e ".[dev,web,gpu-mac]"
+        pip install -e ".[dev,web,export,gpu-mac]"
     else
-        pip install -e ".[dev,web]"
+        pip install -e ".[dev,web,export]"
     fi
 }
 

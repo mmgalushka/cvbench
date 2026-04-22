@@ -41,6 +41,10 @@ def yellow(text: str) -> str:
     return _c("93", text)
 
 
+def blue(text: str) -> str:
+    return _c("94", text)
+
+
 def rule(width: int | None = None, color: str = "dim") -> str:
     """Separator line.
 
