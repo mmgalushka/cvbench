@@ -5,6 +5,7 @@ from pathlib import Path
 
 import keras
 
+from cvbench.core import _fmt
 from cvbench.core.config import CVBenchConfig
 
 
@@ -14,9 +15,20 @@ def build_checkpoint_callback(cfg: CVBenchConfig, run_dir: str) -> keras.callbac
     strategy = ckpt_cfg.strategy
 
     if strategy == "best_only":
-        return keras.callbacks.ModelCheckpoint(
+        monitor = ckpt_cfg.monitor
+
+        class _BestOnly(keras.callbacks.ModelCheckpoint):
+            def on_epoch_end(self, epoch, logs=None):
+                prev_best = self.best
+                super().on_epoch_end(epoch, logs)
+                if self.best != prev_best:
+                    val = logs.get(monitor) if logs else None
+                    val_str = f"{val:.4f}" if val is not None else "—"
+                    print(f"\n  {_fmt.green('✓ New best saved')}  {_fmt.dim(monitor)} = {_fmt.bold(val_str)}")
+
+        return _BestOnly(
             filepath=str(Path(run_dir) / "best.keras"),
-            monitor=ckpt_cfg.monitor,
+            monitor=monitor,
             mode=ckpt_cfg.mode,
             save_best_only=True,
             save_weights_only=False,
@@ -32,6 +44,7 @@ def build_checkpoint_callback(cfg: CVBenchConfig, run_dir: str) -> keras.callbac
             def on_epoch_end(self, epoch, logs=None):
                 if (epoch + 1) % every_n == 0:
                     super().on_epoch_end(epoch, logs)
+                    print(f"\n  {_fmt.green('✓ Checkpoint saved')}  epoch {_fmt.bold(str(epoch + 1))}")
 
         return _EveryNEpochs(
             filepath=str(Path(run_dir) / "epoch_{epoch:03d}.keras"),

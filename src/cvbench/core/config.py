@@ -59,8 +59,8 @@ class InterruptConfig:
 class CheckpointsConfig:
     strategy: str = "best_only"
     every_n_epochs: int = 5
-    monitor: str = "val_accuracy"
-    mode: str = "max"
+    monitor: str = "val_loss"
+    mode: str = "min"
     keep_last_n: int = 1
 
 
@@ -89,6 +89,7 @@ class RunConfig:
     status: str = "running"
     epochs_run: int = 0
     val_accuracy: Any = None
+    val_loss: Any = None
     test_accuracy: Any = None
     resumable: bool = False
     resume_checkpoint: Any = None
@@ -180,6 +181,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
         status=r.get("status", cfg.run.status),
         epochs_run=r.get("epochs_run", cfg.run.epochs_run),
         val_accuracy=r.get("val_accuracy", cfg.run.val_accuracy),
+        val_loss=r.get("val_loss", cfg.run.val_loss),
         test_accuracy=r.get("test_accuracy", cfg.run.test_accuracy),
         resumable=r.get("resumable", cfg.run.resumable),
         resume_checkpoint=r.get("resume_checkpoint", cfg.run.resume_checkpoint),

@@ -26,7 +26,7 @@ def runs():
 @runs.command("list")
 @click.argument("experiments_dir", default=_DEFAULT_EXPERIMENTS_DIR)
 @click.option("--sort", default="date",
-              type=click.Choice(["val_accuracy", "date", "backbone"]),
+              type=click.Choice(["val_accuracy", "val_loss", "date", "backbone"]),
               show_default=True)
 def list_runs(experiments_dir, sort):
     """List experiments in EXPERIMENTS_DIR (default: experiments/)."""
@@ -37,13 +37,13 @@ def list_runs(experiments_dir, sort):
 
     tr = _fmt.rule(76, "white")
     print(tr)
-    print(f" {'Run':<45} {'Status':<12} {'Val Acc':>8}  {'Epochs':>6}")
+    print(f" {'Run':<45} {'Status':<12} {'Val Loss':>9}  {'Epochs':>6}")
     print(tr)
     for r in entries:
-        acc = r.get("val_accuracy")
-        acc_str = f"{acc:.4f}" if acc is not None else "  —   "
+        loss = r.get("val_loss")
+        loss_str = f"{loss:.4f}" if loss is not None else "   —   "
         name = _fit(r['name'], 45)
-        print(f" {name:<45} {r.get('status', '?'):<12} {acc_str:>8}  {r.get('epochs_run', '?'):>6}")
+        print(f" {name:<45} {r.get('status', '?'):<12} {loss_str:>9}  {r.get('epochs_run', '?'):>6}")
     print(tr)
 
 
@@ -74,7 +74,7 @@ def compare(experiment_a, experiment_b):
 
     fields = [
         "backbone", "lr",
-        "epochs", "val_accuracy", "test_accuracy", "epochs_run", "status", "date",
+        "epochs", "val_loss", "val_accuracy", "test_accuracy", "epochs_run", "status", "date",
     ]
     name_a = a.get("name", run_a)
     name_b = b.get("name", run_b)
@@ -94,8 +94,8 @@ def compare(experiment_a, experiment_b):
 
 @runs.command()
 @click.argument("experiments_dir", default=_DEFAULT_EXPERIMENTS_DIR)
-@click.option("--metric", default="val_accuracy",
-              type=click.Choice(["val_accuracy", "val_loss", "test_accuracy"]),
+@click.option("--metric", default="val_loss",
+              type=click.Choice(["val_loss", "val_accuracy", "test_accuracy"]),
               show_default=True)
 def best(experiments_dir, metric):
     """Show the best experiment in EXPERIMENTS_DIR by a given metric."""

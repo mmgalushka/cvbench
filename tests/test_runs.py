@@ -133,25 +133,10 @@ def test_best_experiment_by_val_accuracy(tmp_path):
 
 
 def test_best_experiment_by_val_loss(tmp_path):
-    _write_exp(tmp_path, "good", val_accuracy=0.1)  # reuse val_accuracy as proxy
-    _write_exp(tmp_path, "bad", val_accuracy=0.9)
-    # Test with val_loss directly
-    parent = tmp_path / "loss_test"
-    parent.mkdir()
-    for name, loss in [("good_loss", 0.1), ("bad_loss", 0.9)]:
-        exp_dir = parent / name
-        exp_dir.mkdir()
-        cfg = build_config("data")
-        cfg.run.name = name
-        save_config(cfg, str(exp_dir))
-        # patch val_loss into the yaml directly
-        import yaml
-        p = exp_dir / "config.yaml"
-        raw = yaml.safe_load(p.read_text())
-        raw.setdefault("run", {})["val_accuracy"] = loss  # use val_accuracy as stand-in
-        p.write_text(yaml.dump(raw))
-    b = best_experiment(str(parent), "val_accuracy")
-    assert b["val_accuracy"] == 0.9  # higher is better for val_accuracy
+    _write_exp(tmp_path, "good", val_loss=0.1)
+    _write_exp(tmp_path, "bad", val_loss=0.9)
+    b = best_experiment(str(tmp_path), "val_loss")
+    assert b["name"] == "good"  # lower loss is better
 
 
 def test_best_experiment_no_metric(tmp_path):

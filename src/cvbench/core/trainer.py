@@ -152,6 +152,7 @@ def train(
         status="interrupted" if interrupted else "done",
         epochs_run=last_epoch,
         val_accuracy=final_metrics.get("val_accuracy"),
+        val_loss=final_metrics.get("val_loss"),
         resumable=interrupted,
         resume_checkpoint=interrupt_ckpt,
     )

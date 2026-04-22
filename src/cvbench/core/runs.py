@@ -82,6 +82,7 @@ def _read_entry(exp_dir: Path) -> dict | None:
         "lr": cfg.training.learning_rate,
         "epochs": cfg.training.epochs,
         "val_accuracy": cfg.run.val_accuracy,
+        "val_loss": cfg.run.val_loss,
         "test_accuracy": cfg.run.test_accuracy,
         "epochs_run": cfg.run.epochs_run,
         "status": cfg.run.status,
@@ -108,7 +109,7 @@ def scan_experiments(parent_dir: str, sort_by: str = "date") -> list[dict]:
             if entry is not None:
                 entries.append(entry)
 
-    valid_sorts = {"val_accuracy", "date", "backbone"}
+    valid_sorts = {"val_accuracy", "val_loss", "date", "backbone"}
     key = sort_by if sort_by in valid_sorts else "date"
     reverse = key != "backbone"
     return sorted(
@@ -118,7 +119,7 @@ def scan_experiments(parent_dir: str, sort_by: str = "date") -> list[dict]:
     )
 
 
-def best_experiment(parent_dir: str, metric: str = "val_accuracy") -> dict | None:
+def best_experiment(parent_dir: str, metric: str = "val_loss") -> dict | None:
     """Return the experiment with the best value for the given metric."""
     entries = [e for e in scan_experiments(parent_dir) if e.get(metric) is not None]
     if not entries:

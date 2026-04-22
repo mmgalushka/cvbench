@@ -58,12 +58,12 @@ def test_runs_list_sort_by_val_accuracy(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_runs_best(tmp_path):
-    _write_exp(tmp_path, "low", val_accuracy=0.7)
-    _write_exp(tmp_path, "high", val_accuracy=0.95)
+    _write_exp(tmp_path, "bad_loss", val_loss=0.9)
+    _write_exp(tmp_path, "good_loss", val_loss=0.1)
     runner = CliRunner()
     result = runner.invoke(runs, ["best", str(tmp_path)])
     assert result.exit_code == 0
-    assert "high" in result.output
+    assert "good_loss" in result.output
 
 
 def test_runs_best_no_metric(tmp_path):
