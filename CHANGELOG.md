@@ -1,3 +1,14 @@
+## v0.14.0 (2026-04-22)
+
+### Feat
+
+- auto-install tensorflow-metal and show Metal GPU message on Apple Silicon
+- add Grad-CAM explanation to WebUI gallery
+
+### Fix
+
+- use stored epochs_run as initial_epoch when resuming training
+
 ## v0.13.0 (2026-04-21)
 
 ### Feat
