@@ -382,12 +382,22 @@ function showGallery(runName, trueClass, predClass, count) {
   if (samples.length === 0) {
     body = `<p class="gallery-empty">No sample images stored for this cell.</p>`;
   } else {
-    const thumbs = samples.map(s => {
+    const thumbs = samples.map((s, i) => {
       const imgSrc = `/api/runs/${encodeURIComponent(runName)}/images/${imgPath(s.path)}`;
+      const thumbId = `thumb-${Date.now()}-${i}`;
       return `
-        <figure class="gallery-thumb" onclick="openModal('${imgSrc}')">
-          <img src="${imgSrc}" alt="${escHtml(s.path)}" loading="lazy" />
-          <figcaption>${(s.confidence * 100).toFixed(1)}%</figcaption>
+        <figure class="gallery-thumb" id="${thumbId}">
+          <div class="thumb-img-wrap">
+            <img class="thumb-original" src="${imgSrc}" alt="${escHtml(s.path)}" loading="lazy"
+                 onclick="openModal('${imgSrc}')" />
+          </div>
+          <figcaption>
+            <span>${(s.confidence * 100).toFixed(1)}%</span>
+            <button class="explain-btn outline" title="Show Grad-CAM explanation"
+                    onclick="explainImage(event, '${escHtml(runName)}', '${escHtml(s.path)}', '${escHtml(s.predicted_class)}', '${thumbId}')">
+              Explain
+            </button>
+          </figcaption>
         </figure>
       `;
     }).join('');
@@ -403,6 +413,78 @@ function showGallery(runName, trueClass, predClass, count) {
     ${body}
   `;
   panel.style.display = 'block';
+}
+
+/* ── Grad-CAM explanation ──────────────────────────────────────────────────── */
+
+async function explainImage(event, runName, imagePath, predictedClass, thumbId) {
+  event.stopPropagation();
+  const figure = document.getElementById(thumbId);
+  if (!figure) return;
+
+  const btn = event.target;
+  const wrap = figure.querySelector('.thumb-img-wrap');
+  const img = wrap.querySelector('img');
+  const origSrc = `/api/runs/${encodeURIComponent(runName)}/images/${imgPath(imagePath)}`;
+
+  // Toggle: if heatmap is showing, revert to original
+  if (figure.dataset.explained === '1') {
+    img.src = origSrc;
+    img.onclick = () => openModal(origSrc);
+    btn.textContent = 'Explain';
+    figure.dataset.explained = '0';
+    return;
+  }
+
+  // If heatmap already fetched, just swap it back in
+  if (figure.dataset.heatmap) {
+    img.src = figure.dataset.heatmap;
+    img.onclick = () => openModal(figure.dataset.heatmap);
+    btn.textContent = 'Original';
+    figure.dataset.explained = '1';
+    return;
+  }
+
+  btn.textContent = '…';
+  btn.disabled = true;
+
+  const classes = currentRun?.eval_report?.confusion_matrix?.classes || [];
+  const classIndex = classes.indexOf(predictedClass);
+  if (classIndex === -1) {
+    btn.textContent = 'Explain';
+    btn.disabled = false;
+    const existing = figure.querySelector('.explain-error');
+    if (existing) existing.remove();
+    figure.insertAdjacentHTML('beforeend', '<small class="explain-error">Cannot resolve class index.</small>');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/runs/${encodeURIComponent(runName)}/explain/gradcam`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_path: imagePath, class_index: classIndex }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || res.statusText);
+    }
+    const { heatmap_b64 } = await res.json();
+    const heatSrc = `data:image/png;base64,${heatmap_b64}`;
+
+    figure.dataset.heatmap = heatSrc;
+    img.src = heatSrc;
+    img.onclick = () => openModal(heatSrc);
+    btn.textContent = 'Original';
+    btn.disabled = false;
+    figure.dataset.explained = '1';
+  } catch (e) {
+    btn.textContent = 'Explain';
+    btn.disabled = false;
+    const existing = figure.querySelector('.explain-error');
+    if (existing) existing.remove();
+    figure.insertAdjacentHTML('beforeend', `<small class="explain-error">${escHtml(e.message)}</small>`);
+  }
 }
 
 function imgPath(path) {
