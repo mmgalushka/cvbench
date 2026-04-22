@@ -1,3 +1,9 @@
+## v0.14.1 (2026-04-22)
+
+### Fix
+
+- use val_loss as primary metric for best checkpoint selection and experiment ranking
+
 ## v0.14.0 (2026-04-22)
 
 ### Feat
