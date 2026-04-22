@@ -34,6 +34,7 @@ def run_evaluation(
 
     Returns the evaluation report dict (same structure written to eval_report.json).
     """
+    import platform
     import tensorflow as tf
 
     tf.get_logger().setLevel("ERROR")
@@ -44,8 +45,11 @@ def run_evaluation(
 
     gpus = tf.config.list_physical_devices("GPU")
     if gpus:
-        names = ", ".join(g.name for g in gpus)
-        print(_fmt.green(f"🟢 GPU detected: {len(gpus)} device(s) — {names}"))
+        if platform.system() == "Darwin" and platform.machine() == "arm64":
+            print(_fmt.green(f"🟢 Apple Silicon GPU (Metal) detected — evaluating on {len(gpus)} device(s)"))
+        else:
+            names = ", ".join(g.name for g in gpus)
+            print(_fmt.green(f"🟢 GPU detected: {len(gpus)} device(s) — {names}"))
     else:
         print(_fmt.yellow("⚠️  GPU not available, evaluating on CPU"))
 

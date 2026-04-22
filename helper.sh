@@ -86,7 +86,13 @@ action_init(){
     python3 -m venv .venv
     source .venv/bin/activate
     pip install --upgrade pip -q
-    pip install -e ".[dev,web]"
+
+    if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
+        echo "Apple Silicon detected — installing tensorflow-metal for GPU acceleration"
+        pip install -e ".[dev,web,gpu-mac]"
+    else
+        pip install -e ".[dev,web]"
+    fi
 }
 
 action_activate(){

@@ -62,14 +62,18 @@ def run_training(
     Builds config, datasets, model, and delegates to core trainer.
     Returns the experiment directory path.
     """
+    import platform
     import tensorflow as tf
 
     from cvbench.core import _fmt
 
     gpus = tf.config.list_physical_devices("GPU")
     if gpus:
-        names = ", ".join(g.name for g in gpus)
-        print(_fmt.green(f"🟢 GPU detected: {len(gpus)} device(s) — {names}"))
+        if platform.system() == "Darwin" and platform.machine() == "arm64":
+            print(_fmt.green(f"🟢 Apple Silicon GPU (Metal) detected — training on {len(gpus)} device(s)"))
+        else:
+            names = ", ".join(g.name for g in gpus)
+            print(_fmt.green(f"🟢 GPU detected: {len(gpus)} device(s) — {names}"))
     else:
         print(_fmt.yellow("⚠️  GPU not available, training on CPU"))
 
