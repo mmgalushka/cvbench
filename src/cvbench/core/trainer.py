@@ -52,10 +52,15 @@ def train(
     if resume_checkpoint:
         print(f" Resuming from: {resume_checkpoint}")
         model.load_weights(resume_checkpoint)
-        import re
-        m = re.search(r"epoch[_]?(\d+)", Path(resume_checkpoint).stem)
-        if m:
-            initial_epoch = int(m.group(1))
+        if cfg.run.epochs_run > 0:
+            # Use the epoch count stored in config (reliable for all checkpoint names,
+            # including best.keras which carries no epoch number in its filename).
+            initial_epoch = cfg.run.epochs_run
+        else:
+            import re
+            m = re.search(r"epoch[_]?(\d+)", Path(resume_checkpoint).stem)
+            if m:
+                initial_epoch = int(m.group(1))
 
     # Callbacks
     callbacks = [
