@@ -1,3 +1,9 @@
+## v0.17.0 (2026-04-23)
+
+### Feat
+
+- add mixup augmentation with background-class blending
+
 ## v0.16.0 (2026-04-23)
 
 ### Feat
