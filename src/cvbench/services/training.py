@@ -57,6 +57,8 @@ def run_training(
     lcn_kernel_size: int | None = None,
     lcn_epsilon: float | None = None,
     val_split: float | None = None,
+    mixup_alpha: float | None = None,
+    mixup_background_class: str | None = None,
 ) -> str:
     """Orchestrate a full training run.
 
@@ -149,6 +151,20 @@ def run_training(
                 x_aug.set_shape(x.shape)
                 return x_aug, y
             train_ds = train_ds.map(_custom_aug_map, num_parallel_calls=tf.data.AUTOTUNE)
+
+    if mixup_alpha and mixup_alpha > 0:
+        from cvbench.augmentations.mixup import build_mixup_fn
+        if mixup_background_class not in class_names:
+            raise ValueError(
+                f"--mixup-background-class '{mixup_background_class}' not found. "
+                f"Available classes: {class_names}"
+            )
+        bg_idx = class_names.index(mixup_background_class)
+        train_ds = train_ds.map(
+            build_mixup_fn(background_class_idx=bg_idx, alpha=mixup_alpha),
+            num_parallel_calls=tf.data.AUTOTUNE,
+        )
+        print(_fmt.dim(f" Mixup enabled: alpha={mixup_alpha}, background='{mixup_background_class}' (class {bg_idx})"))
 
     model = build_model(cfg)
 

@@ -47,6 +47,8 @@ action_usage(){
     echo -e "    ${OPT}--lcn-kernel-size <N>${NC}      LCN neighbourhood size in pixels (default: 32);"
     echo -e "    ${OPT}--lcn-epsilon <float>${NC}      LCN stability constant (default: 1e-3);"
     echo -e "    ${OPT}--val-split <float>${NC}        fraction of train used for val when no val/ dir exists (default: 0.2);"
+    echo -e "    ${OPT}--mixup-alpha <float>${NC}      enable mixup blending with background class (0.2 = standard, 0 = off);"
+    echo -e "    ${OPT}--mixup-background-class <name>${NC}  class to use as background/negative for mixup (required with --mixup-alpha);"
     echo -e "    ${OPT}--resume <checkpoint>${NC}      resume from a checkpoint; use with --from to continue two-phase training (--epochs N means end at epoch N, not N more epochs);"
     echo -e "  ${CMD}evaluate${OPT} <experiment> [opts]${NC}  evaluate a trained model (bare name or full path);"
     echo -e "    ${OPT}--split val|test${NC}           dataset split to evaluate on;"

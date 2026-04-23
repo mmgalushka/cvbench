@@ -153,6 +153,7 @@ train         <data_dir> [--epochs N] [--backbone NAME] [--lr FLOAT] [--batch-si
                          [--fine-tune-from-layer N] [--augmentation FILE]
                          [--use-lcn] [--lcn-kernel-size N] [--lcn-epsilon F]
                          [--val-split FLOAT] [--resume CHECKPOINT] [--output DIR]
+                         [--mixup-alpha F] [--mixup-background-class NAME]
 evaluate      <experiment>  [--output-dir PATH]
 predict       --checkpoint <path> --input <image-or-folder>
 runs          list       [dir] [--sort val_accuracy|date|backbone]
@@ -325,3 +326,30 @@ train data/ --use-lcn --lcn-kernel-size 48 --lcn-epsilon 0.01 --epochs 30
 | `--lcn-epsilon F` | `1e-3` | Stability constant — increase if flat/noisy regions produce artefacts |
 
 **Kernel size guidance:** for 224×224 images, `32` covers ~14% of the image width — appropriate for fine-grained patterns. Use `48`–`64` for coarser structures or if weak signals appear on a noisy background.
+
+---
+
+## Mixup
+
+Mixup blends each signal image with a sample from the background class at a random weight λ, creating training examples at varying effective SNR levels. This trains the model to detect signal even when it is partially obscured, and directly reduces false positives caused by the model latching onto a single spectral feature.
+
+Only signal+background pairs are blended. Signal+signal pairs are left unchanged — class boundaries between different signal types remain clean.
+
+```bash
+# Standard mixup — background class is named "noise"
+train data/ --mixup-alpha 0.2 --mixup-background-class noise
+
+# More aggressive blending (more 50/50 mixes)
+train data/ --mixup-alpha 0.4 --mixup-background-class noise
+
+# Combined with augmentation
+train data/ --augmentation workspace/spec_augmentation.yaml \
+            --mixup-alpha 0.2 --mixup-background-class noise
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--mixup-alpha F` | disabled | Beta distribution shape parameter. 0.2 = standard (bimodal, mostly near-pure images). 0.4–0.5 = more uniform blending |
+| `--mixup-background-class NAME` | — | Class name treated as background/negative. Required when `--mixup-alpha` is set |
+
+**Alpha guidance:** `0.2` is the standard starting point — most blended images are strongly one class or the other, with occasional near-50/50 mixes. Increase to `0.4` if the model still overfits to strong signals and misses weak ones.
