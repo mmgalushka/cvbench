@@ -5,7 +5,7 @@ import keras
 import keras_hub
 import tensorflow as tf
 
-from cvbench.core.config import CVBenchConfig
+from cvbench.core.config import CVBenchConfig, LossConfig
 
 
 class LocalContrastNormalization(keras.layers.Layer):
@@ -64,6 +64,17 @@ _BACKBONE_PRESETS = {
 }
 
 
+def _build_loss(loss_cfg: LossConfig) -> keras.losses.Loss:
+    if loss_cfg.type == "focal":
+        return keras.losses.CategoricalFocalCrossentropy(
+            gamma=loss_cfg.focal_gamma,
+            label_smoothing=loss_cfg.label_smoothing,
+        )
+    return keras.losses.CategoricalCrossentropy(
+        label_smoothing=loss_cfg.label_smoothing,
+    )
+
+
 def build_model(cfg: CVBenchConfig) -> keras.Model:
     """Build and return a compiled Keras model.
 
@@ -117,7 +128,7 @@ def build_model(cfg: CVBenchConfig) -> keras.Model:
 
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=cfg.training.learning_rate),
-        loss="categorical_crossentropy",
+        loss=_build_loss(cfg.training.loss),
         metrics=["accuracy"],
     )
 

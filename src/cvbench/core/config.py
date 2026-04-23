@@ -73,10 +73,18 @@ class LRSchedulerConfig:
 
 
 @dataclass
+class LossConfig:
+    type: str = "crossentropy"   # "crossentropy" | "focal"
+    label_smoothing: float = 0.0
+    focal_gamma: float = 2.0     # only used when type="focal"
+
+
+@dataclass
 class TrainingConfig:
     epochs: int = 10
     learning_rate: float = 1e-4
     class_weight: Any = None  # null | "auto" | {class_name: weight, ...}
+    loss: LossConfig = field(default_factory=LossConfig)
     lr_scheduler: LRSchedulerConfig = field(default_factory=LRSchedulerConfig)
     interrupt: InterruptConfig = field(default_factory=InterruptConfig)
     checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
@@ -148,10 +156,16 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
     intr = tr.get("interrupt", {})
     ckpt = tr.get("checkpoints", {})
     lrs = tr.get("lr_scheduler", {})
+    loss = tr.get("loss", {})
     cfg.training = TrainingConfig(
         epochs=tr.get("epochs", cfg.training.epochs),
         learning_rate=tr.get("learning_rate", cfg.training.learning_rate),
         class_weight=tr.get("class_weight", cfg.training.class_weight),
+        loss=LossConfig(
+            type=loss.get("type", cfg.training.loss.type),
+            label_smoothing=loss.get("label_smoothing", cfg.training.loss.label_smoothing),
+            focal_gamma=loss.get("focal_gamma", cfg.training.loss.focal_gamma),
+        ),
         lr_scheduler=LRSchedulerConfig(
             patience=lrs.get("patience", cfg.training.lr_scheduler.patience),
             factor=lrs.get("factor", cfg.training.lr_scheduler.factor),
@@ -205,6 +219,7 @@ def build_config(
     input_size: int | None = None,
     dropout: float | None = None,
     class_weight: Any = None,
+    loss: "LossConfig | None" = None,
     lr_patience: int | None = None,
     lr_factor: float | None = None,
     lr_min: float | None = None,
@@ -244,6 +259,8 @@ def build_config(
         cfg.model.dropout = dropout
     if class_weight is not None:
         cfg.training.class_weight = class_weight
+    if loss is not None:
+        cfg.training.loss = loss
     if lr_patience is not None:
         cfg.training.lr_scheduler.patience = lr_patience
     if lr_factor is not None:

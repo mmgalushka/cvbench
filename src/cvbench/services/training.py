@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from cvbench.core.config import build_config, save_config
+from cvbench.core.config import build_config, save_config, LossConfig
 from cvbench.core.data import (
     build_datasets,
     get_class_distribution,
@@ -48,6 +48,7 @@ def run_training(
     aug_file: str | None = None,
     resume: str | None = None,
     class_weight=None,
+    loss: LossConfig | None = None,
     lr_patience: int | None = None,
     lr_factor: float | None = None,
     lr_min: float | None = None,
@@ -87,6 +88,7 @@ def run_training(
         input_size=input_size,
         dropout=dropout,
         class_weight=class_weight,
+        loss=loss,
         lr_patience=lr_patience,
         lr_factor=lr_factor,
         lr_min=lr_min,

@@ -42,6 +42,7 @@ action_usage(){
     echo -e "    ${OPT}--batch-size <N>${NC}           batch size;"
     echo -e "    ${OPT}--augmentation <file>${NC}      augmentation YAML file;"
     echo -e "    ${OPT}--fine-tune-from-layer <N>${NC}  unfreeze backbone from layer N (0=frozen, -1=all);"
+    echo -e "    ${OPT}--loss <type[:params]>${NC}      loss function: crossentropy (default) | focal | focal:gamma=2.0 | focal:gamma=2.0,label_smoothing=0.1;"
     echo -e "    ${OPT}--use-lcn${NC}                  enable Local Contrast Normalization (pattern-focused, brightness-invariant);"
     echo -e "    ${OPT}--lcn-kernel-size <N>${NC}      LCN neighbourhood size in pixels (default: 32);"
     echo -e "    ${OPT}--lcn-epsilon <float>${NC}      LCN stability constant (default: 1e-3);"

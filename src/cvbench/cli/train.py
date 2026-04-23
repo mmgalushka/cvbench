@@ -2,6 +2,7 @@ import json
 
 import click
 
+from cvbench.core.config import LossConfig
 from cvbench.services.training import run_training
 
 
@@ -19,6 +20,28 @@ def _parse_class_weight(value: str | None):
         pass
     raise click.BadParameter(
         f"Expected null, auto, or a JSON dict like '{{\"cat\": 1.0, \"dog\": 2.5}}', got: {value!r}"
+    )
+
+
+def _parse_loss(value: str | None) -> LossConfig | None:
+    if value is None:
+        return None
+    if ":" not in value:
+        return LossConfig(type=value)
+    loss_type, params_str = value.split(":", 1)
+    params = {}
+    for kv in params_str.split(","):
+        k, v = kv.split("=", 1)
+        params[k.strip()] = v.strip()
+    known = {"crossentropy", "focal"}
+    if loss_type.strip() not in known:
+        raise click.BadParameter(
+            f"Unknown loss type '{loss_type}'. Valid options: {', '.join(sorted(known))}"
+        )
+    return LossConfig(
+        type=loss_type.strip(),
+        label_smoothing=float(params.get("label_smoothing", 0.0)),
+        focal_gamma=float(params.get("gamma", 2.0)),
     )
 
 
@@ -40,6 +63,8 @@ def _parse_class_weight(value: str | None):
               help="Path to a checkpoint file to resume training from.")
 @click.option("--class-weight", "class_weight_raw", default=None,
               help="Class weighting: null | auto | '{\"cat\": 1.0, \"dog\": 2.5}'")
+@click.option("--loss", "loss_raw", default=None,
+              help="Loss function: crossentropy | focal | focal:gamma=2.0 | focal:gamma=2.0,label_smoothing=0.1")
 @click.option("--lr-patience", default=None, type=int,
               help="Enable ReduceLROnPlateau: reduce LR after N epochs with no improvement.")
 @click.option("--lr-factor", default=None, type=float,
@@ -59,7 +84,7 @@ def _parse_class_weight(value: str | None):
 def train(
     data_dir, output_dir, from_dir, backbone, epochs, lr,
     batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
-    lr_patience, lr_factor, lr_min, fine_tune_from_layer,
+    loss_raw, lr_patience, lr_factor, lr_min, fine_tune_from_layer,
     use_lcn, lcn_kernel_size, lcn_epsilon, val_split,
 ):
     """Train a model on DATA_DIR.
@@ -68,6 +93,7 @@ def train(
     All parameters have sensible defaults and can be overridden individually.
     """
     class_weight = _parse_class_weight(class_weight_raw)
+    loss = _parse_loss(loss_raw)
     run_training(
         data_dir=data_dir,
         output_dir=output_dir,
@@ -81,6 +107,7 @@ def train(
         aug_file=aug_file,
         resume=resume,
         class_weight=class_weight,
+        loss=loss,
         lr_patience=lr_patience,
         lr_factor=lr_factor,
         lr_min=lr_min,
