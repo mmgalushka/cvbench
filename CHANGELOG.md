@@ -1,3 +1,9 @@
+## v0.16.0 (2026-04-23)
+
+### Feat
+
+- add --loss flag for focal loss and label smoothing support
+
 ## v0.15.0 (2026-04-22)
 
 ### Feat
