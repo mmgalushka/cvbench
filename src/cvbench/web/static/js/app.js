@@ -15,8 +15,8 @@ function route() {
     showRunsList();
   } else if (hash.startsWith('#/runs/')) {
     showRunDetail(decodeURIComponent(hash.slice(7)));
-  } else if (hash === '#/predict') {
-    showPredict();
+  } else if (hash === '#/inference') {
+    showInference();
   }
 }
 
@@ -613,24 +613,24 @@ function escHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-/* ── Predict page ──────────────────────────────────────────────────────────── */
+/* ── Inference page ──────────────────────────────────────────────────────────── */
 
-let _predictRuns       = [];
-let _predictAugSchema  = [];
-let _predictFile       = null;   // File object from drop / browse
-let _predictAugments   = [];     // [{id, name, label, params: {name: value}}]
-let _predictAugCounter = 0;
-let _predictOrigResult = null;   // last original prediction result
-let _predictAugResult  = null;   // last augmented prediction result
-let _predictOrigKey    = null;   // "run::filename::size" — cache key for orig result
+let _inferRuns       = [];
+let _inferAugSchema  = [];
+let _inferFile       = null;   // File object from drop / browse
+let _inferAugments   = [];     // [{id, name, label, params: {name: value}}]
+let _inferAugCounter = 0;
+let _inferOrigResult = null;   // last original prediction result
+let _inferAugResult  = null;   // last augmented prediction result
+let _inferOrigKey    = null;   // "run::filename::size" — cache key for orig result
 
-async function showPredict() {
-  setActive('nav-predict');
+async function showInference() {
+  setActive('nav-inference');
   const page = document.getElementById('page');
   page.innerHTML = '<p aria-busy="true">Loading…</p>';
 
   try {
-    [_predictRuns, _predictAugSchema] = await Promise.all([
+    [_inferRuns, _inferAugSchema] = await Promise.all([
       api('/runs'),
       api('/augmentations'),
     ]);
@@ -639,40 +639,40 @@ async function showPredict() {
     return;
   }
 
-  _predictFile       = null;
-  _predictAugments   = [];
-  _predictAugCounter = 0;
-  _predictOrigResult = null;
-  _predictAugResult  = null;
+  _inferFile       = null;
+  _inferAugments   = [];
+  _inferAugCounter = 0;
+  _inferOrigResult = null;
+  _inferAugResult  = null;
 
-  page.innerHTML = buildPredictPage();
+  page.innerHTML = buildInferencePage();
   _initDropZone();
 }
 
-function buildPredictPage() {
-  const runOptions = _predictRuns.length
-    ? _predictRuns.map(r =>
+function buildInferencePage() {
+  const runOptions = _inferRuns.length
+    ? _inferRuns.map(r =>
         `<option value="${escHtml(r.name)}">${escHtml(r.name)} (${escHtml(r.backbone)}, ${fmtAcc(r.val_accuracy)})</option>`
       ).join('')
     : '<option value="">No runs available</option>';
 
   return `
-    <div class="page-header"><h2>Predict</h2></div>
-    <div class="predict-layout">
+    <div class="page-header"><h2>Inference</h2></div>
+    <div class="inference-layout">
 
       <!-- LEFT PANEL -->
-      <div class="predict-left">
+      <div class="inference-left">
 
-        <div class="predict-section">
+        <div class="inference-section">
           <p class="section-label">Model</p>
-          <select id="predict-run-select" style="margin:0">
+          <select id="inference-run-select" style="margin:0">
             ${runOptions}
           </select>
         </div>
 
-        <div class="predict-section">
+        <div class="inference-section">
           <p class="section-label">Image</p>
-          <div class="drop-zone" id="predict-drop-zone" onclick="document.getElementById('predict-file-input').click()">
+          <div class="drop-zone" id="inference-drop-zone" onclick="document.getElementById('inference-file-input').click()">
             <div class="drop-inner" id="drop-inner">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -681,18 +681,18 @@ function buildPredictPage() {
               </svg>
               <span>Drop image or click to browse</span>
             </div>
-            <input type="file" id="predict-file-input" accept="image/*" style="display:none"
-                   onchange="onPredictFileSelected(this.files[0])">
+            <input type="file" id="inference-file-input" accept="image/*" style="display:none"
+                   onchange="onInferFileSelected(this.files[0])">
           </div>
         </div>
 
-        <div class="predict-section">
-          <div class="predict-aug-header">
+        <div class="inference-section">
+          <div class="inference-aug-header">
             <p class="section-label" style="margin:0">Augmentations</p>
             <div style="position:relative">
-              <button class="predict-add-btn outline" onclick="toggleAugDropdown(event)">+ Add</button>
+              <button class="inference-add-btn outline" onclick="toggleAugDropdown(event)">+ Add</button>
               <div class="aug-dropdown" id="aug-dropdown" style="display:none">
-                ${_predictAugSchema.map(a =>
+                ${_inferAugSchema.map(a =>
                   `<div class="aug-dropdown-item" onclick="addAugmentation('${escHtml(a.name)}')">${escHtml(a.label)}</div>`
                 ).join('')}
               </div>
@@ -701,15 +701,15 @@ function buildPredictPage() {
           <div id="aug-stack"></div>
         </div>
 
-        <button id="predict-run-btn" class="predict-run-btn" onclick="runPrediction()" disabled>
+        <button id="inference-run-btn" class="inference-run-btn" onclick="runInference()" disabled>
           ▶ Run
         </button>
 
       </div>
 
       <!-- RIGHT PANEL -->
-      <div class="predict-right" id="predict-right">
-        <div class="predict-placeholder">
+      <div class="inference-right" id="inference-right">
+        <div class="inference-placeholder">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3" aria-hidden="true">
             <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
             <polyline points="21 15 16 10 5 21"/>
@@ -725,7 +725,7 @@ function buildPredictPage() {
 /* ── Drop zone ─────────────────────────────────────────────────────────────── */
 
 function _initDropZone() {
-  const zone = document.getElementById('predict-drop-zone');
+  const zone = document.getElementById('inference-drop-zone');
   if (!zone) return;
 
   zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
@@ -734,13 +734,13 @@ function _initDropZone() {
     e.preventDefault();
     zone.classList.remove('drag-over');
     const f = e.dataTransfer.files[0];
-    if (f) onPredictFileSelected(f);
+    if (f) onInferFileSelected(f);
   });
 }
 
-function onPredictFileSelected(file) {
+function onInferFileSelected(file) {
   if (!file) return;
-  _predictFile = file;
+  _inferFile = file;
 
   const reader = new FileReader();
   reader.onload = ev => {
@@ -752,13 +752,13 @@ function onPredictFileSelected(file) {
   };
   reader.readAsDataURL(file);
 
-  const btn = document.getElementById('predict-run-btn');
+  const btn = document.getElementById('inference-run-btn');
   if (btn) btn.disabled = false;
 
   // Clear previous results — new file invalidates the orig cache
-  _predictOrigResult = null;
-  _predictAugResult  = null;
-  _predictOrigKey    = null;
+  _inferOrigResult = null;
+  _inferAugResult  = null;
+  _inferOrigKey    = null;
   _renderRight();
 }
 
@@ -774,25 +774,25 @@ function toggleAugDropdown(e) {
 }
 
 function addAugmentation(name) {
-  const schema = _predictAugSchema.find(a => a.name === name);
+  const schema = _inferAugSchema.find(a => a.name === name);
   if (!schema) return;
 
-  const id = ++_predictAugCounter;
+  const id = ++_inferAugCounter;
   const params = {};
   schema.params.forEach(p => { params[p.name] = p.default; });
-  _predictAugments.push({ id, name, label: schema.label, params });
+  _inferAugments.push({ id, name, label: schema.label, params });
   _renderAugStack();
 }
 
 function removeAugmentation(id) {
-  _predictAugments = _predictAugments.filter(a => a.id !== id);
+  _inferAugments = _inferAugments.filter(a => a.id !== id);
   _renderAugStack();
 }
 
 function updateAugParam(id, paramName, value) {
-  const aug = _predictAugments.find(a => a.id === id);
+  const aug = _inferAugments.find(a => a.id === id);
   if (!aug) return;
-  const schema = _predictAugSchema.find(a => a.name === aug.name);
+  const schema = _inferAugSchema.find(a => a.name === aug.name);
   const pSchema = schema?.params.find(p => p.name === paramName);
   aug.params[paramName] = pSchema?.type === 'int' ? parseInt(value, 10) : pSchema?.type === 'float' ? parseFloat(value) : value;
   // Update displayed value label without full re-render
@@ -804,13 +804,13 @@ function _renderAugStack() {
   const stack = document.getElementById('aug-stack');
   if (!stack) return;
 
-  if (_predictAugments.length === 0) {
+  if (_inferAugments.length === 0) {
     stack.innerHTML = '<p class="aug-empty">No augmentations added.</p>';
     return;
   }
 
-  stack.innerHTML = _predictAugments.map(aug => {
-    const schema = _predictAugSchema.find(a => a.name === aug.name);
+  stack.innerHTML = _inferAugments.map(aug => {
+    const schema = _inferAugSchema.find(a => a.name === aug.name);
     const controls = (schema?.params || []).map(p => {
       const val = aug.params[p.name];
       if (p.type === 'choice') {
@@ -850,27 +850,27 @@ function _renderAugStack() {
 
 /* ── Run prediction ────────────────────────────────────────────────────────── */
 
-async function runPrediction() {
-  if (!_predictFile) return;
+async function runInference() {
+  if (!_inferFile) return;
 
-  const run = document.getElementById('predict-run-select')?.value;
+  const run = document.getElementById('inference-run-select')?.value;
   if (!run) return;
 
-  const btn = document.getElementById('predict-run-btn');
+  const btn = document.getElementById('inference-run-btn');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
 
-  const hasAug = _predictAugments.length > 0;
-  const origKey = `${run}::${_predictFile.name}::${_predictFile.size}`;
-  const origCached = _predictOrigResult && _predictOrigKey === origKey;
+  const hasAug = _inferAugments.length > 0;
+  const origKey = `${run}::${_inferFile.name}::${_inferFile.size}`;
+  const origCached = _inferOrigResult && _inferOrigKey === origKey;
 
-  _predictAugResult = null;
+  _inferAugResult = null;
   _renderPendingGrid(hasAug, origCached);
 
   try {
     if (!origCached) {
-      _predictOrigResult = null;
+      _inferOrigResult = null;
       const fd = new FormData();
-      fd.append('file', _predictFile);
+      fd.append('file', _inferFile);
       fd.append('run', run);
 
       const origRes = await fetch('/api/predict/single', { method: 'POST', body: fd });
@@ -878,15 +878,15 @@ async function runPrediction() {
         const err = await origRes.json().catch(() => ({ detail: origRes.statusText }));
         throw new Error(err.detail || origRes.statusText);
       }
-      _predictOrigResult = await origRes.json();
-      _predictOrigKey    = origKey;
+      _inferOrigResult = await origRes.json();
+      _inferOrigKey    = origKey;
       _updateOrigPanel();
     }
 
     if (hasAug) {
-      const augPayload = _predictAugments.map(a => ({ name: a.name, params: a.params }));
+      const augPayload = _inferAugments.map(a => ({ name: a.name, params: a.params }));
       const fd2 = new FormData();
-      fd2.append('file', _predictFile);
+      fd2.append('file', _inferFile);
       fd2.append('run', run);
       fd2.append('augmentations', JSON.stringify(augPayload));
 
@@ -895,11 +895,11 @@ async function runPrediction() {
         const err = await augRes.json().catch(() => ({ detail: augRes.statusText }));
         throw new Error(err.detail || augRes.statusText);
       }
-      _predictAugResult = await augRes.json();
+      _inferAugResult = await augRes.json();
       _updateAugPanel();
     }
   } catch (e) {
-    document.getElementById('predict-right').innerHTML =
+    document.getElementById('inference-right').innerHTML =
       `<p class="error-msg">${escHtml(e.message)}</p>`;
     if (btn) { btn.disabled = false; btn.textContent = '▶ Run'; }
     return;
@@ -911,17 +911,17 @@ async function runPrediction() {
 /* ── Right panel rendering ─────────────────────────────────────────────────── */
 
 function _renderRight() {
-  const right = document.getElementById('predict-right');
+  const right = document.getElementById('inference-right');
   if (!right) return;
   right.innerHTML = `
-    <div class="predict-placeholder">
+    <div class="inference-placeholder">
       <p>Drop an image and press Run to see predictions</p>
     </div>`;
 }
 
 function _pendingSlot(label) {
   return `
-    <div class="predict-result-panel">
+    <div class="inference-result-panel">
       <p class="section-label">${label}</p>
       <div class="aug-processing-placeholder">
         <div class="aug-processing-spinner"></div>
@@ -931,42 +931,42 @@ function _pendingSlot(label) {
 }
 
 function _renderPendingGrid(hasAug, origCached) {
-  const right = document.getElementById('predict-right');
+  const right = document.getElementById('inference-right');
   if (!right) return;
   const origContent = origCached
-    ? `<div class="predict-result-panel"><p class="section-label">Original</p>${buildResultPanel('orig', _predictOrigResult, null)}</div>`
+    ? `<div class="inference-result-panel"><p class="section-label">Original</p>${buildResultPanel('orig', _inferOrigResult, null)}</div>`
     : _pendingSlot('Original');
   right.innerHTML = `
-    <div class="predict-results-grid ${hasAug ? 'has-aug' : ''}">
-      <div id="predict-orig-slot">${origContent}</div>
-      ${hasAug ? `<div id="predict-aug-slot">${_pendingSlot('Augmented')}</div>` : '<div id="predict-aug-slot"></div>'}
+    <div class="inference-results-grid ${hasAug ? 'has-aug' : ''}">
+      <div id="inference-orig-slot">${origContent}</div>
+      ${hasAug ? `<div id="inference-aug-slot">${_pendingSlot('Augmented')}</div>` : '<div id="inference-aug-slot"></div>'}
     </div>`;
 }
 
 function _updateOrigPanel() {
-  const slot = document.getElementById('predict-orig-slot');
-  if (!slot || !_predictOrigResult) return;
+  const slot = document.getElementById('inference-orig-slot');
+  if (!slot || !_inferOrigResult) return;
   slot.innerHTML = `
-    <div class="predict-result-panel">
+    <div class="inference-result-panel">
       <p class="section-label">Original</p>
-      ${buildResultPanel('orig', _predictOrigResult, null)}
+      ${buildResultPanel('orig', _inferOrigResult, null)}
     </div>`;
 }
 
 function _updateAugPanel() {
-  if (!_predictAugResult) return;
-  const grid = document.querySelector('.predict-results-grid');
+  if (!_inferAugResult) return;
+  const grid = document.querySelector('.inference-results-grid');
   if (grid) grid.classList.add('has-aug');
-  const flipped = _predictAugResult.class_name !== _predictOrigResult.class_name;
-  const slot = document.getElementById('predict-aug-slot');
+  const flipped = _inferAugResult.class_name !== _inferOrigResult.class_name;
+  const slot = document.getElementById('inference-aug-slot');
   if (!slot) return;
   slot.innerHTML = `
-    <div class="predict-result-panel ${flipped ? 'result-flipped' : ''}">
+    <div class="inference-result-panel ${flipped ? 'result-flipped' : ''}">
       <p class="section-label">
         Augmented
         ${flipped ? '<span class="flip-badge">⚠ prediction changed</span>' : ''}
       </p>
-      ${buildResultPanel('aug', _predictAugResult, _predictAugResult.augmented_image_b64)}
+      ${buildResultPanel('aug', _inferAugResult, _inferAugResult.augmented_image_b64)}
     </div>`;
 }
 
@@ -990,7 +990,7 @@ function buildResultPanel(panelId, result, augImageB64) {
 
   const imgSrc = augImageB64
     ? `data:image/png;base64,${augImageB64}`
-    : (_predictFile ? URL.createObjectURL(_predictFile) : '');
+    : (_inferFile ? URL.createObjectURL(_inferFile) : '');
 
   return `
     <div class="result-image-wrap">
@@ -1008,7 +1008,7 @@ function buildResultPanel(panelId, result, augImageB64) {
   `;
 }
 
-/* ── XAI for predict page ──────────────────────────────────────────────────── */
+/* ── XAI for inference page ─────────────────────────────────────────────────── */
 
 async function explainPrediction(event, panelId, classIndex) {
   const btn = event.target;
@@ -1037,13 +1037,13 @@ async function explainPrediction(event, panelId, classIndex) {
   btn.disabled = true;
   if (errEl) errEl.textContent = '';
 
-  const run = document.getElementById('predict-run-select')?.value;
+  const run = document.getElementById('inference-run-select')?.value;
   if (!run) { btn.textContent = 'Explain'; btn.disabled = false; return; }
 
   // For the augmented panel, XAI runs on the augmented image bytes (base64 → Blob)
-  let fileToSend = _predictFile;
-  if (panelId === 'aug' && _predictAugResult?.augmented_image_b64) {
-    const binary = atob(_predictAugResult.augmented_image_b64);
+  let fileToSend = _inferFile;
+  if (panelId === 'aug' && _inferAugResult?.augmented_image_b64) {
+    const binary = atob(_inferAugResult.augmented_image_b64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     fileToSend = new Blob([bytes], { type: 'image/png' });
