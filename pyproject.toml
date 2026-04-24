@@ -35,6 +35,7 @@ web = [
 export = [
     "tf2onnx==1.17.0",
     "onnx==1.16.2",
+    "onnxruntime>=1.18",
 ]
 dev = [
     "pytest==9.0.3",

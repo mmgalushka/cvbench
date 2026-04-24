@@ -45,14 +45,15 @@ def blue(text: str) -> str:
     return _c("94", text)
 
 
-def rule(width: int | None = None, color: str = "dim") -> str:
+def rule(width: int | None = None, color: str = "dim", thick: bool = False) -> str:
     """Separator line.
 
     width  — explicit width; defaults to full terminal width.
     color  — 'dim' (gray) or 'white' (bright white).
+    thick  — use heavy box-drawing character ━ instead of ─.
     """
     w = width if width is not None else term_width()
-    line = "─" * w
+    line = ("━" if thick else "─") * w
     if not _color_enabled():
         return line
     if color == "white":

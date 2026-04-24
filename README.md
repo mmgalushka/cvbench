@@ -160,6 +160,7 @@ runs          list       [dir] [--sort val_accuracy|date|backbone]
 runs          compare    <experiment_a> <experiment_b>
 runs          best       [dir] [--metric val_accuracy|val_loss|test_accuracy]
 runs          export     <experiment> --format tflite|onnx|plan [--quantize none|float16|int8] [--output DIR]
+runs          predict    <experiment> <image-or-folder> [--format keras|onnx|tflite|plan|all]
 data          generate   [out_dir]  [--train N] [--val N] [--test N] [--image-size N]
 data          explore    <data_dir> [--split train|val|test] [--threshold N]
 augmentations list

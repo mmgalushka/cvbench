@@ -21,7 +21,7 @@ COPY src/ ./src/
 
 # Non-editable install — entry points land in /usr/local/bin
 # cvbench[web] adds fastapi + uvicorn for the WebUI (served by `serve` command)
-RUN pip install --no-cache-dir ".[web]" jupyterlab tensorboard
+RUN pip install --no-cache-dir ".[web,export]" jupyterlab tensorboard
 
 # ── Suppress TF banner and ldconfig error from /etc/bash.bashrc ──────────
 RUN echo '# cleared by CVBench' > /etc/bash.bashrc

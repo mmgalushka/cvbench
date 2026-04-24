@@ -67,6 +67,7 @@ action_usage(){
     echo -e "  ${CMD}runs compare${OPT} <experiment_a> <experiment_b>${NC}"
     echo -e "  ${CMD}runs best${OPT} [dir] [--metric val_accuracy|val_loss|test_accuracy]${NC}"
     echo -e "  ${CMD}runs export${OPT} <experiment> --format tflite|onnx|plan [--quantize none|float16|int8] [--output dir]${NC}"
+    echo -e "  ${CMD}runs predict${OPT} <experiment> <image-or-folder> [--format keras|onnx|tflite|plan|all]${NC}"
     echo -e ""
     echo -e "${BOLD}WebUI Commands:${NC}"
     echo -e "  ${CMD}serve${OPT} [opts]${NC}                launch the CVBench WebUI;"
