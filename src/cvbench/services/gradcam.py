@@ -16,6 +16,20 @@ import io
 import numpy as np
 
 
+def compute_gradcam_from_bytes(checkpoint: str, image_bytes: bytes, class_index: int) -> str:
+    """Like compute_gradcam but accepts raw image bytes instead of a file path."""
+    import os
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+        f.write(image_bytes)
+        tmp_path = f.name
+    try:
+        return compute_gradcam(checkpoint, tmp_path, class_index)
+    finally:
+        os.unlink(tmp_path)
+
+
 def compute_gradcam(checkpoint: str, image_path: str, class_index: int) -> str:
     """Return a base64 PNG of the Grad-CAM heatmap blended onto the original image.
 

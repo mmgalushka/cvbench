@@ -16,13 +16,13 @@ it here.
 
 try:
     from fastapi import APIRouter
-    from cvbench.web.api import runs, explain
+    from cvbench.web.api import runs, explain, prediction
 
     router = APIRouter()
-    router.include_router(runs.router,    tags=["runs"])
-    router.include_router(explain.router, tags=["explain"])
+    router.include_router(runs.router,        tags=["runs"])
+    router.include_router(explain.router,     tags=["explain"])
+    router.include_router(prediction.router,  tags=["prediction"])
     # router.include_router(training.router,   tags=["training"])
     # router.include_router(evaluation.router, tags=["evaluation"])
-    # router.include_router(prediction.router, tags=["prediction"])
 except ImportError:
     router = None  # type: ignore[assignment]  # guarded in app.create_app()
