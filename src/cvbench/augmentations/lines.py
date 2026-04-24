@@ -1,6 +1,30 @@
 import numpy as np
 
 
+def aug_lines(
+    img: np.ndarray,
+    n_lines: int = 5,
+    width: int = 2,
+    brightness: int = 128,
+    orientation: str = "h",
+    seed: int = None,
+) -> np.ndarray:
+    """Draw N random lines along the given orientation ('h' or 'v')."""
+    rng = np.random.default_rng(seed)
+    out = img.copy()
+    h, w = img.shape[:2]
+    axis_size = h if orientation == "h" else w
+    for _ in range(n_lines):
+        pos = rng.integers(0, axis_size)
+        p0 = max(0, pos - width // 2)
+        p1 = min(axis_size, p0 + width)
+        if orientation == "h":
+            out[p0:p1, :] = brightness
+        else:
+            out[:, p0:p1] = brightness
+    return out
+
+
 def aug_lines_h(
     img: np.ndarray,
     n_lines: int = 5,
@@ -9,15 +33,7 @@ def aug_lines_h(
     seed: int = None,
 ) -> np.ndarray:
     """Draw N random horizontal lines with given width and brightness."""
-    rng = np.random.default_rng(seed)
-    out = img.copy()
-    h = img.shape[0]
-    for _ in range(n_lines):
-        y  = rng.integers(0, h)
-        y0 = max(0, y - width // 2)
-        y1 = min(h, y0 + width)
-        out[y0:y1, :] = brightness
-    return out
+    return aug_lines(img, n_lines, width, brightness, "h", seed)
 
 
 def aug_lines_v(
@@ -28,12 +44,4 @@ def aug_lines_v(
     seed: int = None,
 ) -> np.ndarray:
     """Draw N random vertical lines with given width and brightness."""
-    rng = np.random.default_rng(seed)
-    out = img.copy()
-    iw = img.shape[1]
-    for _ in range(n_lines):
-        x  = rng.integers(0, iw)
-        x0 = max(0, x - width // 2)
-        x1 = min(iw, x0 + width)
-        out[:, x0:x1] = brightness
-    return out
+    return aug_lines(img, n_lines, width, brightness, "v", seed)

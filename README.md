@@ -153,7 +153,6 @@ train         <data_dir> [--epochs N] [--backbone NAME] [--lr FLOAT] [--batch-si
                          [--fine-tune-from-layer N] [--augmentation FILE]
                          [--use-lcn] [--lcn-kernel-size N] [--lcn-epsilon F]
                          [--val-split FLOAT] [--resume CHECKPOINT] [--output DIR]
-                         [--mixup-alpha F] [--mixup-background-class NAME]
 evaluate      <experiment>  [--output-dir PATH]
 predict       <experiment> <image-or-folder> [--format keras|onnx|tflite|plan|all]
 runs          list       [dir] [--sort val_accuracy|date|backbone]
@@ -335,21 +334,30 @@ Mixup blends each signal image with a sample from the background class at a rand
 
 Only signal+background pairs are blended. Signal+signal pairs are left unchanged — class boundaries between different signal types remain clean.
 
-```bash
-# Standard mixup — background class is named "noise"
-train data/ --mixup-alpha 0.2 --mixup-background-class noise
+Mixup is configured in the augmentation YAML file alongside the image transforms:
 
-# More aggressive blending (more 50/50 mixes)
-train data/ --mixup-alpha 0.4 --mixup-background-class noise
+```yaml
+# workspace/my_aug.yaml
+transforms:
+  - name: aug_blur
+    prob: 0.5
+    radius: [0.5, 2.5]
+  # ... other transforms ...
 
-# Combined with augmentation
-train data/ --augmentation workspace/spec_augmentation.yaml \
-            --mixup-alpha 0.2 --mixup-background-class noise
+mixup:
+  alpha: 0.2
+  background_class: noise
 ```
 
-| Option | Default | Description |
+```bash
+train data/ --augmentation workspace/my_aug.yaml
+```
+
+To disable mixup, omit the `mixup:` section from the YAML entirely.
+
+| Field | Default | Description |
 |---|---|---|
-| `--mixup-alpha F` | disabled | Beta distribution shape parameter. 0.2 = standard (bimodal, mostly near-pure images). 0.4–0.5 = more uniform blending |
-| `--mixup-background-class NAME` | — | Class name treated as background/negative. Required when `--mixup-alpha` is set |
+| `alpha` | — | Beta distribution shape parameter. 0.2 = standard (bimodal, mostly near-pure images). 0.4–0.5 = more uniform blending |
+| `background_class` | — | Class name treated as background/negative |
 
 **Alpha guidance:** `0.2` is the standard starting point — most blended images are strongly one class or the other, with occasional near-50/50 mixes. Increase to `0.4` if the model still overfits to strong signals and misses weak ones.

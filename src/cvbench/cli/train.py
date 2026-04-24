@@ -81,25 +81,17 @@ def _parse_loss(value: str | None) -> LossConfig | None:
               help="LCN stability constant for division (default: 1e-3).")
 @click.option("--val-split", default=None, type=float,
               help="Fraction of train set to use for validation when no val/ directory exists (default: 0.2).")
-@click.option("--mixup-alpha", default=None, type=float,
-              help="Enable mixup: blend signal images with the background class. 0.2 is standard (0 = disabled).")
-@click.option("--mixup-background-class", default=None, type=str,
-              help="Class name to use as the background/negative for mixup blending. Required when --mixup-alpha is set.")
 def train(
     data_dir, output_dir, from_dir, backbone, epochs, lr,
     batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
     loss_raw, lr_patience, lr_factor, lr_min, fine_tune_from_layer,
     use_lcn, lcn_kernel_size, lcn_epsilon, val_split,
-    mixup_alpha, mixup_background_class,
 ):
     """Train a model on DATA_DIR.
 
     DATA_DIR must contain train/, val/, and test/ subdirectories.
     All parameters have sensible defaults and can be overridden individually.
     """
-    if mixup_alpha is not None and mixup_alpha > 0 and not mixup_background_class:
-        raise click.UsageError("--mixup-background-class is required when --mixup-alpha is set.")
-
     class_weight = _parse_class_weight(class_weight_raw)
     loss = _parse_loss(loss_raw)
     run_training(
@@ -124,6 +116,4 @@ def train(
         lcn_kernel_size=lcn_kernel_size,
         lcn_epsilon=lcn_epsilon,
         val_split=val_split,
-        mixup_alpha=mixup_alpha,
-        mixup_background_class=mixup_background_class,
     )

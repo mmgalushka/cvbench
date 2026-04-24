@@ -3,6 +3,8 @@ import random
 import numpy as np
 import keras
 
+from cvbench.core.config import OneOfConfig
+
 _KERAS_MAP = {
     "keras_flip":        (keras.layers.RandomFlip,        {"mode": "horizontal"}),
     "keras_rotation":    (keras.layers.RandomRotation,    {"factor": 0.1}),
@@ -17,15 +19,17 @@ _KERAS_MAP = {
 
 def build_aug_pipeline(transforms: list) -> callable:
     """
-    Build an augmentation pipeline from a list of TransformConfig objects.
+    Build an augmentation pipeline from a list of TransformConfig / OneOfConfig objects.
 
     Returns apply(img: np.ndarray float32 [0,255]) -> np.ndarray float32 [0,255].
-    Each step fires independently with its own prob.
+    Each step fires independently with its own prob; one_of groups pick one candidate.
     """
     steps = []
     for t in transforms:
-        fn = _resolve(t.name, t.params)
-        steps.append((fn, t.prob))
+        if isinstance(t, OneOfConfig):
+            steps.append((_make_one_of_fn(t.candidates), t.prob))
+        else:
+            steps.append((_resolve(t.name, t.params), t.prob))
 
     def apply(img):
         for fn, prob in steps:
@@ -34,6 +38,23 @@ def build_aug_pipeline(transforms: list) -> callable:
         return img
 
     return apply
+
+
+def _make_one_of_fn(candidates: list):
+    """Build a function that picks one candidate by weight and applies it."""
+    fns_weights = [(_resolve(c.name, c.params), c.weight) for c in candidates]
+    total = sum(w for _, w in fns_weights)
+
+    def one_of_fn(img):
+        r = random.uniform(0, total)
+        cumul = 0.0
+        for fn, w in fns_weights:
+            cumul += w
+            if r <= cumul:
+                return fn(img)
+        return fns_weights[-1][0](img)
+
+    return one_of_fn
 
 
 def build_keras_aug_fn(transforms: list):
@@ -49,6 +70,8 @@ def build_keras_aug_fn(transforms: list):
 
     keras_steps = []
     for t in transforms:
+        if isinstance(t, OneOfConfig):
+            continue  # one_of groups contain only aug_* custom transforms
         if t.name in _KERAS_MAP:
             cls, defaults = _KERAS_MAP[t.name]
             merged = {**defaults, **t.params}
@@ -79,7 +102,11 @@ def build_custom_aug_fn(transforms: list):
     """
     steps = []
     for t in transforms:
-        if t.name.startswith("aug_"):
+        if isinstance(t, OneOfConfig):
+            aug_candidates = [c for c in t.candidates if c.name.startswith("aug_")]
+            if aug_candidates:
+                steps.append((_make_one_of_fn(aug_candidates), t.prob))
+        elif t.name.startswith("aug_"):
             fn = _resolve(t.name, t.params)
             steps.append((fn, t.prob))
 

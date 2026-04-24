@@ -44,8 +44,27 @@ class TransformConfig:
 
 
 @dataclass
+class OneOfCandidateConfig:
+    name: str
+    weight: float = 1.0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class OneOfConfig:
+    prob: float = 1.0
+    candidates: list = field(default_factory=list)  # list[OneOfCandidateConfig]
+
+
+@dataclass
+class MixupConfig:
+    alpha: float = 0.2
+    background_class: str = ""
+
+
+@dataclass
 class AugmentationConfig:
-    transforms: list = field(default_factory=list)  # list[TransformConfig]
+    transforms: list = field(default_factory=list)  # list[TransformConfig | OneOfConfig]
 
 
 @dataclass
@@ -88,6 +107,7 @@ class TrainingConfig:
     lr_scheduler: LRSchedulerConfig = field(default_factory=LRSchedulerConfig)
     interrupt: InterruptConfig = field(default_factory=InterruptConfig)
     checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
+    mixup: MixupConfig | None = None
 
 
 @dataclass
@@ -111,6 +131,39 @@ class CVBenchConfig:
     augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
     run: RunConfig = field(default_factory=RunConfig)
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _parse_transforms(raw: list) -> list:
+    transforms = []
+    for t in raw:
+        if "one_of" in t:
+            group = t["one_of"]
+            candidates = []
+            for c in group.get("candidates", []):
+                name = c["name"]
+                weight = c.get("weight", 1.0)
+                params = {k: v for k, v in c.items() if k not in ("name", "weight")}
+                candidates.append(OneOfCandidateConfig(name=name, weight=weight, params=params))
+            transforms.append(OneOfConfig(prob=group.get("prob", 1.0), candidates=candidates))
+        else:
+            name = t["name"]
+            prob = t.get("prob", 1.0)
+            params = {k: v for k, v in t.items() if k not in ("name", "prob")}
+            transforms.append(TransformConfig(name=name, prob=prob, params=params))
+    return transforms
+
+
+def _parse_mixup(raw: dict | None) -> MixupConfig | None:
+    if not raw:
+        return None
+    return MixupConfig(
+        alpha=raw.get("alpha", 0.2),
+        background_class=raw.get("background_class", ""),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -143,14 +196,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
     )
 
     aug = d.get("augmentation", {})
-    raw_transforms = aug.get("transforms", [])
-    transforms = []
-    for t in raw_transforms:
-        name = t["name"]
-        prob = t.get("prob", 1.0)
-        params = {k: v for k, v in t.items() if k not in ("name", "prob")}
-        transforms.append(TransformConfig(name=name, prob=prob, params=params))
-    cfg.augmentation = AugmentationConfig(transforms=transforms)
+    cfg.augmentation = AugmentationConfig(transforms=_parse_transforms(aug.get("transforms", [])))
 
     tr = d.get("training", {})
     intr = tr.get("interrupt", {})
@@ -186,6 +232,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
             mode=ckpt.get("mode", cfg.training.checkpoints.mode),
             keep_last_n=ckpt.get("keep_last_n", cfg.training.checkpoints.keep_last_n),
         ),
+        mixup=_parse_mixup(tr.get("mixup")),
     )
 
     r = d.get("run", {})
@@ -292,6 +339,16 @@ def save_config(cfg: CVBenchConfig, exp_dir: str):
             d = {"name": obj.name, "prob": obj.prob}
             d.update(obj.params)
             return d
+        if isinstance(obj, OneOfConfig):
+            return {
+                "one_of": {
+                    "prob": obj.prob,
+                    "candidates": [
+                        {"name": c.name, "weight": c.weight, **c.params}
+                        for c in obj.candidates
+                    ],
+                }
+            }
         if dataclasses.is_dataclass(obj):
             return {f.name: _to_dict(getattr(obj, f.name)) for f in dataclasses.fields(obj)}
         if isinstance(obj, list):
@@ -312,18 +369,13 @@ def load_config(exp_dir: str) -> CVBenchConfig:
     return _dict_to_config(raw)
 
 
-def load_aug_file(path: str) -> AugmentationConfig:
-    """Load an augmentation YAML file and return an AugmentationConfig."""
+def load_aug_file(path: str) -> tuple:
+    """Load an augmentation YAML file. Returns (AugmentationConfig, MixupConfig | None)."""
     with open(path) as f:
         raw = yaml.safe_load(f) or {}
-    raw_transforms = raw.get("transforms", [])
-    transforms = []
-    for t in raw_transforms:
-        name = t["name"]
-        prob = t.get("prob", 1.0)
-        params = {k: v for k, v in t.items() if k not in ("name", "prob")}
-        transforms.append(TransformConfig(name=name, prob=prob, params=params))
-    return AugmentationConfig(transforms=transforms)
+    aug = AugmentationConfig(transforms=_parse_transforms(raw.get("transforms", [])))
+    mixup = _parse_mixup(raw.get("mixup"))
+    return aug, mixup
 
 
 def update_run_status(exp_dir: str, **kwargs):
