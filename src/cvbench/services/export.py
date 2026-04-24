@@ -76,7 +76,7 @@ def _print_plan_instructions(run_name: str, onnx_exists: bool) -> None:
     print()
     print(f" {_fmt.bold('Step 2')} {_fmt.dim('— on the Jetson, convert to TensorRT engine plan:')}")
     print()
-    print( "   trtexec --onnx=model.onnx --saveEngine=model.plan --fp16")
+    print( "   trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32")
     print()
     print(f" {_fmt.bold('Step 3')} {_fmt.dim('— run inference using the TensorRT Python API or DeepStream.')}")
     print()
@@ -155,7 +155,7 @@ def run_export(
         "exported_at": datetime.now().isoformat(timespec="seconds"),
     }
     if format == "onnx":
-        export_info["jetson_trtexec"] = "trtexec --onnx=model.onnx --saveEngine=model.plan --fp16"
+        export_info["jetson_trtexec"] = "trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32"
     info_path = export_dir / "export_info.json"
     info_path.write_text(json.dumps(export_info, indent=2))
 
