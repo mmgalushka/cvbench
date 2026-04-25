@@ -1,0 +1,272 @@
+/* ── Pico CSS overrides — pull the base size down to ~13 px ─────────────────
+   Google Cloud Console / Workspace use 13–14 px Roboto for data-dense UIs.
+   Pico defaults to 16 px with 1 rem spacing everywhere; we trim both.       */
+
+:root {
+  --pico-font-size: 81.25%;          /* 13 px from 16 px root               */
+  --pico-line-height: 1.45;
+  --pico-spacing: 0.75rem;
+  --pico-typography-spacing-vertical: 0.75rem;
+  --pico-block-spacing-vertical: 0.75rem;
+  --pico-block-spacing-horizontal: 1rem;
+  --pico-table-cell-padding: 0.35rem 0.75rem;
+  --pico-form-element-spacing-vertical: 0.4rem;
+  --pico-form-element-spacing-horizontal: 0.75rem;
+
+  /* App tokens */
+  --sidebar-w: 196px;
+  --brand-color: #6366f1;
+  --section-label-size: 0.692rem;   /* 9 px — tight uppercase labels        */
+}
+
+/* Headings: Pico's defaults are huge for a dashboard. Set explicit px.      */
+h1 { font-size: 1.25rem; }          /* ~16 px */
+h2 { font-size: 1.077rem; }         /* ~14 px */
+h3 { font-size: 1rem; }
+h4 { font-size: 0.923rem; }         /* ~12 px */
+h5 { font-size: 0.846rem; }         /* ~11 px */
+
+body { margin: 0; }
+
+/* ── Layout ────────────────────────────────────────────────────────────────── */
+
+.app-layout { display: flex; min-height: 100vh; }
+
+/* ── Sidebar ───────────────────────────────────────────────────────────────── */
+
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--pico-card-background-color, var(--card-background-color));
+  border-right: 1px solid var(--pico-card-border-color, var(--card-border-color));
+  padding: 1rem 0.625rem;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding: 0 0.25rem;
+}
+
+.brand-name {
+  font-size: 0.923rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 1px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.625rem;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--pico-color, var(--color));
+  font-size: 0.846rem;
+  font-weight: 500;
+  transition: background 0.1s, color 0.1s;
+}
+
+.nav-link:hover  { background: var(--pico-card-sectioning-background-color, var(--card-sectionning-background-color)); }
+.nav-link.active { background: var(--brand-color); color: #fff; }
+
+.sidebar-footer {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--pico-card-border-color, var(--card-border-color));
+}
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.769rem;
+  color: var(--pico-muted-color, var(--muted-color));
+  cursor: pointer;
+}
+
+.theme-toggle input { margin: 0; width: 0.9rem; height: 0.9rem; }
+
+/* ── Main content ──────────────────────────────────────────────────────────── */
+
+.main-content {
+  flex: 1;
+  padding: 1.5rem 2rem;
+  overflow-x: hidden;
+  min-width: 0;
+}
+
+/* ── Page header ───────────────────────────────────────────────────────────── */
+
+.page-header { margin-bottom: 1rem; }
+
+.page-header h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.back-link {
+  display: inline-block;
+  font-size: 0.769rem;
+  color: var(--pico-muted-color, var(--muted-color));
+  text-decoration: none;
+  margin-bottom: 0.2rem;
+}
+
+.back-link:hover { color: var(--pico-color, var(--color)); }
+
+/* ── Status badges ─────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-block;
+  padding: 0.1em 0.5em;
+  border-radius: 9999px;
+  font-size: 0.692rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+}
+
+.badge-done        { background: #c8e6c9; color: #1b5e20; }
+.badge-running     { background: #bbdefb; color: #0d47a1; }
+.badge-interrupted { background: #ffe8b2; color: #6d3a00; }
+.badge-failed      { background: #ffcdd2; color: #b71c1c; }
+
+[data-theme="dark"] .badge-done        { background: #1b3d28; color: #81c995; }
+[data-theme="dark"] .badge-running     { background: #0d2d5a; color: #82b1f5; }
+[data-theme="dark"] .badge-interrupted { background: #3d2200; color: #f5a623; }
+[data-theme="dark"] .badge-failed      { background: #4a1010; color: #f48a8a; }
+
+/* ── Metric cards ──────────────────────────────────────────────────────────── */
+
+.metric-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.metric-card {
+  text-align: center;
+  padding: 0.625rem 0.5rem;
+  margin: 0;
+}
+
+.metric-card small {
+  display: block;
+  color: var(--pico-muted-color, var(--muted-color));
+  font-size: var(--section-label-size);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 0.2rem;
+  white-space: nowrap;
+}
+
+.metric-card strong {
+  font-size: 1.231rem;    /* ~16 px — prominent but not giant */
+  font-weight: 600;
+  word-break: break-all;
+}
+
+/* ── Section label (reusable) ──────────────────────────────────────────────── */
+
+.section-label {
+  font-size: var(--section-label-size);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 600;
+  margin: 0 0 0.625rem;
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--pico-card-border-color, var(--card-border-color));
+  margin-bottom: 1rem;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 0.45rem 1rem;
+  font-size: 0.846rem;
+  font-weight: 500;
+  color: var(--pico-muted-color, var(--muted-color));
+  cursor: pointer;
+  border-radius: 0;
+  transition: color 0.12s, border-color 0.12s;
+  box-shadow: none;
+}
+
+.tab-btn:hover:not(:disabled) { color: inherit !important; background: none !important; }
+.tab-btn.active  { color: var(--brand-color); border-bottom-color: var(--brand-color); }
+.tab-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Shared utilities ──────────────────────────────────────────────────────── */
+
+.overflow-x { overflow-x: auto; }
+
+/* ── Error ─────────────────────────────────────────────────────────────────── */
+
+.error-msg {
+  color: #dc2626;
+  padding: 0.75rem 1rem;
+  background: #fee2e2;
+  border-radius: 6px;
+  font-size: 0.846rem;
+}
+
+[data-theme="dark"] .error-msg { background: #450a0a; color: #fca5a5; }
+
+/* ── Modal ─────────────────────────────────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.modal-box {
+  background: var(--pico-card-background-color, var(--card-background-color));
+  border-radius: 10px;
+  padding: 1rem;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.modal-box img {
+  max-width: 100%;
+  max-height: 75vh;
+  border-radius: 6px;
+  display: block;
+}

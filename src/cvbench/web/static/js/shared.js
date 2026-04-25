@@ -1,0 +1,85 @@
+/* ── Router ────────────────────────────────────────────────────────────────── */
+
+window.addEventListener('hashchange', route);
+window.addEventListener('DOMContentLoaded', route);
+
+function route() {
+  const hash = location.hash;
+  if (!hash || hash === '#' || hash === '#/') {
+    showRunsList();
+  } else if (hash.startsWith('#/runs/')) {
+    showRunDetail(decodeURIComponent(hash.slice(7)));
+  } else if (hash === '#/inference') {
+    showInference();
+  }
+}
+
+function navigate(hash) {
+  location.hash = hash;
+}
+
+/* ── API helper ────────────────────────────────────────────────────────────── */
+
+async function api(path) {
+  const res = await fetch('/api' + path);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+/* ── Theme ─────────────────────────────────────────────────────────────────── */
+
+function toggleTheme(checkbox) {
+  document.documentElement.setAttribute('data-theme', checkbox.checked ? 'dark' : 'light');
+  localStorage.setItem('theme', checkbox.checked ? 'dark' : 'light');
+}
+
+(function initTheme() {
+  const saved = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+  const cb = document.getElementById('theme-toggle');
+  if (cb) cb.checked = saved === 'dark';
+})();
+
+/* ── Nav active state ──────────────────────────────────────────────────────── */
+
+function setActive(id) {
+  document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+  if (id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+  }
+}
+
+/* ── Shared formatters ─────────────────────────────────────────────────────── */
+
+function fmtAcc(v) {
+  return v != null ? (v * 100).toFixed(1) + '%' : '—';
+}
+
+/* ── Utilities ─────────────────────────────────────────────────────────────── */
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/* ── Image modal ───────────────────────────────────────────────────────────── */
+
+function openModal(src) {
+  document.getElementById('modal-content').innerHTML = `<img src="${src}" />`;
+  document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+  document.getElementById('modal-content').innerHTML = '';
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
