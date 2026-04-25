@@ -4,6 +4,14 @@ let currentRun = null;
 let activeTab = 'training';
 let chartInstance = null;
 
+/* ── Helpers ────────────────────────────────────────────────────────────────── */
+
+function fmtClassWeight(cw) {
+  if (!cw) return 'none';
+  if (typeof cw === 'string') return cw;
+  return Object.entries(cw).map(([k, v]) => `${k}: ${v}`).join(', ');
+}
+
 /* ── Runs list ─────────────────────────────────────────────────────────────── */
 
 async function showRunsList() {
@@ -167,7 +175,7 @@ function buildTrainingTab(run) {
           <dt>Epochs</dt>         <dd>${run.epochs_run} / ${run.epochs}</dd>
           <dt>Learning rate</dt>  <dd>${run.config.training.learning_rate}</dd>
           <dt>Batch size</dt>     <dd>${run.config.data.batch_size}</dd>
-          <dt>Class weight</dt>   <dd>${run.config.training.class_weight || 'none'}</dd>
+          <dt>Class weight</dt>   <dd>${fmtClassWeight(run.config.training.class_weight)}</dd>
           <dt>LR patience</dt>    <dd>${run.config.training.lr_scheduler_patience || 0}</dd>
           <dt>Checkpoints</dt>    <dd>${run.config.training.checkpoints_strategy}</dd>
         </dl>
