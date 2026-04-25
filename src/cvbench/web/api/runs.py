@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 from cvbench.core.runs import EXPERIMENTS_DIR, scan_experiments, resolve_run_dir
-from cvbench.core.config import load_config
+from cvbench.core.config import load_config, OneOfConfig, TransformConfig
 
 router = APIRouter()
 
@@ -98,6 +98,11 @@ def get_run(name: str):
             },
             "augmentation": [
                 {"name": t.name, "prob": t.prob, **t.params}
+                if isinstance(t, TransformConfig)
+                else {
+                    "name": "one_of(" + ", ".join(c.name for c in t.candidates) + ")",
+                    "prob": t.prob,
+                }
                 for t in cfg.augmentation.transforms
             ],
         },
