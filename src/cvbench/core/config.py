@@ -122,6 +122,7 @@ class RunConfig:
     resumable: bool = False
     resume_checkpoint: Any = None
     notes: str = ""
+    cli_command: str = ""
 
 
 @dataclass
@@ -247,6 +248,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
         resumable=r.get("resumable", cfg.run.resumable),
         resume_checkpoint=r.get("resume_checkpoint", cfg.run.resume_checkpoint),
         notes=r.get("notes", cfg.run.notes),
+        cli_command=r.get("cli_command", cfg.run.cli_command),
     )
 
     return cfg

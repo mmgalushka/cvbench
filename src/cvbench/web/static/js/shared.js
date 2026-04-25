@@ -70,6 +70,15 @@ function escHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+function copyCliCommand(btn) {
+  const cmd = btn.dataset.cmd;
+  navigator.clipboard.writeText(cmd).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  });
+}
+
 /* ── Image modal ───────────────────────────────────────────────────────────── */
 
 function openModal(src) {

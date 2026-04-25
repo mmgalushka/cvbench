@@ -78,6 +78,7 @@ def get_run(name: str):
             else (eval_report or {}).get("overall_accuracy"),
         "resumable": cfg.run.resumable,
         "notes": cfg.run.notes,
+        "cli_command": cfg.run.cli_command or "",
         "config": {
             "data": {
                 "data_dir": cfg.data.data_dir,

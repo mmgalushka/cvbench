@@ -142,8 +142,15 @@ function buildTrainingTab(run) {
   const augs = run.config.augmentation;
   const augText = augs.length ? augs.map(t => t.name).join(', ') : 'None';
   const hasLog = run.training_log.length > 0;
+  const cliHtml = run.cli_command ? `
+    <div class="cli-command-bar">
+      <svg class="cli-label" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      <code class="cli-code">${escHtml(run.cli_command)}</code>
+      <button class="cli-copy-btn" data-cmd="${escHtml(run.cli_command)}" onclick="copyCliCommand(this)">Copy</button>
+    </div>` : '';
 
   return `
+    ${cliHtml}
     <div class="config-grid">
       <article>
         <h4>Model</h4>

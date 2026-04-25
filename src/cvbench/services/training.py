@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from datetime import date
 
 from cvbench.core.config import build_config, save_config, LossConfig
@@ -124,6 +125,7 @@ def run_training(
     cfg.run.name = exp_dir.rstrip("/").split("/")[-1]
     cfg.run.date = date.today().strftime("%Y-%m-%d")
     cfg.run.status = "running"
+    cfg.run.cli_command = " ".join([sys.argv[0].split("/")[-1]] + sys.argv[1:])
 
     save_config(cfg, exp_dir)
 
