@@ -1,3 +1,20 @@
+## v0.18.0 (2026-04-25)
+
+### Feat
+
+- move mixup config to augmentation YAML and add one_of transform groups
+- add runs predict command with multi-format inference support
+- add web predict page with image upload and GradCAM visualization
+
+### Fix
+
+- replace --fp16 with --noTF32 in TensorRT plan build instructions
+
+### Refactor
+
+- promote runs predict to top-level predict command
+- rename Predict page to Inference in web UI
+
 ## v0.17.0 (2026-04-23)
 
 ### Feat
