@@ -3,6 +3,7 @@
 let currentRun = null;
 let activeTab = 'training';
 let chartInstance = null;
+let currentExports = [];
 
 /* ── Helpers ────────────────────────────────────────────────────────────────── */
 
@@ -514,6 +515,7 @@ function buildExportTab(run) {
             <select id="export-format" onchange="updateExportForm()">
               <option value="tflite">TFLite</option>
               <option value="onnx">ONNX</option>
+              <option value="plan">TensorRT Plan (Jetson)</option>
             </select>
           </label>
           <label id="quantize-wrap">
@@ -527,6 +529,7 @@ function buildExportTab(run) {
         </div>
         <button id="export-generate-btn" onclick="generateExport('${escHtml(run.name)}')">Generate Export</button>
         <p id="export-error" class="error-msg" style="display:none;margin-top:0.5rem"></p>
+        <div id="plan-instructions" style="display:none"></div>
       `}
     </article>
   `;
@@ -535,7 +538,76 @@ function buildExportTab(run) {
 function updateExportForm() {
   const fmt = document.getElementById('export-format')?.value;
   const wrap = document.getElementById('quantize-wrap');
+  const btn = document.getElementById('export-generate-btn');
+  const planEl = document.getElementById('plan-instructions');
+
+  const isPlan = fmt === 'plan';
   if (wrap) wrap.style.display = fmt === 'tflite' ? '' : 'none';
+  if (btn) btn.style.display = isPlan ? 'none' : '';
+  if (planEl) {
+    if (isPlan) {
+      planEl.style.display = '';
+      planEl.innerHTML = buildPlanInstructions(currentRun?.name);
+    } else {
+      planEl.style.display = 'none';
+    }
+  }
+}
+
+function buildPlanInstructions(runName) {
+  const onnxExists = currentExports.some(e => e.format === 'onnx' || e.subfolder === 'onnx');
+  const scp = `scp experiments/${runName}/export/onnx/model.onnx user@jetson:/home/user/model.onnx`;
+  const trtexec = `trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32`;
+  const cliCmd = `cvbench runs export ${runName} --format plan`;
+  const termIcon = `<svg class="cli-label" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`;
+
+  const onnxWarning = onnxExists ? '' : `
+    <div class="plan-warning">
+      <strong>ONNX export not found.</strong> Generate it first:
+      <div class="cli-command-bar plan-cmd-inline">
+        ${termIcon}
+        <code class="cli-code">cvbench runs export ${escHtml(runName)} --format onnx</code>
+        <button class="cli-copy-btn" data-cmd="cvbench runs export ${escHtml(runName)} --format onnx" onclick="copyCliCommand(this)">Copy</button>
+      </div>
+    </div>`;
+
+  return `
+    <div class="plan-instructions-box">
+      <p class="plan-intro">A TensorRT <code>.plan</code> file must be built on the target Jetson device itself — it is compiled for a specific GPU architecture.</p>
+      ${onnxWarning}
+      <div class="plan-step">
+        <span class="plan-step-label">Step 1</span>
+        <span class="plan-step-desc">Copy the ONNX model to your Jetson:</span>
+        <div class="cli-command-bar">
+          ${termIcon}
+          <code class="cli-code">${escHtml(scp)}</code>
+          <button class="cli-copy-btn" data-cmd="${escHtml(scp)}" onclick="copyCliCommand(this)">Copy</button>
+        </div>
+      </div>
+      <div class="plan-step">
+        <span class="plan-step-label">Step 2</span>
+        <span class="plan-step-desc">On the Jetson, convert to TensorRT engine plan:</span>
+        <div class="cli-command-bar">
+          ${termIcon}
+          <code class="cli-code">${escHtml(trtexec)}</code>
+          <button class="cli-copy-btn" data-cmd="${escHtml(trtexec)}" onclick="copyCliCommand(this)">Copy</button>
+        </div>
+      </div>
+      <div class="plan-step">
+        <span class="plan-step-label">Step 3</span>
+        <span class="plan-step-desc">Run inference using the TensorRT Python API or DeepStream.</span>
+      </div>
+      <div class="plan-step plan-cli-equivalent">
+        <span class="plan-step-label">CLI</span>
+        <span class="plan-step-desc">Equivalent command (prints these instructions):</span>
+        <div class="cli-command-bar">
+          ${termIcon}
+          <code class="cli-code">${escHtml(cliCmd)}</code>
+          <button class="cli-copy-btn" data-cmd="${escHtml(cliCmd)}" onclick="copyCliCommand(this)">Copy</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 async function loadExports(runName) {
@@ -543,6 +615,7 @@ async function loadExports(runName) {
   if (!el) return;
   try {
     const exports = await api(`/runs/${encodeURIComponent(runName)}/exports`);
+    currentExports = exports;
     el.innerHTML = renderExportsList(exports);
   } catch (e) {
     el.innerHTML = `<p class="error-msg">Failed to load exports: ${e.message}</p>`;
@@ -608,6 +681,7 @@ async function generateExport(runName) {
       throw new Error(err.detail || exports.statusText);
     }
     const data = await exports.json();
+    currentExports = data;
     const listEl = document.getElementById('exports-list');
     if (listEl) listEl.innerHTML = renderExportsList(data);
   } catch (e) {
