@@ -7,7 +7,7 @@ from pathlib import Path
 
 import keras
 
-from cvbench.core.config import load_config
+from cvbench.core.config import load_config, save_config
 from cvbench.core.data import build_dataset, get_class_names
 from cvbench.core.runs import resolve_run_dir
 from cvbench.core import evaluator as _evaluator
@@ -66,7 +66,7 @@ def run_evaluation(
         warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
         model = keras.saving.load_model(f"{run_dir}/best.keras")
 
-    return _evaluator.evaluate(
+    report = _evaluator.evaluate(
         model=model,
         test_ds=test_ds,
         class_names=class_names,
@@ -74,3 +74,8 @@ def run_evaluation(
         test_dir=cfg.data.test_dir,
         output_dir=output_dir,
     )
+
+    cfg.run.test_accuracy = report["overall_accuracy"]
+    save_config(cfg, run_dir)
+
+    return report

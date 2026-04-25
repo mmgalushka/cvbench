@@ -74,7 +74,8 @@ def get_run(name: str):
         "epochs_run": cfg.run.epochs_run,
         "val_accuracy": cfg.run.val_accuracy,
         "val_loss": cfg.run.val_loss,
-        "test_accuracy": cfg.run.test_accuracy,
+        "test_accuracy": cfg.run.test_accuracy if cfg.run.test_accuracy is not None
+            else (eval_report or {}).get("overall_accuracy"),
         "resumable": cfg.run.resumable,
         "notes": cfg.run.notes,
         "config": {

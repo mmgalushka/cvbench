@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date
 from pathlib import Path
 
@@ -67,6 +68,19 @@ def make_unique_dir(parent: str, name: str) -> Path:
 # Filesystem experiment index
 # ---------------------------------------------------------------------------
 
+def _resolve_test_accuracy(exp_dir: Path, config_value):
+    if config_value is not None:
+        return config_value
+    report_path = exp_dir / "eval_report.json"
+    if report_path.exists():
+        try:
+            with open(report_path) as f:
+                return json.load(f).get("overall_accuracy")
+        except Exception:
+            pass
+    return None
+
+
 def _read_entry(exp_dir: Path) -> dict | None:
     """Read config.yaml from an experiment dir and return a flat summary dict.
     Returns None if config.yaml is missing or unreadable.
@@ -83,7 +97,7 @@ def _read_entry(exp_dir: Path) -> dict | None:
         "epochs": cfg.training.epochs,
         "val_accuracy": cfg.run.val_accuracy,
         "val_loss": cfg.run.val_loss,
-        "test_accuracy": cfg.run.test_accuracy,
+        "test_accuracy": _resolve_test_accuracy(exp_dir, cfg.run.test_accuracy),
         "epochs_run": cfg.run.epochs_run,
         "status": cfg.run.status,
         "date": cfg.run.date,
