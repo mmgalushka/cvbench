@@ -241,6 +241,71 @@
 [data-theme="dark"] .compare-diff td { background: rgba(245,158,11,0.08); }
 .compare-diff-note { font-size: 0.769rem; color: var(--pico-muted-color, var(--muted-color)); margin-top: 0.375rem; }
 
+/* ── Export tab ────────────────────────────────────────────────────────────── */
+
+.export-list-card,
+.export-form-card {
+  margin: 0 0 0.625rem;
+  padding: 0.875rem;
+}
+
+.export-list-card h4,
+.export-form-card h4 {
+  margin: 0 0 0.625rem;
+  font-size: var(--section-label-size);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 600;
+}
+
+.export-table { font-size: 0.846rem; }
+.export-table th { font-size: 0.692rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.export-table td, .export-table th { padding: 0.35rem 0.75rem; }
+
+.export-quant-badge {
+  display: inline-block;
+  font-size: 0.692rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  background: var(--pico-card-sectioning-background-color, var(--card-sectionning-background-color));
+  color: var(--pico-muted-color, var(--muted-color));
+}
+
+.export-download-btn {
+  font-size: 0.769rem;
+  padding: 0.15rem 0.6rem;
+  white-space: nowrap;
+}
+
+.export-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.875rem;
+}
+
+.export-form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.846rem;
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 500;
+  min-width: 150px;
+}
+
+.export-form-row select { margin: 0; font-size: 0.846rem; }
+
+.export-empty {
+  color: var(--pico-muted-color, var(--muted-color));
+  font-size: 0.846rem;
+  margin-bottom: 0.625rem;
+}
+
 /* ── Runs table ────────────────────────────────────────────────────────────── */
 
 .runs-table { font-size: 0.846rem; }

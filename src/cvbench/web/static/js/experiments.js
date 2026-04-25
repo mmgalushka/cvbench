@@ -93,6 +93,7 @@ function buildRunDetail(run) {
       <button class="tab-btn" id="tab-training" onclick="switchTab('training')">Training</button>
       <button class="tab-btn" id="tab-eval"     onclick="switchTab('eval')"     ${!hasEval ? 'disabled title="Run evaluation first"' : ''}>Evaluation</button>
       <button class="tab-btn" id="tab-compare"  onclick="switchTab('compare')">Compare</button>
+      <button class="tab-btn" id="tab-export"   onclick="switchTab('export')">Export</button>
     </div>
     <div id="tab-content"></div>
   `;
@@ -111,7 +112,7 @@ function card(label, value) {
 
 function switchTab(tab) {
   activeTab = tab;
-  ['training', 'eval', 'compare'].forEach(t => {
+  ['training', 'eval', 'compare', 'export'].forEach(t => {
     const btn = document.getElementById('tab-' + t);
     if (btn) btn.classList.toggle('active', t === tab);
   });
@@ -129,6 +130,9 @@ function switchTab(tab) {
   } else if (tab === 'compare') {
     content.innerHTML = buildCompareTab();
     loadCompareOptions();
+  } else if (tab === 'export') {
+    content.innerHTML = buildExportTab(currentRun);
+    loadExports(currentRun.name);
   }
 }
 
@@ -476,6 +480,127 @@ async function loadCompareRun(name) {
     result.innerHTML = buildCompareSideBySide(currentRun, other);
   } catch (e) {
     result.innerHTML = `<p class="error-msg">Failed to load run: ${e.message}</p>`;
+  }
+}
+
+/* ── Export tab ────────────────────────────────────────────────────────────── */
+
+function buildExportTab(run) {
+  const hasCheckpoint = run.status === 'done' || run.status === 'evaluated' || run.epochs_run > 0;
+  return `
+    <div id="exports-list"><p aria-busy="true">Loading exports…</p></div>
+
+    <article class="export-form-card">
+      <h4>Generate New Export</h4>
+      ${!hasCheckpoint ? '<p class="error-msg">No trained checkpoint available. Train the model first.</p>' : `
+        <div class="export-form-row">
+          <label>
+            Format
+            <select id="export-format" onchange="updateExportForm()">
+              <option value="tflite">TFLite</option>
+              <option value="onnx">ONNX</option>
+            </select>
+          </label>
+          <label id="quantize-wrap">
+            Quantization
+            <select id="export-quantize">
+              <option value="none">None (float32)</option>
+              <option value="float16">Float16</option>
+              <option value="int8">Int8</option>
+            </select>
+          </label>
+        </div>
+        <button id="export-generate-btn" onclick="generateExport('${escHtml(run.name)}')">Generate Export</button>
+        <p id="export-error" class="error-msg" style="display:none;margin-top:0.5rem"></p>
+      `}
+    </article>
+  `;
+}
+
+function updateExportForm() {
+  const fmt = document.getElementById('export-format')?.value;
+  const wrap = document.getElementById('quantize-wrap');
+  if (wrap) wrap.style.display = fmt === 'tflite' ? '' : 'none';
+}
+
+async function loadExports(runName) {
+  const el = document.getElementById('exports-list');
+  if (!el) return;
+  try {
+    const exports = await api(`/runs/${encodeURIComponent(runName)}/exports`);
+    el.innerHTML = renderExportsList(exports);
+  } catch (e) {
+    el.innerHTML = `<p class="error-msg">Failed to load exports: ${e.message}</p>`;
+  }
+}
+
+function renderExportsList(exports) {
+  if (exports.length === 0) {
+    return `<p class="export-empty">No exports yet. Use the form below to generate one.</p>`;
+  }
+
+  const rows = exports.map(ex => {
+    const fmt = ex.format ? ex.format.toUpperCase() : ex.subfolder.toUpperCase();
+    const quant = ex.quantize || 'none';
+    const size = ex.size_mb != null ? `${ex.size_mb} MB` : '—';
+    const date = ex.exported_at ? ex.exported_at.replace('T', ' ') : '—';
+    const dlUrl = `/api/runs/${encodeURIComponent(currentRun.name)}/exports/${encodeURIComponent(ex.subfolder)}/download`;
+    return `
+      <tr>
+        <td><strong>${fmt}</strong></td>
+        <td><span class="export-quant-badge">${quant}</span></td>
+        <td>${size}</td>
+        <td>${date}</td>
+        <td><a href="${dlUrl}" class="export-download-btn" role="button">↓ .tar.gz</a></td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <article class="export-list-card">
+      <h4>Available Exports</h4>
+      <div class="overflow-x">
+        <table class="export-table">
+          <thead><tr><th>Format</th><th>Quantization</th><th>Size</th><th>Exported</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </article>
+  `;
+}
+
+async function generateExport(runName) {
+  const btn = document.getElementById('export-generate-btn');
+  const errEl = document.getElementById('export-error');
+  const format = document.getElementById('export-format')?.value;
+  const quantize = document.getElementById('export-quantize')?.value || 'none';
+
+  if (!btn || !format) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  btn.setAttribute('aria-busy', 'true');
+  if (errEl) errEl.style.display = 'none';
+
+  try {
+    const exports = await fetch(`/api/runs/${encodeURIComponent(runName)}/exports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ format, quantize }),
+    });
+    if (!exports.ok) {
+      const err = await exports.json().catch(() => ({ detail: exports.statusText }));
+      throw new Error(err.detail || exports.statusText);
+    }
+    const data = await exports.json();
+    const listEl = document.getElementById('exports-list');
+    if (listEl) listEl.innerHTML = renderExportsList(data);
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = ''; }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generate Export';
+    btn.removeAttribute('aria-busy');
   }
 }
 
