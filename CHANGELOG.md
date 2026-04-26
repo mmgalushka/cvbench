@@ -1,3 +1,21 @@
+## v0.19.0 (2026-04-26)
+
+### Feat
+
+- add TensorRT Plan (Jetson) option to Export tab with step-by-step instructions and CLI copy bars
+- show CLI command used for training in run detail Training tab
+- add Export tab to run detail with list, generate, and tar.gz download
+
+### Fix
+
+- display class_weight dict properly in web UI instead of [object Object]
+- show test accuracy in experiments table for evaluated runs
+- handle one_of augmentation transforms in run detail API
+
+### Refactor
+
+- split monolithic style.css and app.js into per-page CSS/JS modules
+
 ## v0.18.0 (2026-04-25)
 
 ### Feat
