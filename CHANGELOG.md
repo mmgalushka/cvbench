@@ -1,3 +1,9 @@
+## v0.20.0 (2026-04-26)
+
+### Feat
+
+- add Hailo HEF export format with calibration dataset preparation
+
 ## v0.19.0 (2026-04-26)
 
 ### Feat
