@@ -516,6 +516,7 @@ function buildExportTab(run) {
               <option value="tflite">TFLite</option>
               <option value="onnx">ONNX</option>
               <option value="plan">TensorRT Plan (Jetson)</option>
+              <option value="hailo">Hailo HEF (hailo8l)</option>
             </select>
           </label>
           <label id="quantize-wrap">
@@ -529,7 +530,7 @@ function buildExportTab(run) {
         </div>
         <button id="export-generate-btn" onclick="generateExport('${escHtml(run.name)}')">Generate Export</button>
         <p id="export-error" class="error-msg" style="display:none;margin-top:0.5rem"></p>
-        <div id="plan-instructions" style="display:none"></div>
+        <div id="format-instructions" style="display:none"></div>
       `}
     </article>
   `;
@@ -539,17 +540,19 @@ function updateExportForm() {
   const fmt = document.getElementById('export-format')?.value;
   const wrap = document.getElementById('quantize-wrap');
   const btn = document.getElementById('export-generate-btn');
-  const planEl = document.getElementById('plan-instructions');
+  const instrEl = document.getElementById('format-instructions');
 
-  const isPlan = fmt === 'plan';
   if (wrap) wrap.style.display = fmt === 'tflite' ? '' : 'none';
-  if (btn) btn.style.display = isPlan ? 'none' : '';
-  if (planEl) {
-    if (isPlan) {
-      planEl.style.display = '';
-      planEl.innerHTML = buildPlanInstructions(currentRun?.name);
+  if (btn) btn.style.display = fmt === 'plan' ? 'none' : '';
+  if (instrEl) {
+    if (fmt === 'plan') {
+      instrEl.style.display = '';
+      instrEl.innerHTML = buildPlanInstructions(currentRun?.name);
+    } else if (fmt === 'hailo') {
+      instrEl.style.display = '';
+      instrEl.innerHTML = buildHailoInstructions(currentRun?.name);
     } else {
-      planEl.style.display = 'none';
+      instrEl.style.display = 'none';
     }
   }
 }
@@ -600,6 +603,58 @@ function buildPlanInstructions(runName) {
       <div class="plan-step plan-cli-equivalent">
         <span class="plan-step-label">CLI</span>
         <span class="plan-step-desc">Equivalent command (prints these instructions):</span>
+        <div class="cli-command-bar">
+          ${termIcon}
+          <code class="cli-code">${escHtml(cliCmd)}</code>
+          <button class="cli-copy-btn" data-cmd="${escHtml(cliCmd)}" onclick="copyCliCommand(this)">Copy</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildHailoInstructions(runName) {
+  const rel = `experiments/${runName}/export/hailo`;
+  const termIcon = `<svg class="cli-label" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`;
+  const cliCmd = `cvbench runs export ${runName} --format hailo`;
+
+  const step1cmd = `hailo parser tf model.tflite`;
+  const step2cmd = `hailo optimize --hw-arch hailo8l --calib-set-path calib_set.npy --model-script model.alls --output-har-path model_optimized.har model_float.har`;
+  const step3cmd = `hailo compiler --hw-arch hailo8l model_optimized.har`;
+
+  return `
+    <div class="plan-instructions-box">
+      <p class="plan-intro">Click <strong>Generate Export</strong> to prepare <code>model.tflite</code>, <code>calib_set.npy</code>, and <code>model.alls</code> in <code>${escHtml(rel)}/</code>. Then run the commands below inside the Hailo Docker container.</p>
+      <div class="plan-step">
+        <span class="plan-step-label">Step 1</span>
+        <span class="plan-step-desc">Parse TFLite to HAR:</span>
+        <div class="cli-command-bar">
+          ${termIcon}
+          <code class="cli-code">${escHtml(step1cmd)}</code>
+          <button class="cli-copy-btn" data-cmd="${escHtml(step1cmd)}" onclick="copyCliCommand(this)">Copy</button>
+        </div>
+      </div>
+      <div class="plan-step">
+        <span class="plan-step-label">Step 2</span>
+        <span class="plan-step-desc">Optimize with calibration data:</span>
+        <div class="cli-command-bar">
+          ${termIcon}
+          <code class="cli-code">${escHtml(step2cmd)}</code>
+          <button class="cli-copy-btn" data-cmd="${escHtml(step2cmd)}" onclick="copyCliCommand(this)">Copy</button>
+        </div>
+      </div>
+      <div class="plan-step">
+        <span class="plan-step-label">Step 3</span>
+        <span class="plan-step-desc">Compile to HEF:</span>
+        <div class="cli-command-bar">
+          ${termIcon}
+          <code class="cli-code">${escHtml(step3cmd)}</code>
+          <button class="cli-copy-btn" data-cmd="${escHtml(step3cmd)}" onclick="copyCliCommand(this)">Copy</button>
+        </div>
+      </div>
+      <div class="plan-step plan-cli-equivalent">
+        <span class="plan-step-label">CLI</span>
+        <span class="plan-step-desc">Equivalent command (generates the package):</span>
         <div class="cli-command-bar">
           ${termIcon}
           <code class="cli-code">${escHtml(cliCmd)}</code>

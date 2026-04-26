@@ -119,8 +119,8 @@ def compare(experiment_a, experiment_b):
     "--format",
     "fmt",
     required=True,
-    type=click.Choice(["tflite", "onnx", "plan"]),
-    help="Export format (plan prints Jetson TensorRT instructions).",
+    type=click.Choice(["tflite", "onnx", "plan", "hailo"]),
+    help="Export format (plan prints Jetson TensorRT instructions; hailo prepares Hailo Docker package).",
 )
 @click.option(
     "--quantize",
@@ -136,7 +136,7 @@ def compare(experiment_a, experiment_b):
     help="Output directory (default: <experiment>/export/). Ignored for plan.",
 )
 def export(experiment, fmt, quantize, output_dir):
-    """Export the best checkpoint of EXPERIMENT to TFLite or ONNX, or print Jetson deployment instructions (plan).
+    """Export the best checkpoint of EXPERIMENT to TFLite, ONNX, or Hailo package, or print Jetson deployment instructions (plan).
 
     EXPERIMENT is a run name or full path to a run directory.
     """

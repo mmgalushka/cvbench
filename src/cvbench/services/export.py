@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import warnings
 from datetime import datetime
 from pathlib import Path
@@ -88,6 +89,92 @@ def _print_plan_instructions(run_name: str, onnx_exists: bool) -> None:
     print(_fmt.rule())
 
 
+def _build_calibration_set(cfg, output_path: Path, n_calib: int) -> None:
+    import numpy as np
+    from PIL import Image
+
+    source_dir = cfg.data.val_dir if os.path.isdir(cfg.data.val_dir) else cfg.data.train_dir
+    size = cfg.model.input_size
+
+    image_files = []
+    for ext in ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.JPG", "*.JPEG", "*.PNG"):
+        image_files.extend(Path(source_dir).rglob(ext))
+
+    if not image_files:
+        raise RuntimeError(f"No images found in: {source_dir}")
+
+    if len(image_files) > n_calib:
+        random.seed(42)
+        image_files = random.sample(image_files, n_calib)
+
+    print(_fmt.dim(f"  Building  calib_set.npy ({len(image_files)} images, {size}×{size})..."))
+
+    calib_data = []
+    for img_path in sorted(image_files):
+        img = Image.open(img_path).convert("RGB").resize((size, size))
+        calib_data.append(np.array(img, dtype=np.float32))
+
+    calib_set = np.array(calib_data)
+    np.save(str(output_path), calib_set)
+    print(_fmt.dim(f"  Written   calib_set.npy  shape={calib_set.shape}"))
+
+
+def _write_alls(output_path: Path) -> None:
+    output_path.write_text(
+        "model_optimization_flavor(optimization_level=2, compression_level=1)\n"
+    )
+    print(_fmt.dim("  Written   model.alls"))
+
+
+def _prepare_hailo_package(run_dir: Path, cfg, n_calib: int = 200) -> Path:
+    export_dir = run_dir / "export" / "hailo"
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    tflite_path = export_dir / "model.tflite"
+    if tflite_path.exists():
+        print(_fmt.dim(f"  Reusing   model.tflite"))
+    else:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
+            model = keras.saving.load_model(str(run_dir / "best.keras"))
+        print(_fmt.dim("  Converting to TFLite (float32)..."))
+        _export_tflite(model, tflite_path, quantize="none")
+
+    _build_calibration_set(cfg, export_dir / "calib_set.npy", n_calib)
+    _write_alls(export_dir / "model.alls")
+
+    return export_dir
+
+
+def _print_hailo_instructions(run_name: str, export_dir: Path) -> None:
+    rel = f"experiments/{run_name}/export/hailo"
+    print(_fmt.rule())
+    print(f" Hailo HEF — hailo8l deployment")
+    print(_fmt.rule())
+    print()
+    print(_fmt.blue(" The Hailo conversion commands must be run inside the Hailo Docker container."))
+    print(_fmt.blue(f" Mount or copy the export folder into the container: {rel}/"))
+    print()
+    print(f" {_fmt.bold('Step 1')} {_fmt.dim('— parse TFLite to HAR:')}")
+    print()
+    print( "   hailo parser tf model.tflite")
+    print()
+    print(f" {_fmt.bold('Step 2')} {_fmt.dim('— optimize with calibration data:')}")
+    print()
+    print( "   hailo optimize \\")
+    print( "       --hw-arch hailo8l \\")
+    print( "       --calib-set-path calib_set.npy \\")
+    print( "       --model-script model.alls \\")
+    print( "       --output-har-path model_optimized.har \\")
+    print( "       model_float.har")
+    print()
+    print(f" {_fmt.bold('Step 3')} {_fmt.dim('— compile to HEF:')}")
+    print()
+    print( "   hailo compiler --hw-arch hailo8l model_optimized.har")
+    print()
+    print(_fmt.rule())
+
+
 def run_export(
     experiment: str,
     format: str,
@@ -104,6 +191,43 @@ def run_export(
         onnx_path = run_dir / "export" / "onnx" / "model.onnx"
         _print_plan_instructions(run_dir.name, onnx_exists=onnx_path.exists())
         return None
+
+    if format == "hailo":
+        import tensorflow as tf
+        tf.get_logger().setLevel("ERROR")
+        import absl.logging
+        absl.logging.set_verbosity(absl.logging.ERROR)
+
+        cfg = load_config(str(run_dir))
+        checkpoint = run_dir / "best.keras"
+        if not checkpoint.exists():
+            raise FileNotFoundError(f"No best.keras found in: {run_dir}")
+
+        print(_fmt.rule())
+        print(f" Hailo package — '{run_dir.name}'")
+        print(_fmt.rule())
+
+        export_dir = _prepare_hailo_package(run_dir, cfg)
+
+        export_info = {
+            "source_checkpoint": str(checkpoint),
+            "format": "hailo",
+            "quantize": None,
+            "input_shape": [1, cfg.model.input_size, cfg.model.input_size, 3],
+            "input_dtype": "float32",
+            "classes": cfg.data.classes,
+            "backbone": cfg.model.backbone,
+            "val_accuracy": cfg.run.val_accuracy,
+            "val_loss": cfg.run.val_loss,
+            "exported_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        (export_dir / "export_info.json").write_text(json.dumps(export_info, indent=2))
+        print(f"  Written   export_info.json")
+        print(_fmt.rule())
+        print(_fmt.green(f" Package ready → {export_dir}"))
+        print(_fmt.rule())
+        _print_hailo_instructions(run_dir.name, export_dir)
+        return export_dir
 
     import tensorflow as tf
     tf.get_logger().setLevel("ERROR")
