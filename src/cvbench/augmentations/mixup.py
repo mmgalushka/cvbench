@@ -51,8 +51,19 @@ def build_mixup_fn(background_class_idx: int, alpha: float = 0.2):
             tf.equal(labels2, bg_idx),
         )
 
-        # per-image lambda from Beta distribution
+        # per-image lambda from Beta distribution, clamped so signal always
+        # dominates (>= 0.5 pixel weight) to prevent bright background from
+        # visually overpowering dark signal images despite the label
         lam = _sample_beta(batch_size)
+        x1_is_signal = tf.cast(tf.not_equal(labels1, bg_idx), tf.float32)
+        x2_is_signal = tf.cast(tf.not_equal(labels2, bg_idx), tf.float32)
+        # x1 is signal, x2 is bg  → lam should be >= 0.5  → take max(lam, 1-lam)
+        # x1 is bg,     x2 is signal → lam should be <= 0.5 → take min(lam, 1-lam)
+        lam_high = tf.maximum(lam, 1.0 - lam)   # >= 0.5
+        lam_low  = tf.minimum(lam, 1.0 - lam)   # <= 0.5
+        lam = (x1_is_signal * (1.0 - x2_is_signal)) * lam_high \
+            + (x2_is_signal * (1.0 - x1_is_signal)) * lam_low \
+            + (1.0 - tf.abs(x1_is_signal - x2_is_signal)) * lam
         lam_x = tf.reshape(lam, [-1, 1, 1, 1])
         lam_y = tf.reshape(lam, [-1, 1])
 
