@@ -121,8 +121,8 @@ def _collect_images(directory: Path) -> list[Path]:
 
 
 def _build_calibration_set(cfg, output_path: Path, n_calib: int) -> None:
+    import cv2
     import numpy as np
-    from PIL import Image
 
     source_dir = Path(
         cfg.data.train_dir
@@ -174,8 +174,11 @@ def _build_calibration_set(cfg, output_path: Path, n_calib: int) -> None:
 
     calib_data = []
     for img_path in sorted(selected):
-        img = Image.open(img_path).convert("RGB").resize((size, size))
-        calib_data.append(np.array(img, dtype=np.float32))
+        # Load as BGR (matches the training pipeline) so Hailo calibration
+        # sees the same channel order as the model was trained on.
+        img = cv2.imread(str(img_path))
+        img = cv2.resize(img, (size, size))
+        calib_data.append(img.astype(np.float32))
 
     calib_set = np.array(calib_data)
     np.save(str(output_path), calib_set)

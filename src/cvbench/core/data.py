@@ -131,6 +131,9 @@ def build_dataset(
         seed=42 if training else None,
     )
 
+    # Keras loads images as RGB; reverse to BGR to match OpenCV inference pipeline.
+    ds = ds.map(lambda x, y: (x[..., ::-1], y), num_parallel_calls=tf.data.AUTOTUNE)
+
     if training:
         ds = ds.repeat()
 
@@ -185,6 +188,7 @@ def build_datasets(
                 tf.keras.utils.image_dataset_from_directory(
                     cfg.data.train_dir, subset="training", shuffle=True, **common_kwargs
                 )
+                .map(lambda x, y: (x[..., ::-1], y), num_parallel_calls=tf.data.AUTOTUNE)
                 .repeat()
                 .prefetch(tf.data.AUTOTUNE)
             )
@@ -192,6 +196,7 @@ def build_datasets(
                 tf.keras.utils.image_dataset_from_directory(
                     cfg.data.train_dir, subset="validation", shuffle=False, **common_kwargs
                 )
+                .map(lambda x, y: (x[..., ::-1], y), num_parallel_calls=tf.data.AUTOTUNE)
                 .prefetch(tf.data.AUTOTUNE)
             )
         num_train_samples = math.floor(total_train * (1 - split))

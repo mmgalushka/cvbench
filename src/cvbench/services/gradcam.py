@@ -41,14 +41,16 @@ def compute_gradcam(checkpoint: str, image_path: str, class_index: int) -> str:
     Returns:
         Base64-encoded PNG string (no data-URI prefix).
     """
+    import cv2
     import tensorflow as tf
     import keras
 
     model = keras.saving.load_model(checkpoint)
     input_size = model.input_shape[1]
 
-    img = tf.keras.utils.load_img(image_path, target_size=(input_size, input_size))
-    arr = tf.cast(tf.keras.utils.img_to_array(img)[None], tf.float32)  # (1,H,W,3)
+    img_bgr = cv2.imread(image_path)
+    img_bgr = cv2.resize(img_bgr, (input_size, input_size))
+    arr = tf.cast(img_bgr.astype("float32")[None], tf.float32)  # (1,H,W,3) BGR
 
     with tf.GradientTape() as tape:
         conv_outputs, predictions = _run_with_conv_output(model, arr, tape=tape)
@@ -64,9 +66,9 @@ def compute_gradcam(checkpoint: str, image_path: str, class_index: int) -> str:
     if cam.max() > 0:
         cam /= cam.max()
 
-    heatmap = _colorize(cam, input_size)               # (H, W, 3) uint8
-    original = np.array(img).astype(np.uint8)          # (H, W, 3)
-    blended = _blend(original, heatmap, alpha=0.45)    # (H, W, 3)
+    heatmap = _colorize(cam, input_size)               # (H, W, 3) uint8 RGB
+    original = img_bgr[..., ::-1].astype(np.uint8)    # (H, W, 3) RGB for display
+    blended = _blend(original, heatmap, alpha=0.45)    # (H, W, 3) RGB
 
     return _to_base64_png(blended)
 

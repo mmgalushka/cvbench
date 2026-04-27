@@ -18,6 +18,7 @@ dependencies = [
     "matplotlib==3.10.8",
     "pandas==2.3.3",
     "tqdm==4.67.3",
+    "opencv-python-headless>=4.9",
 ]
 
 [project.optional-dependencies]

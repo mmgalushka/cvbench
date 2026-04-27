@@ -75,9 +75,10 @@ def _get_class_names(run_dir: Path, fmt: str) -> list[str] | None:
 
 
 def _load_image(img_path: str, size: int) -> np.ndarray:
-    from PIL import Image
-    img = Image.open(img_path).convert("RGB").resize((size, size))
-    return np.array(img, dtype=np.float32)[None]  # (1, H, W, 3)
+    import cv2
+    img = cv2.imread(img_path)  # BGR uint8
+    img = cv2.resize(img, (size, size))
+    return img.astype(np.float32)[None]  # (1, H, W, 3) BGR
 
 
 def _infer_keras(model_path: Path, images: list[str], size: int) -> list[np.ndarray]:
@@ -210,7 +211,6 @@ def run_experiment_prediction(
 def run_prediction(checkpoint: str, input_path: str) -> list[dict]:
     """Run inference on an image or folder using a .keras checkpoint."""
     import keras
-    import tensorflow as tf
 
     model = keras.saving.load_model(checkpoint)
     size = model.input_shape[1]
@@ -221,8 +221,7 @@ def run_prediction(checkpoint: str, input_path: str) -> list[dict]:
 
     results = []
     for img_path in paths:
-        img = tf.keras.utils.load_img(img_path, target_size=(size, size))
-        arr = tf.keras.utils.img_to_array(img)[None]
+        arr = _load_image(img_path, size)
         probs = model.predict(arr, verbose=0)[0]
         top_idx = int(np.argmax(probs))
         results.append({
@@ -307,19 +306,23 @@ def _build_result(probs: np.ndarray, class_names: list[str]) -> dict:
 
 
 def _bytes_to_input(image_bytes: bytes, size: int) -> np.ndarray:
-    from PIL import Image
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((size, size))
-    return np.array(img, dtype=np.float32)[None]
+    import cv2
+    arr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)  # BGR uint8
+    img = cv2.resize(img, (size, size))
+    return img.astype(np.float32)[None]  # (1, H, W, 3) BGR
 
 
 def _bytes_to_numpy(image_bytes: bytes, size: int) -> np.ndarray:
-    from PIL import Image
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((size, size))
-    return np.array(img, dtype=np.uint8)
+    import cv2
+    arr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)  # BGR uint8
+    return cv2.resize(img, (size, size))
 
 
 def _numpy_to_base64_png(arr: np.ndarray) -> str:
     from PIL import Image
     buf = io.BytesIO()
-    Image.fromarray(arr.astype(np.uint8)).save(buf, format="PNG")
+    # arr is BGR; convert to RGB for correct web display
+    Image.fromarray(arr[..., ::-1].astype(np.uint8)).save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode("ascii")
