@@ -34,7 +34,9 @@ def _export_tflite(model, output_path: Path, quantize: str) -> None:
         saved_model_path = Path(tmp_dir) / "saved_model"
         model.export(str(saved_model_path))
 
-        converter = tf.lite.TFLiteConverter.from_saved_model(str(saved_model_path))
+        converter = tf.lite.TFLiteConverter.from_saved_model(
+            str(saved_model_path)
+        )
         if quantize in ("float16", "int8"):
             converter.optimizations = [tf.lite.Optimize.DEFAULT]
         if quantize == "float16":
@@ -55,10 +57,17 @@ def _export_onnx(model, output_path: Path, input_size: int) -> None:
             "Install it with: pip install 'cvbench[export]'"
         )
 
-    input_spec = (tf.TensorSpec([1, input_size, input_size, 3], tf.float32, name="image"),)
-    model_proto, _ = tf2onnx.convert.from_keras(model, input_signature=input_spec, opset=13)
+    input_spec = (
+        tf.TensorSpec(
+            [1, input_size, input_size, 3], tf.float32, name="image"
+        ),
+    )
+    model_proto, _ = tf2onnx.convert.from_keras(
+        model, input_signature=input_spec, opset=13
+    )
 
     import onnx
+
     onnx.save(model_proto, str(output_path))
 
 
@@ -67,50 +76,104 @@ def _print_plan_instructions(run_name: str, onnx_exists: bool) -> None:
     print(f" TensorRT Engine Plan — Jetson deployment")
     print(_fmt.rule())
     print()
-    print(_fmt.blue(" A TensorRT .plan file must be built on the target Jetson device itself,"))
+    print(
+        _fmt.blue(
+            " A TensorRT .plan file must be built on the target Jetson device itself,"
+        )
+    )
     print(_fmt.blue(" since it is compiled for a specific GPU architecture."))
     print()
-    print(f" {_fmt.bold('Step 1')} {_fmt.dim('— copy the ONNX model to your Jetson:')}")
+    print(
+        f" {_fmt.bold('Step 1')} {_fmt.dim('— copy the ONNX model to your Jetson:')}"
+    )
     print()
     print(f"   scp experiments/{run_name}/export/onnx/model.onnx \\")
-    print( "       user@jetson:/home/user/model.onnx")
+    print("       user@jetson:/home/user/model.onnx")
     print()
-    print(f" {_fmt.bold('Step 2')} {_fmt.dim('— on the Jetson, convert to TensorRT engine plan:')}")
+    print(
+        f" {_fmt.bold('Step 2')} {_fmt.dim('— on the Jetson, convert to TensorRT engine plan:')}"
+    )
     print()
-    print( "   trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32")
+    print("   trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32")
     print()
-    print(f" {_fmt.bold('Step 3')} {_fmt.dim('— run inference using the TensorRT Python API or DeepStream.')}")
+    print(
+        f" {_fmt.bold('Step 3')} {_fmt.dim('— run inference using the TensorRT Python API or DeepStream.')}"
+    )
     print()
     if not onnx_exists:
-        print(_fmt.yellow(" Note: ONNX export not found. Generate it first with:"))
+        print(
+            _fmt.yellow(
+                " Note: ONNX export not found. Generate it first with:"
+            )
+        )
         print()
         print(f"   runs export {run_name} --format onnx")
         print()
     print(_fmt.rule())
 
 
+def _collect_images(directory: Path) -> list[Path]:
+    exts = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.JPG", "*.JPEG", "*.PNG")
+    files = []
+    for ext in exts:
+        files.extend(directory.rglob(ext))
+    return files
+
+
 def _build_calibration_set(cfg, output_path: Path, n_calib: int) -> None:
     import numpy as np
     from PIL import Image
 
-    source_dir = cfg.data.val_dir if os.path.isdir(cfg.data.val_dir) else cfg.data.train_dir
+    source_dir = Path(
+        cfg.data.train_dir
+        if os.path.isdir(cfg.data.train_dir)
+        else cfg.data.val_dir
+    )
     size = cfg.model.input_size
+    rng = random.Random(42)
 
-    image_files = []
-    for ext in ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.JPG", "*.JPEG", "*.PNG"):
-        image_files.extend(Path(source_dir).rglob(ext))
+    # Collect images grouped by class subdirectory.
+    class_dirs = sorted(p for p in source_dir.iterdir() if p.is_dir())
+    if class_dirs:
+        per_class: dict[str, list[Path]] = {
+            d.name: _collect_images(d) for d in class_dirs
+        }
+        per_class = {k: v for k, v in per_class.items() if v}
+    else:
+        # Flat dataset — treat as a single bucket.
+        all_files = _collect_images(source_dir)
+        per_class = {"_all": all_files}
 
-    if not image_files:
+    if not per_class:
         raise RuntimeError(f"No images found in: {source_dir}")
 
-    if len(image_files) > n_calib:
-        random.seed(42)
-        image_files = random.sample(image_files, n_calib)
+    n_classes = len(per_class)
+    quota = n_calib // n_classes
 
-    print(_fmt.dim(f"  Building  calib_set.npy ({len(image_files)} images, {size}×{size})..."))
+    selected: list[Path] = []
+    leftover_pool: list[Path] = []
+
+    for files in per_class.values():
+        take = min(quota, len(files))
+        chosen = rng.sample(files, take)
+        selected.extend(chosen)
+        leftover_pool.extend(f for f in files if f not in set(chosen))
+
+    # Fill remaining slots from the leftover pool (preserves diversity).
+    remainder = n_calib - len(selected)
+    if remainder > 0 and leftover_pool:
+        rng.shuffle(leftover_pool)
+        selected.extend(leftover_pool[:remainder])
+
+    print(
+        _fmt.dim(
+            f"  Building  calib_set.npy ({len(selected)} images across "
+            f"{n_classes} class(es), {size}×{size})..."
+        )
+    )
 
     calib_data = []
-    for img_path in sorted(image_files):
+    for img_path in sorted(selected):
         img = Image.open(img_path).convert("RGB").resize((size, size))
         calib_data.append(np.array(img, dtype=np.float32))
 
@@ -126,7 +189,7 @@ def _write_alls(output_path: Path) -> None:
     print(_fmt.dim("  Written   model.alls"))
 
 
-def _prepare_hailo_package(run_dir: Path, cfg, n_calib: int = 200) -> Path:
+def _prepare_hailo_package(run_dir: Path, cfg, n_calib: int = 1024) -> Path:
     export_dir = run_dir / "export" / "hailo"
     export_dir.mkdir(parents=True, exist_ok=True)
 
@@ -135,7 +198,9 @@ def _prepare_hailo_package(run_dir: Path, cfg, n_calib: int = 200) -> Path:
         print(_fmt.dim(f"  Reusing   model.tflite"))
     else:
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
+            warnings.filterwarnings(
+                "ignore", message="Skipping variable loading for optimizer"
+            )
             model = keras.saving.load_model(str(run_dir / "best.keras"))
         print(_fmt.dim("  Converting to TFLite (float32)..."))
         _export_tflite(model, tflite_path, quantize="none")
@@ -152,25 +217,35 @@ def _print_hailo_instructions(run_name: str, export_dir: Path) -> None:
     print(f" Hailo HEF — hailo8l deployment")
     print(_fmt.rule())
     print()
-    print(_fmt.blue(" The Hailo conversion commands must be run inside the Hailo Docker container."))
-    print(_fmt.blue(f" Mount or copy the export folder into the container: {rel}/"))
+    print(
+        _fmt.blue(
+            " The Hailo conversion commands must be run inside the Hailo Docker container."
+        )
+    )
+    print(
+        _fmt.blue(
+            f" Mount or copy the export folder into the container: {rel}/"
+        )
+    )
     print()
     print(f" {_fmt.bold('Step 1')} {_fmt.dim('— parse TFLite to HAR:')}")
     print()
-    print( "   hailo parser tf model.tflite")
+    print("   hailo parser tf model.tflite")
     print()
-    print(f" {_fmt.bold('Step 2')} {_fmt.dim('— optimize with calibration data:')}")
+    print(
+        f" {_fmt.bold('Step 2')} {_fmt.dim('— optimize with calibration data:')}"
+    )
     print()
-    print( "   hailo optimize \\")
-    print( "       --hw-arch hailo8l \\")
-    print( "       --calib-set-path calib_set.npy \\")
-    print( "       --model-script model.alls \\")
-    print( "       --output-har-path model_optimized.har \\")
-    print( "       model_float.har")
+    print("   hailo optimize \\")
+    print("       --hw-arch hailo8l \\")
+    print("       --calib-set-path calib_set.npy \\")
+    print("       --model-script model.alls \\")
+    print("       --output-har-path model_optimized.har \\")
+    print("       model.har")
     print()
     print(f" {_fmt.bold('Step 3')} {_fmt.dim('— compile to HEF:')}")
     print()
-    print( "   hailo compiler --hw-arch hailo8l model_optimized.har")
+    print("   hailo compiler --hw-arch hailo8l model_optimized.har")
     print()
     print(_fmt.rule())
 
@@ -194,8 +269,10 @@ def run_export(
 
     if format == "hailo":
         import tensorflow as tf
+
         tf.get_logger().setLevel("ERROR")
         import absl.logging
+
         absl.logging.set_verbosity(absl.logging.ERROR)
 
         cfg = load_config(str(run_dir))
@@ -221,7 +298,9 @@ def run_export(
             "val_loss": cfg.run.val_loss,
             "exported_at": datetime.now().isoformat(timespec="seconds"),
         }
-        (export_dir / "export_info.json").write_text(json.dumps(export_info, indent=2))
+        (export_dir / "export_info.json").write_text(
+            json.dumps(export_info, indent=2)
+        )
         print(f"  Written   export_info.json")
         print(_fmt.rule())
         print(_fmt.green(f" Package ready → {export_dir}"))
@@ -230,8 +309,10 @@ def run_export(
         return export_dir
 
     import tensorflow as tf
+
     tf.get_logger().setLevel("ERROR")
     import absl.logging
+
     absl.logging.set_verbosity(absl.logging.ERROR)
 
     cfg = load_config(str(run_dir))
@@ -251,11 +332,15 @@ def run_export(
     print(_fmt.dim(f"  Loading   {checkpoint}"))
 
     with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
+        warnings.filterwarnings(
+            "ignore", message="Skipping variable loading for optimizer"
+        )
         model = keras.saving.load_model(str(checkpoint))
 
     if format == "tflite":
-        model_filename = f"model{_TFLITE_QUANTIZE_SUFFIX.get(quantize, '')}.tflite"
+        model_filename = (
+            f"model{_TFLITE_QUANTIZE_SUFFIX.get(quantize, '')}.tflite"
+        )
         model_path = export_dir / model_filename
         print(_fmt.dim(f"  Converting to TFLite (quantize={quantize})..."))
         _export_tflite(model, model_path, quantize)
@@ -279,7 +364,9 @@ def run_export(
         "exported_at": datetime.now().isoformat(timespec="seconds"),
     }
     if format == "onnx":
-        export_info["jetson_trtexec"] = "trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32"
+        export_info["jetson_trtexec"] = (
+            "trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32"
+        )
     info_path = export_dir / "export_info.json"
     info_path.write_text(json.dumps(export_info, indent=2))
 

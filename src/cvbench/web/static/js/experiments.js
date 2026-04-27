@@ -619,7 +619,7 @@ function buildHailoInstructions(runName) {
   const cliCmd = `cvbench runs export ${runName} --format hailo`;
 
   const step1cmd = `hailo parser tf model.tflite`;
-  const step2cmd = `hailo optimize --hw-arch hailo8l --calib-set-path calib_set.npy --model-script model.alls --output-har-path model_optimized.har model_float.har`;
+  const step2cmd = `hailo optimize --hw-arch hailo8l --calib-set-path calib_set.npy --model-script model.alls --output-har-path model_optimized.har model.har`;
   const step3cmd = `hailo compiler --hw-arch hailo8l model_optimized.har`;
 
   return `
