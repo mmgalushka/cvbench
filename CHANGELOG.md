@@ -1,3 +1,9 @@
+## v0.22.0 (2026-04-27)
+
+### Feat
+
+- switch image pipeline to BGR (OpenCV) for packing compatibility
+
 ## v0.21.0 (2026-04-27)
 
 ### Feat
