@@ -1,3 +1,15 @@
+## v0.21.0 (2026-04-27)
+
+### Feat
+
+- add curl/wget copy buttons to exports table
+
+### Fix
+
+- mixup clamps lambda so signal always dominates pixel blend over background
+- CLI copy button works over HTTP, long commands wrap in UI
+- hailo calibration uses train set, stratified per-class sampling, 1024-image default
+
 ## v0.20.0 (2026-04-26)
 
 ### Feat
