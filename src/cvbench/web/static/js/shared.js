@@ -72,11 +72,31 @@ function escHtml(str) {
 
 function copyCliCommand(btn) {
   const cmd = btn.dataset.cmd;
-  navigator.clipboard.writeText(cmd).then(() => {
+  const flash = () => {
     const orig = btn.textContent;
     btn.textContent = 'Copied!';
     setTimeout(() => { btn.textContent = orig; }, 1500);
-  });
+  };
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(cmd).then(flash).catch(() => fallbackCopy(cmd, flash));
+  } else {
+    fallbackCopy(cmd, flash);
+  }
+}
+
+function fallbackCopy(text, onSuccess) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    if (document.execCommand('copy')) onSuccess();
+  } finally {
+    document.body.removeChild(ta);
+  }
 }
 
 /* ── Image modal ───────────────────────────────────────────────────────────── */
