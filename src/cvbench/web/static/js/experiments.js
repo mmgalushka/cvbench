@@ -688,13 +688,20 @@ function renderExportsList(exports) {
     const size = ex.size_mb != null ? `${ex.size_mb} MB` : '—';
     const date = ex.exported_at ? ex.exported_at.replace('T', ' ') : '—';
     const dlUrl = `/api/runs/${encodeURIComponent(currentRun.name)}/exports/${encodeURIComponent(ex.subfolder)}/download`;
+    const dlPath = `/api/runs/${encodeURIComponent(currentRun.name)}/exports/${encodeURIComponent(ex.subfolder)}/download`;
+    const curl = `curl -O http://<HOST>:<PORT>${dlPath}`;
+    const wget = `wget http://<HOST>:<PORT>${dlPath}`;
     return `
       <tr>
         <td><strong>${fmt}</strong></td>
         <td><span class="export-quant-badge">${quant}</span></td>
         <td>${size}</td>
         <td>${date}</td>
-        <td><a href="${dlUrl}" class="export-download-btn" role="button">↓ .tar.gz</a></td>
+        <td class="export-dl-btns">
+          <a href="${dlUrl}" class="export-download-btn" role="button">↓ .tar.gz</a>
+          <button class="cli-copy-btn export-dl-copy-btn" data-cmd="${escHtml(curl)}" onclick="copyCliCommand(this)" title="${escHtml(curl)}">curl</button>
+          <button class="cli-copy-btn export-dl-copy-btn" data-cmd="${escHtml(wget)}" onclick="copyCliCommand(this)" title="${escHtml(wget)}">wget</button>
+        </td>
       </tr>
     `;
   }).join('');

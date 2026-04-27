@@ -345,6 +345,18 @@
   margin-bottom: 0.625rem;
 }
 
+.export-dl-btns {
+  white-space: nowrap;
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.export-dl-copy-btn {
+  min-width: 4.5rem;
+  text-align: center;
+}
+
 /* ── Plan instructions ─────────────────────────────────────────────────────── */
 
 .plan-instructions-box {
