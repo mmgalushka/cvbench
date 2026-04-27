@@ -1,3 +1,9 @@
+## v0.22.1 (2026-04-27)
+
+### Fix
+
+- strip Rescaling and fix avgpool quantization for Hailo export
+
 ## v0.22.0 (2026-04-27)
 
 ### Feat
