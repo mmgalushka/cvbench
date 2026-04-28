@@ -17,11 +17,15 @@ ENV TF_CPP_MIN_LOG_LEVEL=3
 WORKDIR /opt/cvbench
 
 COPY pyproject.toml README.md ./
-COPY src/ ./src/
+# Stub the package so pip resolves and caches all dependencies without the real source.
+# On code-only changes this layer is reused, skipping the full dependency download.
+RUN mkdir -p src/cvbench && touch src/cvbench/__init__.py \
+ && pip install --no-cache-dir ".[web,export]" jupyterlab tensorboard \
+ && rm -rf src/
 
-# Non-editable install — entry points land in /usr/local/bin
-# cvbench[web] adds fastapi + uvicorn for the WebUI (served by `serve` command)
-RUN pip install --no-cache-dir ".[web,export]" jupyterlab tensorboard
+COPY src/ ./src/
+# Reinstall the package itself — no network I/O, all deps already present
+RUN pip install --no-cache-dir --no-deps .
 
 # ── Suppress TF banner and ldconfig error from /etc/bash.bashrc ──────────
 RUN echo '# cleared by CVBench' > /etc/bash.bashrc
