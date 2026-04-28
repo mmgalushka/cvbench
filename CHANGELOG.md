@@ -1,3 +1,9 @@
+## v0.22.3 (2026-04-28)
+
+### Refactor
+
+- standardize on RGB, replace opencv with Pillow, add --calib-images-per-class
+
 ## v0.22.2 (2026-04-28)
 
 ### Refactor
