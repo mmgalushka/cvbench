@@ -1,3 +1,9 @@
+## v0.23.0 (2026-04-28)
+
+### Feat
+
+- add --normalization flag (internal/external) for pipeline compatibility
+
 ## v0.22.3 (2026-04-28)
 
 ### Refactor
