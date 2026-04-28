@@ -131,6 +131,12 @@ def build_dataset(
         seed=42 if training else None,
     )
 
+    if cfg.model.normalization == "external":
+        ds = ds.map(
+            lambda x, y: (tf.cast(x, tf.float32) / 255.0, y),
+            num_parallel_calls=tf.data.AUTOTUNE,
+        )
+
     if training:
         ds = ds.repeat()
 

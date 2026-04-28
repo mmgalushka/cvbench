@@ -54,6 +54,7 @@ def run_training(
     lr_factor: float | None = None,
     lr_min: float | None = None,
     fine_tune_from_layer: int | None = None,
+    normalization: str | None = None,
     val_split: float | None = None,
 ) -> str:
     """Orchestrate a full training run.
@@ -91,6 +92,7 @@ def run_training(
         lr_factor=lr_factor,
         lr_min=lr_min,
         fine_tune_from_layer=fine_tune_from_layer,
+        normalization=normalization,
         val_split=val_split,
     )
 

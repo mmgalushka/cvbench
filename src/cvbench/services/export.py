@@ -162,11 +162,13 @@ def _build_calibration_set(cfg, output_path: Path, images_per_class: int) -> Non
         )
     )
 
+    normalize = getattr(cfg.model, "normalization", "internal") == "external"
     calib_data = []
     for img_path in sorted(selected):
         img = Image.open(str(img_path)).convert("RGB")
         img = img.resize((size, size))
-        calib_data.append(np.array(img, dtype=np.float32))
+        arr = np.array(img, dtype=np.float32)
+        calib_data.append(arr / 255.0 if normalize else arr)
 
     calib_set = np.array(calib_data)
     np.save(str(output_path), calib_set)

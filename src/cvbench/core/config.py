@@ -31,6 +31,7 @@ class ModelConfig:
     num_classes: int = 0
     dropout: float = 0.2
     fine_tune_from_layer: int = 0
+    normalization: str = "internal"  # "internal" = Rescaling(1/255) in model; "external" = pipeline normalizes
 
 
 @dataclass
@@ -188,6 +189,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
         num_classes=m.get("num_classes", cfg.model.num_classes),
         dropout=m.get("dropout", cfg.model.dropout),
         fine_tune_from_layer=m.get("fine_tune_from_layer", cfg.model.fine_tune_from_layer),
+        normalization=m.get("normalization", cfg.model.normalization),
     )
 
     aug = d.get("augmentation", {})
@@ -267,6 +269,7 @@ def build_config(
     lr_factor: float | None = None,
     lr_min: float | None = None,
     fine_tune_from_layer: int | None = None,
+    normalization: str | None = None,
     val_split: float | None = None,
 ) -> CVBenchConfig:
     """Build a CVBenchConfig from CLI options.
@@ -309,6 +312,8 @@ def build_config(
         cfg.training.lr_scheduler.min_lr = lr_min
     if fine_tune_from_layer is not None:
         cfg.model.fine_tune_from_layer = fine_tune_from_layer
+    if normalization is not None:
+        cfg.model.normalization = normalization
     if val_split is not None:
         cfg.data.val_split = val_split
         cfg.data.val_split_explicit = True
