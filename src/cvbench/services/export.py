@@ -186,41 +186,10 @@ def _build_calibration_set(cfg, output_path: Path, n_calib: int) -> None:
 
 
 def _write_alls(output_path: Path) -> None:
-    # Rescaling(1/255) is stripped from the Hailo TFLite export; replicate it here.
-    # avgpool1 needs a16_w16 precision to stay within Hailo8L shift-delta limits.
     output_path.write_text(
-        "normalization1 = normalization([0, 0, 0], [255, 255, 255])\n"
-        "quantization_param(avgpool1, precision_mode=a16_w16)\n"
         "model_optimization_flavor(optimization_level=2, compression_level=1)\n"
     )
     print(_fmt.dim("  Written   model.alls"))
-
-
-def _build_hailo_model(model: keras.Model, input_size: int) -> keras.Model:
-    """Strip Rescaling from the model for Hailo export.
-
-    Rescaling(1/255) is removed because Hailo applies equivalent normalization
-    via the .alls file in hardware. Keeping it in the graph shifts layer names
-    when normalization is added to .alls, breaking quantization_param targets.
-    """
-    rescaling = next((l for l in model.layers if isinstance(l, keras.layers.Rescaling)), None)
-    if rescaling is None:
-        return model
-
-    gap    = next(l for l in model.layers if isinstance(l, keras.layers.GlobalAveragePooling2D))
-    dropout = next((l for l in model.layers if isinstance(l, keras.layers.Dropout)), None)
-    dense  = next(l for l in model.layers if isinstance(l, keras.layers.Dense))
-
-    backbone = keras.Model(inputs=rescaling.output, outputs=gap.input)
-
-    inp = keras.Input(shape=model.input_shape[1:], name="image")
-    x   = backbone(inp)
-    x   = gap(x)
-    if dropout is not None:
-        x = dropout(x)
-    x   = dense(x)
-
-    return keras.Model(inputs=inp, outputs=x)
 
 
 def _prepare_hailo_package(run_dir: Path, cfg, n_calib: int = 1024) -> Path:
@@ -236,9 +205,8 @@ def _prepare_hailo_package(run_dir: Path, cfg, n_calib: int = 1024) -> Path:
                 "ignore", message="Skipping variable loading for optimizer"
             )
             model = keras.saving.load_model(str(run_dir / "best.keras"))
-        hailo_model = _build_hailo_model(model, cfg.model.input_size)
-        print(_fmt.dim("  Converting to TFLite (float32, Rescaling stripped)..."))
-        _export_tflite(hailo_model, tflite_path, quantize="none")
+        print(_fmt.dim("  Converting to TFLite (float32)..."))
+        _export_tflite(model, tflite_path, quantize="none")
 
     _build_calibration_set(cfg, export_dir / "calib_set.npy", n_calib)
     _write_alls(export_dir / "model.alls")
