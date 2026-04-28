@@ -151,7 +151,6 @@ train         <data_dir> [--epochs N] [--backbone NAME] [--lr FLOAT] [--batch-si
                          [--lr-patience N] [--lr-factor F] [--lr-min F]
                          [--loss crossentropy|focal[:gamma=F][,label_smoothing=F]]
                          [--fine-tune-from-layer N] [--augmentation FILE]
-                         [--use-lcn] [--lcn-kernel-size N] [--lcn-epsilon F]
                          [--val-split FLOAT] [--resume CHECKPOINT] [--output DIR]
 evaluate      <experiment>  [--output-dir PATH]
 predict       <experiment> <image-or-folder> [--format keras|onnx|tflite|plan|all]
@@ -301,30 +300,6 @@ train data/ --loss focal:gamma=2.0,label_smoothing=0.1
 | `label_smoothing=F` | `0.0` | Smooths targets; applies to both loss types |
 
 The loss config is saved to `config.yaml` and applied automatically when resuming a run.
-
----
-
-## Local Contrast Normalization (LCN)
-
-Use `--use-lcn` when your images come from sensors with different brightness levels or sensitivities (e.g. time-frequency waterfall images from multiple sensors). LCN inserts a preprocessing layer inside the model that removes local mean and normalizes by local standard deviation, making the model respond to *pattern structure* rather than absolute pixel intensity.
-
-The layer is saved as part of the model — no separate preprocessing is needed at inference.
-
-```bash
-# Enable LCN with defaults (kernel=32px, epsilon=1e-3)
-train data/ --use-lcn --epochs 30
-
-# Tune neighbourhood size and stability constant
-train data/ --use-lcn --lcn-kernel-size 48 --lcn-epsilon 0.01 --epochs 30
-```
-
-| Option | Default | Description |
-|---|---|---|
-| `--use-lcn` | off | Enable Local Contrast Normalization before the backbone |
-| `--lcn-kernel-size N` | `32` | Gaussian neighbourhood size in pixels |
-| `--lcn-epsilon F` | `1e-3` | Stability constant — increase if flat/noisy regions produce artefacts |
-
-**Kernel size guidance:** for 224×224 images, `32` covers ~14% of the image width — appropriate for fine-grained patterns. Use `48`–`64` for coarser structures or if weak signals appear on a noisy background.
 
 ---
 

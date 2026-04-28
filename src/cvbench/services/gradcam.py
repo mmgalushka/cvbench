@@ -78,14 +78,10 @@ def compute_gradcam(checkpoint: str, image_path: str, class_index: int) -> str:
 def _run_with_conv_output(model, arr, tape=None):
     """Run the model and return (last_conv_output, predictions).
 
-    Handles nested backbones (and any pre-backbone layers like LCN) by splitting
-    model.layers into three ordered groups and running them sequentially:
-        pre_layers  → backbone grad-model → post_layers
-    This avoids two failure modes:
-      1. Keras graph-connectivity error when last_conv.output belongs to the
-         backbone's sub-graph rather than the top-level model's graph.
-      2. Pre-backbone preprocessing (e.g. LocalContrastNormalization) being
-         accidentally applied to backbone feature maps instead of the input.
+    Handles nested backbones by splitting model.layers into three ordered groups
+    and running them sequentially: pre_layers → backbone grad-model → post_layers.
+    This avoids a Keras graph-connectivity error when last_conv.output belongs to
+    the backbone's sub-graph rather than the top-level model's graph.
 
     Returns (None, None) when no Conv2D is found.
     """
@@ -113,7 +109,7 @@ def _run_with_conv_output(model, arr, tape=None):
             outputs=[last_conv.output, backbone.outputs[0]],
         )
 
-        # Pre-backbone pass (e.g. LCN, rescaling, etc.)
+        # Pre-backbone pass (rescaling, etc.)
         x = arr
         for layer in pre_layers:
             x = layer(x, training=False)
