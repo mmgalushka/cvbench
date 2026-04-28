@@ -1,3 +1,13 @@
+## v0.22.2 (2026-04-28)
+
+### Refactor
+
+- remove LCN — not exportable to Hailo HEF
+
+### Perf
+
+- cache pip deps layer to speed up code-only Docker builds
+
 ## v0.22.1 (2026-04-27)
 
 ### Fix
