@@ -120,9 +120,9 @@ def _collect_images(directory: Path) -> list[Path]:
     return files
 
 
-def _build_calibration_set(cfg, output_path: Path, n_calib: int) -> None:
-    import cv2
+def _build_calibration_set(cfg, output_path: Path, images_per_class: int) -> None:
     import numpy as np
+    from PIL import Image
 
     source_dir = Path(
         cfg.data.train_dir
@@ -148,37 +148,25 @@ def _build_calibration_set(cfg, output_path: Path, n_calib: int) -> None:
         raise RuntimeError(f"No images found in: {source_dir}")
 
     n_classes = len(per_class)
-    quota = n_calib // n_classes
 
     selected: list[Path] = []
-    leftover_pool: list[Path] = []
-
     for files in per_class.values():
-        take = min(quota, len(files))
+        take = min(images_per_class, len(files))
         chosen = rng.sample(files, take)
         selected.extend(chosen)
-        leftover_pool.extend(f for f in files if f not in set(chosen))
-
-    # Fill remaining slots from the leftover pool (preserves diversity).
-    remainder = n_calib - len(selected)
-    if remainder > 0 and leftover_pool:
-        rng.shuffle(leftover_pool)
-        selected.extend(leftover_pool[:remainder])
 
     print(
         _fmt.dim(
-            f"  Building  calib_set.npy ({len(selected)} images across "
-            f"{n_classes} class(es), {size}×{size})..."
+            f"  Building  calib_set.npy ({len(selected)} images, "
+            f"{images_per_class}/class across {n_classes} class(es), {size}×{size})..."
         )
     )
 
     calib_data = []
     for img_path in sorted(selected):
-        # Load as BGR (matches the training pipeline) so Hailo calibration
-        # sees the same channel order as the model was trained on.
-        img = cv2.imread(str(img_path))
-        img = cv2.resize(img, (size, size))
-        calib_data.append(img.astype(np.float32))
+        img = Image.open(str(img_path)).convert("RGB")
+        img = img.resize((size, size))
+        calib_data.append(np.array(img, dtype=np.float32))
 
     calib_set = np.array(calib_data)
     np.save(str(output_path), calib_set)
@@ -192,7 +180,7 @@ def _write_alls(output_path: Path) -> None:
     print(_fmt.dim("  Written   model.alls"))
 
 
-def _prepare_hailo_package(run_dir: Path, cfg, n_calib: int = 1024) -> Path:
+def _prepare_hailo_package(run_dir: Path, cfg, images_per_class: int = 32) -> Path:
     export_dir = run_dir / "export" / "hailo"
     export_dir.mkdir(parents=True, exist_ok=True)
 
@@ -208,7 +196,7 @@ def _prepare_hailo_package(run_dir: Path, cfg, n_calib: int = 1024) -> Path:
         print(_fmt.dim("  Converting to TFLite (float32)..."))
         _export_tflite(model, tflite_path, quantize="none")
 
-    _build_calibration_set(cfg, export_dir / "calib_set.npy", n_calib)
+    _build_calibration_set(cfg, export_dir / "calib_set.npy", images_per_class)
     _write_alls(export_dir / "model.alls")
 
     return export_dir
@@ -258,6 +246,7 @@ def run_export(
     format: str,
     quantize: str = "none",
     output_dir: str | None = None,
+    images_per_class: int = 32,
 ) -> Path | None:
     """Export the best checkpoint of a run to TFLite, ONNX, or print Jetson plan instructions.
 
@@ -287,7 +276,7 @@ def run_export(
         print(f" Hailo package — '{run_dir.name}'")
         print(_fmt.rule())
 
-        export_dir = _prepare_hailo_package(run_dir, cfg)
+        export_dir = _prepare_hailo_package(run_dir, cfg, images_per_class)
 
         export_info = {
             "source_checkpoint": str(checkpoint),

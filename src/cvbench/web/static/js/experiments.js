@@ -527,6 +527,10 @@ function buildExportTab(run) {
               <option value="int8">Int8</option>
             </select>
           </label>
+          <label id="calib-images-per-class-wrap" style="display:none">
+            Images per class
+            <input id="export-calib-images-per-class" type="number" min="1" max="1000" value="32" style="width:6rem">
+          </label>
         </div>
         <button id="export-generate-btn" onclick="generateExport('${escHtml(run.name)}')">Generate Export</button>
         <p id="export-error" class="error-msg" style="display:none;margin-top:0.5rem"></p>
@@ -543,6 +547,8 @@ function updateExportForm() {
   const instrEl = document.getElementById('format-instructions');
 
   if (wrap) wrap.style.display = fmt === 'tflite' ? '' : 'none';
+  const calibWrap = document.getElementById('calib-images-per-class-wrap');
+  if (calibWrap) calibWrap.style.display = fmt === 'hailo' ? '' : 'none';
   if (btn) btn.style.display = fmt === 'plan' ? 'none' : '';
   if (instrEl) {
     if (fmt === 'plan') {
@@ -616,7 +622,8 @@ function buildPlanInstructions(runName) {
 function buildHailoInstructions(runName) {
   const rel = `experiments/${runName}/export/hailo`;
   const termIcon = `<svg class="cli-label" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`;
-  const cliCmd = `cvbench runs export ${runName} --format hailo`;
+  const imgsPerClass = document.getElementById('export-calib-images-per-class')?.value || '32';
+  const cliCmd = `cvbench runs export ${runName} --format hailo --calib-images-per-class ${imgsPerClass}`;
 
   const step1cmd = `hailo parser tf model.tflite`;
   const step2cmd = `hailo optimize --hw-arch hailo8l --calib-set-path calib_set.npy --model-script model.alls --output-har-path model_optimized.har model.har`;
@@ -724,6 +731,7 @@ async function generateExport(runName) {
   const errEl = document.getElementById('export-error');
   const format = document.getElementById('export-format')?.value;
   const quantize = document.getElementById('export-quantize')?.value || 'none';
+  const images_per_class = parseInt(document.getElementById('export-calib-images-per-class')?.value || '32', 10);
 
   if (!btn || !format) return;
 
@@ -736,7 +744,7 @@ async function generateExport(runName) {
     const exports = await fetch(`/api/runs/${encodeURIComponent(runName)}/exports`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ format, quantize }),
+      body: JSON.stringify({ format, quantize, images_per_class }),
     });
     if (!exports.ok) {
       const err = await exports.json().catch(() => ({ detail: exports.statusText }));

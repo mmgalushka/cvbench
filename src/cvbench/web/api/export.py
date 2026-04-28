@@ -61,6 +61,7 @@ def list_exports(name: str):
 class ExportRequest(BaseModel):
     format: str
     quantize: str = "none"
+    images_per_class: int = 32
 
 
 @router.post("/runs/{name}/exports")
@@ -81,7 +82,7 @@ async def create_export(name: str, req: ExportRequest):
     from cvbench.services.export import run_export
     loop = asyncio.get_event_loop()
     try:
-        await loop.run_in_executor(None, lambda: run_export(name, req.format, req.quantize))
+        await loop.run_in_executor(None, lambda: run_export(name, req.format, req.quantize, images_per_class=req.images_per_class))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

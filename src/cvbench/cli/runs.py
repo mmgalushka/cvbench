@@ -135,14 +135,22 @@ def compare(experiment_a, experiment_b):
     default=None,
     help="Output directory (default: <experiment>/export/). Ignored for plan.",
 )
-def export(experiment, fmt, quantize, output_dir):
+@click.option(
+    "--calib-images-per-class",
+    "images_per_class",
+    default=32,
+    show_default=True,
+    help="Images per class in the Hailo calibration set. Ignored for non-Hailo formats.",
+)
+def export(experiment, fmt, quantize, output_dir, images_per_class):
     """Export the best checkpoint of EXPERIMENT to TFLite, ONNX, or Hailo package, or print Jetson deployment instructions (plan).
 
     EXPERIMENT is a run name or full path to a run directory.
     """
     try:
         run_export(
-            experiment, format=fmt, quantize=quantize, output_dir=output_dir
+            experiment, format=fmt, quantize=quantize, output_dir=output_dir,
+            images_per_class=images_per_class,
         )
     except FileNotFoundError as e:
         raise click.ClickException(str(e))

@@ -75,10 +75,10 @@ def _get_class_names(run_dir: Path, fmt: str) -> list[str] | None:
 
 
 def _load_image(img_path: str, size: int) -> np.ndarray:
-    import cv2
-    img = cv2.imread(img_path)  # BGR uint8
-    img = cv2.resize(img, (size, size))
-    return img.astype(np.float32)[None]  # (1, H, W, 3) BGR
+    from PIL import Image
+    img = Image.open(img_path).convert("RGB")
+    img = img.resize((size, size))
+    return np.array(img, dtype=np.float32)[None]  # (1, H, W, 3) RGB
 
 
 def _infer_keras(model_path: Path, images: list[str], size: int) -> list[np.ndarray]:
@@ -306,23 +306,21 @@ def _build_result(probs: np.ndarray, class_names: list[str]) -> dict:
 
 
 def _bytes_to_input(image_bytes: bytes, size: int) -> np.ndarray:
-    import cv2
-    arr = np.frombuffer(image_bytes, np.uint8)
-    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)  # BGR uint8
-    img = cv2.resize(img, (size, size))
-    return img.astype(np.float32)[None]  # (1, H, W, 3) BGR
+    from PIL import Image
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = img.resize((size, size))
+    return np.array(img, dtype=np.float32)[None]  # (1, H, W, 3) RGB
 
 
 def _bytes_to_numpy(image_bytes: bytes, size: int) -> np.ndarray:
-    import cv2
-    arr = np.frombuffer(image_bytes, np.uint8)
-    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)  # BGR uint8
-    return cv2.resize(img, (size, size))
+    from PIL import Image
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = img.resize((size, size))
+    return np.array(img)
 
 
 def _numpy_to_base64_png(arr: np.ndarray) -> str:
     from PIL import Image
     buf = io.BytesIO()
-    # arr is BGR; convert to RGB for correct web display
-    Image.fromarray(arr[..., ::-1].astype(np.uint8)).save(buf, format="PNG")
+    Image.fromarray(arr.astype(np.uint8)).save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode("ascii")
