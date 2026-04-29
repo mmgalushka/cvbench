@@ -1,3 +1,19 @@
+## v0.25.0 (2026-04-29)
+
+### Feat
+
+- add --seed flag for reproducible training
+- add rename experiment (CLI, API, web UI)
+- delete run/export CLI command; TensorRT plan package export; web UI delete action and dynamic format dropdown
+
+### Fix
+
+- include filename in export download URL for curl/wget compatibility
+
+### Refactor
+
+- remove --normalization external option
+
 ## v0.24.1 (2026-04-29)
 
 ### Fix
