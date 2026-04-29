@@ -1,8 +1,9 @@
-"""Exports API — list, trigger, and download model exports."""
+"""Exports API — list, trigger, download, and delete model exports."""
 
 import asyncio
 import io
 import json
+import shutil
 import tarfile
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from cvbench.core.runs import resolve_run_dir
 
 router = APIRouter()
 
-_VALID_FORMATS = {"tflite", "onnx", "hailo"}
+_VALID_FORMATS = {"tflite", "onnx", "hailo", "plan"}
 _VALID_QUANTIZE = {"none", "float16", "int8"}
 _MODEL_FILENAMES = ("model.tflite", "model_float16.tflite", "model_int8.tflite", "model.onnx")
 _HAILO_PACKAGE_FILES = ("model.tflite", "calib_set.npy", "model.alls", "export_info.json")
@@ -138,3 +139,24 @@ def download_export(name: str, subfolder: str):
         media_type="application/gzip",
         headers={"Content-Disposition": f'attachment; filename="{archive_name}"'},
     )
+
+
+@router.delete("/runs/{name}/exports/{subfolder}")
+def delete_export(name: str, subfolder: str):
+    try:
+        run_dir = Path(resolve_run_dir(name))
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"Run '{name}' not found")
+
+    export_base = (run_dir / "export").resolve()
+    export_dir = (export_base / subfolder).resolve()
+    try:
+        export_dir.relative_to(export_base)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not export_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Export not found")
+
+    shutil.rmtree(export_dir)
+    return _scan_exports(run_dir)

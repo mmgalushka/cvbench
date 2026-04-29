@@ -71,6 +71,25 @@ def _export_onnx(model, output_path: Path, input_size: int) -> None:
     onnx.save(model_proto, str(output_path))
 
 
+def _prepare_plan_package(run_dir: Path, cfg) -> Path:
+    export_dir = run_dir / "export" / "plan"
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    onnx_path = export_dir / "model.onnx"
+    if onnx_path.exists():
+        print(_fmt.dim("  Reusing   model.onnx"))
+    else:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="Skipping variable loading for optimizer"
+            )
+            model = keras.saving.load_model(str(run_dir / "best.keras"))
+        print(_fmt.dim("  Converting to ONNX (opset=13)..."))
+        _export_onnx(model, onnx_path, cfg.model.input_size)
+
+    return export_dir
+
+
 def _print_plan_instructions(run_name: str, onnx_exists: bool) -> None:
     print(_fmt.rule())
     print(f" TensorRT Engine Plan — Jetson deployment")
@@ -267,9 +286,47 @@ def run_export(
     run_dir = Path(resolve_run_dir(experiment))
 
     if format == "plan":
-        onnx_path = run_dir / "export" / "onnx" / "model.onnx"
-        _print_plan_instructions(run_dir.name, onnx_exists=onnx_path.exists())
-        return None
+        import tensorflow as tf
+
+        tf.get_logger().setLevel("ERROR")
+        import absl.logging
+
+        absl.logging.set_verbosity(absl.logging.ERROR)
+
+        cfg = load_config(str(run_dir))
+        checkpoint = run_dir / "best.keras"
+        if not checkpoint.exists():
+            raise FileNotFoundError(f"No best.keras found in: {run_dir}")
+
+        print(_fmt.rule())
+        print(f" TensorRT Plan package — '{run_dir.name}'")
+        print(_fmt.rule())
+
+        export_dir = _prepare_plan_package(run_dir, cfg)
+
+        export_info = {
+            "source_checkpoint": str(checkpoint),
+            "format": "plan",
+            "quantize": None,
+            "input_shape": [1, cfg.model.input_size, cfg.model.input_size, 3],
+            "input_dtype": "float32",
+            "normalization": "internal",
+            "classes": cfg.data.classes,
+            "backbone": cfg.model.backbone,
+            "val_accuracy": cfg.run.val_accuracy,
+            "val_loss": cfg.run.val_loss,
+            "exported_at": datetime.now().isoformat(timespec="seconds"),
+            "jetson_trtexec": "trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32",
+        }
+        (export_dir / "export_info.json").write_text(
+            json.dumps(export_info, indent=2)
+        )
+        print(f"  Written   export_info.json")
+        print(_fmt.rule())
+        print(_fmt.green(f" Package ready → {export_dir}"))
+        print(_fmt.rule())
+        _print_plan_instructions(run_dir.name, onnx_exists=True)
+        return export_dir
 
     if format == "hailo":
         import tensorflow as tf

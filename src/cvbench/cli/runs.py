@@ -1,3 +1,5 @@
+import shutil
+
 import click
 
 from cvbench.core import _fmt
@@ -148,6 +150,57 @@ def export(experiment, fmt, quantize, output_dir):
         raise click.ClickException(str(e))
     except RuntimeError as e:
         raise click.ClickException(str(e))
+
+
+@runs.command()
+@click.argument("experiment")
+@click.option(
+    "--export",
+    "export_subfolder",
+    default=None,
+    metavar="SUBFOLDER",
+    help="Delete only this export subfolder (e.g. tflite, onnx, hailo). Omit to delete the entire run.",
+)
+@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
+def delete(experiment, export_subfolder, yes):
+    """Delete a run or one of its exports.
+
+    EXPERIMENT is a run name or full path to a run directory.
+
+    Without --export, the entire run directory is removed.
+    With --export SUBFOLDER, only that export subfolder is removed.
+    """
+    from pathlib import Path
+
+    try:
+        run_dir = Path(resolve_run_dir(experiment))
+    except Exception as e:
+        raise click.ClickException(str(e))
+
+    if export_subfolder:
+        export_base = run_dir / "export"
+        target = (export_base / export_subfolder).resolve()
+        try:
+            target.relative_to(export_base.resolve())
+        except ValueError:
+            raise click.ClickException("Invalid export subfolder.")
+        if not target.is_dir():
+            raise click.ClickException(
+                f"Export '{export_subfolder}' not found in {run_dir.name}."
+            )
+        label = f"export '{export_subfolder}' from run '{run_dir.name}'"
+    else:
+        target = run_dir
+        label = f"run '{run_dir.name}' and all its contents"
+
+    if not yes:
+        click.confirm(
+            f"{_fmt.yellow('Warning:')} This will permanently delete {label}. Continue?",
+            abort=True,
+        )
+
+    shutil.rmtree(target)
+    print(_fmt.green(f" Deleted {label}."))
 
 
 @runs.command()

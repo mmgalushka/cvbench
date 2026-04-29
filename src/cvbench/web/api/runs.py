@@ -1,7 +1,8 @@
-"""Runs API — list and inspect experiment runs."""
+"""Runs API — list, inspect, and delete experiment runs."""
 
 import csv
 import json
+import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -111,3 +112,20 @@ def get_run(name: str):
         "training_log": training_log,
         "eval_report": eval_report,
     }
+
+
+@router.delete("/runs/{name}")
+def delete_run(name: str):
+    try:
+        run_dir = Path(resolve_run_dir(name))
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"Run '{name}' not found")
+
+    experiments_base = Path(EXPERIMENTS_DIR).resolve()
+    try:
+        run_dir.resolve().relative_to(experiments_base)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    shutil.rmtree(run_dir)
+    return {"deleted": name}
