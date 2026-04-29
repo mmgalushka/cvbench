@@ -1,17 +1,28 @@
-"""Runs API — list, inspect, and delete experiment runs."""
+"""Runs API — list, inspect, delete, and rename experiment runs."""
 
 import csv
 import json
+import os
 import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
-from cvbench.core.runs import EXPERIMENTS_DIR, scan_experiments, resolve_run_dir
-from cvbench.core.config import load_config, OneOfConfig, TransformConfig
+from cvbench.core.runs import (
+    EXPERIMENTS_DIR,
+    scan_experiments,
+    resolve_run_dir,
+    validate_run_name,
+    assert_name_available,
+)
+from cvbench.core.config import load_config, update_run_status, OneOfConfig, TransformConfig
 
 router = APIRouter()
+
+
+class RenameRequest(BaseModel):
+    new_name: str
 
 
 @router.get("/runs")
@@ -112,6 +123,29 @@ def get_run(name: str):
         "training_log": training_log,
         "eval_report": eval_report,
     }
+
+
+@router.patch("/runs/{name}")
+def rename_run(name: str, body: RenameRequest):
+    try:
+        run_dir = Path(resolve_run_dir(name))
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"Run '{name}' not found")
+
+    cfg = load_config(str(run_dir))
+    if cfg.run.status == "running":
+        raise HTTPException(status_code=409, detail="Cannot rename a currently running experiment.")
+
+    try:
+        validate_run_name(body.new_name)
+        assert_name_available(body.new_name, current_dir=run_dir)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    new_dir = run_dir.parent / body.new_name
+    os.rename(run_dir, new_dir)
+    update_run_status(str(new_dir), name=body.new_name)
+    return {"name": body.new_name}
 
 
 @router.delete("/runs/{name}")

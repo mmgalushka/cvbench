@@ -1,3 +1,4 @@
+import os
 import shutil
 
 import click
@@ -7,9 +8,11 @@ from cvbench.core.runs import (
     scan_experiments,
     best_experiment,
     resolve_run_dir,
+    validate_run_name,
+    assert_name_available,
     EXPERIMENTS_DIR,
 )
-from cvbench.core.config import load_config
+from cvbench.core.config import load_config, update_run_status
 from cvbench.services.export import run_export
 
 
@@ -113,6 +116,38 @@ def compare(experiment_a, experiment_b):
         diff = " ◀" if va != vb else ""
         print(f" {f:<22}  {va:<26}  {vb:<26}{diff}")
     print(tr)
+
+
+@runs.command()
+@click.argument("experiment")
+@click.argument("new_name")
+def rename(experiment, new_name):
+    """Rename an experiment directory and update its config.
+
+    EXPERIMENT is a run name or full path. NEW_NAME must contain only letters,
+    digits, underscores, and hyphens.
+    """
+    from pathlib import Path
+
+    try:
+        run_dir = Path(resolve_run_dir(experiment))
+    except Exception as e:
+        raise click.ClickException(str(e))
+
+    cfg = load_config(str(run_dir))
+    if cfg.run.status == "running":
+        raise click.ClickException("Cannot rename a currently running experiment.")
+
+    try:
+        validate_run_name(new_name)
+        assert_name_available(new_name, current_dir=run_dir)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+    new_dir = run_dir.parent / new_name
+    os.rename(run_dir, new_dir)
+    update_run_status(str(new_dir), name=new_name)
+    print(_fmt.green(f" Renamed '{run_dir.name}' → '{new_name}'."))
 
 
 @runs.command()

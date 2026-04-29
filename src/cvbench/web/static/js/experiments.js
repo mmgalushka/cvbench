@@ -90,6 +90,7 @@ function buildRunDetail(run) {
       <div class="run-actions-menu" id="run-actions-menu">
         <button class="run-actions-trigger" onclick="toggleRunMenu(event)" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
         <ul class="run-actions-dropdown" id="run-actions-dropdown">
+          <li class="run-actions-item" onclick="renameRun('${escHtml(run.name)}'); closeRunMenu()"><i class="fas fa-pencil-alt"></i> Rename</li>
           <li class="run-actions-item run-actions-item--danger" onclick="deleteRun('${escHtml(run.name)}'); closeRunMenu()"><i class="fas fa-trash-alt"></i> Delete</li>
         </ul>
       </div>
@@ -829,6 +830,32 @@ function toggleRunMenu(e) {
 function closeRunMenu() {
   const dropdown = document.getElementById('run-actions-dropdown');
   if (dropdown) dropdown.classList.remove('open');
+}
+
+const _VALID_RUN_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_\-]*$/;
+
+async function renameRun(runName) {
+  const newName = prompt(`Rename experiment "${runName}" to:`, runName);
+  if (newName === null || newName === runName) return;
+  if (!newName || !_VALID_RUN_NAME.test(newName) || newName.length > 100) {
+    alert('Invalid name. Use only letters, digits, underscores, and hyphens (max 100 chars), starting with a letter or digit.');
+    return;
+  }
+  try {
+    const res = await fetch(`/api/runs/${encodeURIComponent(runName)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_name: newName }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      alert(`Failed to rename run: ${err.detail || res.statusText}`);
+      return;
+    }
+    navigate(`#/runs/${encodeURIComponent(newName)}`);
+  } catch (e) {
+    alert(`Failed to rename run: ${e.message}`);
+  }
 }
 
 async function deleteRun(runName) {

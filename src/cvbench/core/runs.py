@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -10,6 +11,33 @@ from cvbench.core.config import CVBenchConfig, load_config
 
 
 EXPERIMENTS_DIR = "experiments"
+
+_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_\-]*$")
+
+
+def validate_run_name(name: str) -> str:
+    """Raise ValueError if name is not safe to use as an experiment directory name."""
+    if not name or len(name) > 100:
+        raise ValueError("Name must be 1–100 characters.")
+    if not _NAME_RE.match(name):
+        raise ValueError(
+            "Name may only contain letters, digits, underscores, and hyphens, "
+            "and must start with a letter or digit."
+        )
+    return name
+
+
+def assert_name_available(new_name: str, current_dir: Path | None = None) -> None:
+    """Raise ValueError if new_name conflicts with an existing experiment directory."""
+    experiments = Path(EXPERIMENTS_DIR)
+    new_lower = new_name.lower()
+    for existing in experiments.iterdir():
+        if not existing.is_dir():
+            continue
+        if current_dir and existing.resolve() == current_dir.resolve():
+            continue
+        if existing.name.lower() == new_lower:
+            raise ValueError(f"An experiment named '{existing.name}' already exists.")
 
 
 def resolve_run_dir(name: str) -> str:
