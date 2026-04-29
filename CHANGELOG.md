@@ -1,3 +1,10 @@
+## v0.23.1 (2026-04-29)
+
+### Fix
+
+- apply external normalization after augmentation, not before
+- pin TensorFlow base image to 2.16.2-gpu for reproducibility
+
 ## v0.23.0 (2026-04-28)
 
 ### Feat
