@@ -166,6 +166,14 @@ def run_training(
         )
         print(_fmt.dim(f" Mixup enabled: alpha={mx.alpha}, background='{mx.background_class}' (class {bg_idx})"))
 
+    # For external normalization, custom augmentations expect [0, 255], so we
+    # normalize to [0, 1] here, after all augmentation has been applied.
+    if cfg.model.normalization == "external":
+        train_ds = train_ds.map(
+            lambda x, y: (tf.cast(x, tf.float32) / 255.0, y),
+            num_parallel_calls=tf.data.AUTOTUNE,
+        )
+
     model = build_model(cfg)
 
     _trainer.train(

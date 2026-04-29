@@ -104,6 +104,7 @@ def build_dataset(
     class_names: list[str],
     cfg: CVBenchConfig,
     training: bool = False,
+    apply_normalization: bool = True,
 ) -> tf.data.Dataset:
     """Build a tf.data pipeline from an image directory.
 
@@ -112,6 +113,8 @@ def build_dataset(
         class_names: Ordered list of class names (derived from train dir).
         cfg: Resolved experiment config.
         training: If True, apply shuffle and repeat; if False, no shuffle.
+        apply_normalization: If False, skip the external /255 step (used when
+            augmentation will run first and normalization is applied after).
 
     Returns:
         Batched, prefetched tf.data.Dataset yielding (image, label) pairs.
@@ -131,7 +134,7 @@ def build_dataset(
         seed=42 if training else None,
     )
 
-    if cfg.model.normalization == "external":
+    if apply_normalization and cfg.model.normalization == "external":
         ds = ds.map(
             lambda x, y: (tf.cast(x, tf.float32) / 255.0, y),
             num_parallel_calls=tf.data.AUTOTUNE,
@@ -167,7 +170,7 @@ def build_datasets(
             ))
         n_val = sum(1 for _ in Path(cfg.data.val_dir).glob("*/*"))
         with contextlib.redirect_stdout(io.StringIO()):
-            train_ds = build_dataset(cfg.data.train_dir, class_names, cfg, training=True)
+            train_ds = build_dataset(cfg.data.train_dir, class_names, cfg, training=True, apply_normalization=False)
             val_ds = build_dataset(cfg.data.val_dir, class_names, cfg, training=False)
         print(_fmt.dim(f" Found {total_train} files for training ({len(class_names)} classes)."))
         print(_fmt.dim(f" Found {n_val} files for validation ({len(class_names)} classes)."))
@@ -194,12 +197,15 @@ def build_datasets(
                 .repeat()
                 .prefetch(tf.data.AUTOTUNE)
             )
-            val_ds = (
-                tf.keras.utils.image_dataset_from_directory(
-                    cfg.data.train_dir, subset="validation", shuffle=False, **common_kwargs
-                )
-                .prefetch(tf.data.AUTOTUNE)
+            _val_raw = tf.keras.utils.image_dataset_from_directory(
+                cfg.data.train_dir, subset="validation", shuffle=False, **common_kwargs
             )
+            if cfg.model.normalization == "external":
+                _val_raw = _val_raw.map(
+                    lambda x, y: (tf.cast(x, tf.float32) / 255.0, y),
+                    num_parallel_calls=tf.data.AUTOTUNE,
+                )
+            val_ds = _val_raw.prefetch(tf.data.AUTOTUNE)
         num_train_samples = math.floor(total_train * (1 - split))
         n_val_samples = total_train - num_train_samples
         print(_fmt.dim(
