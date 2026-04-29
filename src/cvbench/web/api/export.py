@@ -89,8 +89,8 @@ async def create_export(name: str, req: ExportRequest):
     return _scan_exports(run_dir)
 
 
-@router.get("/runs/{name}/exports/{subfolder}/download")
-def download_export(name: str, subfolder: str):
+@router.get("/runs/{name}/exports/{subfolder}/download/{filename}")
+def download_export(name: str, subfolder: str, filename: str):
     try:
         run_dir = Path(resolve_run_dir(name))
     except Exception:

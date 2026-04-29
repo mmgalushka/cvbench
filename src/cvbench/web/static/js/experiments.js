@@ -738,8 +738,9 @@ function renderExportsList(exports) {
     const quant = ex.quantize || 'none';
     const size = ex.size_mb != null ? `${ex.size_mb} MB` : '—';
     const date = ex.exported_at ? ex.exported_at.replace('T', ' ') : '—';
-    const dlUrl = `/api/runs/${encodeURIComponent(currentRun.name)}/exports/${encodeURIComponent(ex.subfolder)}/download`;
-    const dlPath = `/api/runs/${encodeURIComponent(currentRun.name)}/exports/${encodeURIComponent(ex.subfolder)}/download`;
+    const dlFilename = `${encodeURIComponent(currentRun.name)}_${encodeURIComponent(ex.subfolder)}.tar.gz`;
+    const dlUrl = `/api/runs/${encodeURIComponent(currentRun.name)}/exports/${encodeURIComponent(ex.subfolder)}/download/${dlFilename}`;
+    const dlPath = dlUrl;
     const curl = `curl -O http://<HOST>:<PORT>${dlPath}`;
     const wget = `wget http://<HOST>:<PORT>${dlPath}`;
     const hasInstr = fmt === 'hailo' || fmt === 'plan';
