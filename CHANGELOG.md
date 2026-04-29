@@ -1,3 +1,9 @@
+## v0.24.1 (2026-04-29)
+
+### Fix
+
+- remove calib images-per-class selector from web UI
+
 ## v0.24.0 (2026-04-29)
 
 ### Feat
