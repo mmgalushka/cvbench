@@ -120,7 +120,11 @@ def _collect_images(directory: Path) -> list[Path]:
     return files
 
 
-def _build_calibration_set(cfg, output_path: Path, images_per_class: int) -> None:
+_CALIB_TARGET = 1024
+_CALIB_MIN_PER_CLASS = 2
+
+
+def _build_calibration_set(cfg, output_path: Path) -> None:
     import numpy as np
     from PIL import Image
 
@@ -148,23 +152,31 @@ def _build_calibration_set(cfg, output_path: Path, images_per_class: int) -> Non
         raise RuntimeError(f"No images found in: {source_dir}")
 
     n_classes = len(per_class)
+    total_available = sum(len(v) for v in per_class.values())
 
+    # Stratified proportional sampling: allocate quota proportional to class
+    # size, with a minimum floor so rare classes are never dropped entirely.
     selected: list[Path] = []
     for files in per_class.values():
-        take = min(images_per_class, len(files))
-        chosen = rng.sample(files, take)
-        selected.extend(chosen)
+        proportion = len(files) / total_available
+        quota = max(_CALIB_MIN_PER_CLASS, round(proportion * _CALIB_TARGET))
+        take = min(quota, len(files))
+        selected.extend(rng.sample(files, take))
+
+    # Shuffle so the array is not ordered by class — critical for Hailo
+    # calibration algorithms that process images in sequential mini-batches.
+    rng.shuffle(selected)
 
     print(
         _fmt.dim(
             f"  Building  calib_set.npy ({len(selected)} images, "
-            f"{images_per_class}/class across {n_classes} class(es), {size}×{size})..."
+            f"stratified across {n_classes} class(es), {size}×{size})..."
         )
     )
 
     normalize = getattr(cfg.model, "normalization", "internal") == "external"
     calib_data = []
-    for img_path in sorted(selected):
+    for img_path in selected:
         img = Image.open(str(img_path)).convert("RGB")
         img = img.resize((size, size))
         arr = np.array(img, dtype=np.float32)
@@ -182,7 +194,7 @@ def _write_alls(output_path: Path) -> None:
     print(_fmt.dim("  Written   model.alls"))
 
 
-def _prepare_hailo_package(run_dir: Path, cfg, images_per_class: int = 32) -> Path:
+def _prepare_hailo_package(run_dir: Path, cfg) -> Path:
     export_dir = run_dir / "export" / "hailo"
     export_dir.mkdir(parents=True, exist_ok=True)
 
@@ -198,7 +210,7 @@ def _prepare_hailo_package(run_dir: Path, cfg, images_per_class: int = 32) -> Pa
         print(_fmt.dim("  Converting to TFLite (float32)..."))
         _export_tflite(model, tflite_path, quantize="none")
 
-    _build_calibration_set(cfg, export_dir / "calib_set.npy", images_per_class)
+    _build_calibration_set(cfg, export_dir / "calib_set.npy")
     _write_alls(export_dir / "model.alls")
 
     return export_dir
@@ -248,7 +260,6 @@ def run_export(
     format: str,
     quantize: str = "none",
     output_dir: str | None = None,
-    images_per_class: int = 32,
 ) -> Path | None:
     """Export the best checkpoint of a run to TFLite, ONNX, or print Jetson plan instructions.
 
@@ -278,7 +289,7 @@ def run_export(
         print(f" Hailo package — '{run_dir.name}'")
         print(_fmt.rule())
 
-        export_dir = _prepare_hailo_package(run_dir, cfg, images_per_class)
+        export_dir = _prepare_hailo_package(run_dir, cfg)
 
         export_info = {
             "source_checkpoint": str(checkpoint),
