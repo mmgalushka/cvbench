@@ -1,3 +1,9 @@
+## v0.24.0 (2026-04-29)
+
+### Feat
+
+- stratified proportional calibration set (fixed 1024 images, shuffled)
+
 ## v0.23.1 (2026-04-29)
 
 ### Fix
