@@ -57,42 +57,35 @@ def _export_info_path(run_dir: Path, fmt: str) -> Path | None:
     return None
 
 
-def _get_run_info(run_dir: Path, fmt: str) -> tuple[int, list[str] | None, bool]:
-    """Return (input_size, class_names, normalize) for a run and format."""
+def _get_run_info(run_dir: Path, fmt: str) -> tuple[int, list[str] | None]:
+    """Return (input_size, class_names) for a run and format."""
     info_path = _export_info_path(run_dir, fmt)
     if info_path:
         info = json.loads(info_path.read_text())
         size = info["input_shape"][1]
         classes = info.get("classes")
-        normalize = info.get("normalization") == "external"
-        return size, classes, normalize
+        return size, classes
     cfg = load_config(str(run_dir))
-    return (
-        cfg.model.input_size,
-        cfg.data.classes,
-        getattr(cfg.model, "normalization", "internal") == "external",
-    )
+    return cfg.model.input_size, cfg.data.classes
 
 
-def _load_image(img_path: str, size: int, normalize: bool = False) -> np.ndarray:
+def _load_image(img_path: str, size: int) -> np.ndarray:
     from PIL import Image
     img = Image.open(img_path).convert("RGB")
     img = img.resize((size, size))
     arr = np.array(img, dtype=np.float32)
-    if normalize:
-        arr = arr / 255.0
     return arr[None]  # (1, H, W, 3) RGB
 
 
-def _infer_keras(model_path: Path, images: list[str], size: int, normalize: bool = False) -> list[np.ndarray]:
+def _infer_keras(model_path: Path, images: list[str], size: int) -> list[np.ndarray]:
     import keras
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
         model = keras.saving.load_model(str(model_path))
-    return [model.predict(_load_image(p, size, normalize), verbose=0)[0] for p in images]
+    return [model.predict(_load_image(p, size), verbose=0)[0] for p in images]
 
 
-def _infer_onnx(model_path: Path, images: list[str], size: int, normalize: bool = False) -> list[np.ndarray]:
+def _infer_onnx(model_path: Path, images: list[str], size: int) -> list[np.ndarray]:
     try:
         import onnxruntime as ort
     except ImportError:
@@ -103,12 +96,12 @@ def _infer_onnx(model_path: Path, images: list[str], size: int, normalize: bool 
     sess = ort.InferenceSession(str(model_path))
     input_name = sess.get_inputs()[0].name
     return [
-        np.array(sess.run(None, {input_name: _load_image(p, size, normalize)})[0][0], dtype=np.float32)
+        np.array(sess.run(None, {input_name: _load_image(p, size)})[0][0], dtype=np.float32)
         for p in images
     ]
 
 
-def _infer_tflite(model_path: Path, images: list[str], size: int, normalize: bool = False) -> list[np.ndarray]:
+def _infer_tflite(model_path: Path, images: list[str], size: int) -> list[np.ndarray]:
     try:
         import tensorflow as tf
     except ImportError:
@@ -119,7 +112,7 @@ def _infer_tflite(model_path: Path, images: list[str], size: int, normalize: boo
     out = interp.get_output_details()
     results = []
     for p in images:
-        interp.set_tensor(inp[0]["index"], _load_image(p, size, normalize))
+        interp.set_tensor(inp[0]["index"], _load_image(p, size))
         interp.invoke()
         results.append(np.array(interp.get_tensor(out[0]["index"])[0], dtype=np.float32))
     return results
@@ -186,13 +179,13 @@ def run_experiment_prediction(
             })
             continue
         try:
-            size, class_names, normalize = _get_run_info(run_dir, f)
+            size, class_names = _get_run_info(run_dir, f)
             if f == "keras":
-                probs_list = _infer_keras(path, images, size, normalize)
+                probs_list = _infer_keras(path, images, size)
             elif f == "onnx":
-                probs_list = _infer_onnx(path, images, size, normalize)
+                probs_list = _infer_onnx(path, images, size)
             else:
-                probs_list = _infer_tflite(path, images, size, normalize)
+                probs_list = _infer_tflite(path, images, size)
             formats_run.append({"format": f, "results": _build_results(images, probs_list, class_names)})
         except RuntimeError as e:
             formats_skipped.append({"format": f, "reason": str(e)})
@@ -243,8 +236,6 @@ def predict_image(run_name: str, image_bytes: bytes) -> dict:
 
     run_dir = Path(resolve_run_dir(run_name))
     cfg = load_config(str(run_dir))
-    normalize = getattr(cfg.model, "normalization", "internal") == "external"
-
     checkpoint = _model_path(run_dir, "keras")
     if checkpoint is None:
         raise ValueError(f"No keras checkpoint found for run '{run_name}'")
@@ -254,7 +245,7 @@ def predict_image(run_name: str, image_bytes: bytes) -> dict:
         model = keras.saving.load_model(str(checkpoint))
     size = model.input_shape[1]
 
-    arr = _bytes_to_input(image_bytes, size, normalize)
+    arr = _bytes_to_input(image_bytes, size)
     probs = model.predict(arr, verbose=0)[0]
     return _build_result(probs, cfg.data.classes)
 
@@ -265,8 +256,6 @@ def predict_augmented(run_name: str, image_bytes: bytes, augmentations: list[dic
 
     run_dir = Path(resolve_run_dir(run_name))
     cfg = load_config(str(run_dir))
-    normalize = getattr(cfg.model, "normalization", "internal") == "external"
-
     checkpoint = _model_path(run_dir, "keras")
     if checkpoint is None:
         raise ValueError(f"No keras checkpoint found for run '{run_name}'")
@@ -287,8 +276,6 @@ def predict_augmented(run_name: str, image_bytes: bytes, augmentations: list[dic
     augmented_b64 = _numpy_to_base64_png(img_arr)
 
     arr = img_arr.astype(np.float32)
-    if normalize:
-        arr = arr / 255.0
     probs = model.predict(arr[None], verbose=0)[0]
 
     result = _build_result(probs, cfg.data.classes)
@@ -311,13 +298,11 @@ def _build_result(probs: np.ndarray, class_names: list[str]) -> dict:
     }
 
 
-def _bytes_to_input(image_bytes: bytes, size: int, normalize: bool = False) -> np.ndarray:
+def _bytes_to_input(image_bytes: bytes, size: int) -> np.ndarray:
     from PIL import Image
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = img.resize((size, size))
     arr = np.array(img, dtype=np.float32)
-    if normalize:
-        arr = arr / 255.0
     return arr[None]  # (1, H, W, 3) RGB
 
 

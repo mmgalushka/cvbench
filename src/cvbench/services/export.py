@@ -174,13 +174,12 @@ def _build_calibration_set(cfg, output_path: Path) -> None:
         )
     )
 
-    normalize = getattr(cfg.model, "normalization", "internal") == "external"
     calib_data = []
     for img_path in selected:
         img = Image.open(str(img_path)).convert("RGB")
         img = img.resize((size, size))
         arr = np.array(img, dtype=np.float32)
-        calib_data.append(arr / 255.0 if normalize else arr)
+        calib_data.append(arr)
 
     calib_set = np.array(calib_data)
     np.save(str(output_path), calib_set)
@@ -297,7 +296,7 @@ def run_export(
             "quantize": None,
             "input_shape": [1, cfg.model.input_size, cfg.model.input_size, 3],
             "input_dtype": "float32",
-            "normalization": getattr(cfg.model, "normalization", "internal"),
+            "normalization": "internal",
             "classes": cfg.data.classes,
             "backbone": cfg.model.backbone,
             "val_accuracy": cfg.run.val_accuracy,
@@ -363,7 +362,7 @@ def run_export(
         "quantize": quantize if format == "tflite" else None,
         "input_shape": [1, cfg.model.input_size, cfg.model.input_size, 3],
         "input_dtype": "float32",
-        "normalization": getattr(cfg.model, "normalization", "internal"),
+        "normalization": "internal",
         "classes": cfg.data.classes,
         "backbone": cfg.model.backbone,
         "val_accuracy": cfg.run.val_accuracy,

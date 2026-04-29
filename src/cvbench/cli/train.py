@@ -73,14 +73,12 @@ def _parse_loss(value: str | None) -> LossConfig | None:
               help="Minimum LR floor (default 1e-7). Requires --lr-patience.")
 @click.option("--fine-tune-from-layer", default=None, type=int,
               help="Unfreeze backbone from this layer index onward (0=frozen, -1=all layers).")
-@click.option("--normalization", default=None, type=click.Choice(["internal", "external"]),
-              help="Input normalization: internal=Rescaling(1/255) inside model (default); external=pipeline normalizes, model expects [0,1].")
 @click.option("--val-split", default=None, type=float,
               help="Fraction of train set to use for validation when no val/ directory exists (default: 0.2).")
 def train(
     data_dir, output_dir, from_dir, backbone, epochs, lr,
     batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
-    loss_raw, lr_patience, lr_factor, lr_min, fine_tune_from_layer, normalization, val_split,
+    loss_raw, lr_patience, lr_factor, lr_min, fine_tune_from_layer, val_split,
 ):
     """Train a model on DATA_DIR.
 
@@ -107,6 +105,5 @@ def train(
         lr_factor=lr_factor,
         lr_min=lr_min,
         fine_tune_from_layer=fine_tune_from_layer,
-        normalization=normalization,
         val_split=val_split,
     )

@@ -54,7 +54,6 @@ def run_training(
     lr_factor: float | None = None,
     lr_min: float | None = None,
     fine_tune_from_layer: int | None = None,
-    normalization: str | None = None,
     val_split: float | None = None,
 ) -> str:
     """Orchestrate a full training run.
@@ -92,7 +91,6 @@ def run_training(
         lr_factor=lr_factor,
         lr_min=lr_min,
         fine_tune_from_layer=fine_tune_from_layer,
-        normalization=normalization,
         val_split=val_split,
     )
 
@@ -165,14 +163,6 @@ def run_training(
             num_parallel_calls=tf.data.AUTOTUNE,
         )
         print(_fmt.dim(f" Mixup enabled: alpha={mx.alpha}, background='{mx.background_class}' (class {bg_idx})"))
-
-    # For external normalization, custom augmentations expect [0, 255], so we
-    # normalize to [0, 1] here, after all augmentation has been applied.
-    if cfg.model.normalization == "external":
-        train_ds = train_ds.map(
-            lambda x, y: (tf.cast(x, tf.float32) / 255.0, y),
-            num_parallel_calls=tf.data.AUTOTUNE,
-        )
 
     model = build_model(cfg)
 

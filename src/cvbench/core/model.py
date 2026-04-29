@@ -48,8 +48,7 @@ def build_model(cfg: CVBenchConfig) -> keras.Model:
     inputs = keras.Input(shape=(size, size, 3), name="image")
     x = inputs
 
-    if cfg.model.normalization == "internal":
-        x = keras.layers.Rescaling(1.0 / 255.0)(x)
+    x = keras.layers.Rescaling(1.0 / 255.0)(x)
 
     # Backbone (frozen by default; fine-tune top layers if configured)
     # fine_tune_from_layer == 0  → fully frozen
