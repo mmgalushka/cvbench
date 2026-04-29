@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:latest-gpu AS prod
+FROM tensorflow/tensorflow:2.16.2-gpu AS prod
 
 # ── System dependencies ────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
