@@ -128,7 +128,7 @@ def build_dataset(
         image_size=(size, size),
         batch_size=batch,
         shuffle=training,
-        seed=42 if training else None,
+        seed=cfg.training.seed if training else None,
     )
 
     if training:
@@ -177,7 +177,7 @@ def build_datasets(
             class_names=class_names,
             image_size=(size, size),
             batch_size=batch,
-            seed=42,
+            seed=cfg.training.seed,
             validation_split=split,
         )
         with contextlib.redirect_stdout(io.StringIO()):

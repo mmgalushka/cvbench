@@ -183,6 +183,7 @@ function buildTrainingTab(run) {
           <dt>Epochs</dt>         <dd>${run.epochs_run} / ${run.epochs}</dd>
           <dt>Learning rate</dt>  <dd>${run.config.training.learning_rate}</dd>
           <dt>Batch size</dt>     <dd>${run.config.data.batch_size}</dd>
+          <dt>Seed</dt>           <dd>${run.config.training.seed != null ? run.config.training.seed : '—'}</dd>
           <dt>Class weight</dt>   <dd>${fmtClassWeight(run.config.training.class_weight)}</dd>
           <dt>LR patience</dt>    <dd>${run.config.training.lr_scheduler_patience || 0}</dd>
           <dt>Checkpoints</dt>    <dd>${run.config.training.checkpoints_strategy}</dd>
@@ -906,6 +907,7 @@ function buildCompareSideBySide(a, b) {
     ['Classes',        a.config.data.classes.join(', '), b.config.data.classes.join(', ')],
     ['Augmentations',  a.config.augmentation.map(t=>t.name).join(', ') || 'None',
                        b.config.augmentation.map(t=>t.name).join(', ') || 'None'],
+    ['Seed',           a.config.training.seed ?? '—',      b.config.training.seed ?? '—'],
     ['Checkpoint Strategy', a.config.training.checkpoints_strategy, b.config.training.checkpoints_strategy],
     ['LR Patience',    a.config.training.lr_scheduler_patience, b.config.training.lr_scheduler_patience],
   ];

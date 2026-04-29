@@ -75,10 +75,12 @@ def _parse_loss(value: str | None) -> LossConfig | None:
               help="Unfreeze backbone from this layer index onward (0=frozen, -1=all layers).")
 @click.option("--val-split", default=None, type=float,
               help="Fraction of train set to use for validation when no val/ directory exists (default: 0.2).")
+@click.option("--seed", default=None, type=int,
+              help="Random seed for reproducibility (sets Python, NumPy, and TensorFlow seeds).")
 def train(
     data_dir, output_dir, from_dir, backbone, epochs, lr,
     batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
-    loss_raw, lr_patience, lr_factor, lr_min, fine_tune_from_layer, val_split,
+    loss_raw, lr_patience, lr_factor, lr_min, fine_tune_from_layer, val_split, seed,
 ):
     """Train a model on DATA_DIR.
 
@@ -106,4 +108,5 @@ def train(
         lr_min=lr_min,
         fine_tune_from_layer=fine_tune_from_layer,
         val_split=val_split,
+        seed=seed,
     )

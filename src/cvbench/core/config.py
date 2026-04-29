@@ -99,6 +99,7 @@ class LossConfig:
 class TrainingConfig:
     epochs: int = 10
     learning_rate: float = 1e-4
+    seed: int | None = None
     class_weight: Any = None  # null | "auto" | {class_name: weight, ...}
     loss: LossConfig = field(default_factory=LossConfig)
     lr_scheduler: LRSchedulerConfig = field(default_factory=LRSchedulerConfig)
@@ -201,6 +202,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
     cfg.training = TrainingConfig(
         epochs=tr.get("epochs", cfg.training.epochs),
         learning_rate=tr.get("learning_rate", cfg.training.learning_rate),
+        seed=tr.get("seed", cfg.training.seed),
         class_weight=tr.get("class_weight", cfg.training.class_weight),
         loss=LossConfig(
             type=loss.get("type", cfg.training.loss.type),
@@ -268,6 +270,7 @@ def build_config(
     lr_min: float | None = None,
     fine_tune_from_layer: int | None = None,
     val_split: float | None = None,
+    seed: int | None = None,
 ) -> CVBenchConfig:
     """Build a CVBenchConfig from CLI options.
 
@@ -312,6 +315,8 @@ def build_config(
     if val_split is not None:
         cfg.data.val_split = val_split
         cfg.data.val_split_explicit = True
+    if seed is not None:
+        cfg.training.seed = seed
 
     return cfg
 

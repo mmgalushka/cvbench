@@ -55,6 +55,7 @@ def run_training(
     lr_min: float | None = None,
     fine_tune_from_layer: int | None = None,
     val_split: float | None = None,
+    seed: int | None = None,
 ) -> str:
     """Orchestrate a full training run.
 
@@ -76,6 +77,11 @@ def run_training(
     else:
         print(_fmt.yellow("⚠️  GPU not available, training on CPU"))
 
+    if seed is not None:
+        import keras
+        keras.utils.set_random_seed(seed)
+        print(_fmt.dim(f" Seed: {seed} (reproducible run)"))
+
     cfg = build_config(
         data_dir=data_dir,
         from_dir=from_dir,
@@ -92,6 +98,7 @@ def run_training(
         lr_min=lr_min,
         fine_tune_from_layer=fine_tune_from_layer,
         val_split=val_split,
+        seed=seed,
     )
 
     if aug_file:

@@ -106,6 +106,7 @@ def get_run(name: str):
             "training": {
                 "epochs": cfg.training.epochs,
                 "learning_rate": cfg.training.learning_rate,
+                "seed": cfg.training.seed,
                 "class_weight": cfg.training.class_weight,
                 "checkpoints_strategy": cfg.training.checkpoints.strategy,
                 "lr_scheduler_patience": cfg.training.lr_scheduler.patience,
