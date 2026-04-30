@@ -4,6 +4,7 @@ import contextlib
 import io
 import math
 import os
+import random
 from pathlib import Path
 
 import tensorflow as tf
@@ -170,6 +171,7 @@ def build_datasets(
         split = cfg.data.val_split
         pct_train = int((1 - split) * 100)
         pct_val = int(split * 100)
+        seed = cfg.training.seed if cfg.training.seed is not None else random.randint(0, 2**31 - 1)
 
         common_kwargs = dict(
             labels="inferred",
@@ -177,7 +179,7 @@ def build_datasets(
             class_names=class_names,
             image_size=(size, size),
             batch_size=batch,
-            seed=cfg.training.seed,
+            seed=seed,
             validation_split=split,
         )
         with contextlib.redirect_stdout(io.StringIO()):
