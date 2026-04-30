@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from cvbench.core.runs import (
