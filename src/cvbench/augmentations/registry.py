@@ -107,6 +107,22 @@ _RANGES: dict[str, dict] = {
             "max_delta": {"min": 5, "max": 120, "step": 5},
         },
     },
+    "aug_mask_h": {
+        "label": "Horizontal Band Mask",
+        "params": {
+            "n_masks":   {"min": 1,  "max": 5,   "step": 1},
+            "max_width": {"min": 1,  "max": 100, "step": 1},
+            "fill_value": {"min": 0, "max": 255, "step": 5},
+        },
+    },
+    "aug_mask_v": {
+        "label": "Vertical Band Mask",
+        "params": {
+            "n_masks":   {"min": 1,  "max": 5,   "step": 1},
+            "max_width": {"min": 1,  "max": 100, "step": 1},
+            "fill_value": {"min": 0, "max": 255, "step": 5},
+        },
+    },
 }
 
 _SKIP = {"img", "seed"}
