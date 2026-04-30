@@ -1,3 +1,9 @@
+## v0.26.0 (2026-04-30)
+
+### Feat
+
+- add aug_mask_h/v band masking augmentation with WebUI support
+
 ## v0.25.1 (2026-04-30)
 
 ### Fix
