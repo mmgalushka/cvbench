@@ -1,3 +1,10 @@
+## v0.25.1 (2026-04-30)
+
+### Fix
+
+- add missing FileResponse import for run image endpoint
+- generate random seed for validation split when --seed is not provided
+
 ## v0.25.0 (2026-04-29)
 
 ### Feat
