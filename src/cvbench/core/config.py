@@ -54,12 +54,6 @@ class OneOfConfig:
 
 
 @dataclass
-class MixupConfig:
-    alpha: float = 0.2
-    background_class: str = ""
-
-
-@dataclass
 class AugmentationConfig:
     transforms: list = field(default_factory=list)  # list[TransformConfig | OneOfConfig]
 
@@ -105,7 +99,6 @@ class TrainingConfig:
     lr_scheduler: LRSchedulerConfig = field(default_factory=LRSchedulerConfig)
     interrupt: InterruptConfig = field(default_factory=InterruptConfig)
     checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
-    mixup: MixupConfig | None = None
 
 
 @dataclass
@@ -154,15 +147,6 @@ def _parse_transforms(raw: list) -> list:
             params = {k: v for k, v in t.items() if k not in ("name", "prob")}
             transforms.append(TransformConfig(name=name, prob=prob, params=params))
     return transforms
-
-
-def _parse_mixup(raw: dict | None) -> MixupConfig | None:
-    if not raw:
-        return None
-    return MixupConfig(
-        alpha=raw.get("alpha", 0.2),
-        background_class=raw.get("background_class", ""),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +213,6 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
             mode=ckpt.get("mode", cfg.training.checkpoints.mode),
             keep_last_n=ckpt.get("keep_last_n", cfg.training.checkpoints.keep_last_n),
         ),
-        mixup=_parse_mixup(tr.get("mixup")),
     )
 
     r = d.get("run", {})
@@ -361,13 +344,11 @@ def load_config(exp_dir: str) -> CVBenchConfig:
     return _dict_to_config(raw)
 
 
-def load_aug_file(path: str) -> tuple:
-    """Load an augmentation YAML file. Returns (AugmentationConfig, MixupConfig | None)."""
+def load_aug_file(path: str) -> AugmentationConfig:
+    """Load an augmentation YAML file."""
     with open(path) as f:
         raw = yaml.safe_load(f) or {}
-    aug = AugmentationConfig(transforms=_parse_transforms(raw.get("transforms", [])))
-    mixup = _parse_mixup(raw.get("mixup"))
-    return aug, mixup
+    return AugmentationConfig(transforms=_parse_transforms(raw.get("transforms", [])))
 
 
 def update_run_status(exp_dir: str, **kwargs):

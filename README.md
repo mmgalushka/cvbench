@@ -302,38 +302,3 @@ train data/ --loss focal:gamma=2.0,label_smoothing=0.1
 
 The loss config is saved to `config.yaml` and applied automatically when resuming a run.
 
----
-
-## Mixup
-
-Mixup blends each signal image with a sample from the background class at a random weight λ, creating training examples at varying effective SNR levels. This trains the model to detect signal even when it is partially obscured, and directly reduces false positives caused by the model latching onto a single spectral feature.
-
-Only signal+background pairs are blended. Signal+signal pairs are left unchanged — class boundaries between different signal types remain clean.
-
-Mixup is configured in the augmentation YAML file alongside the image transforms:
-
-```yaml
-# workspace/my_aug.yaml
-transforms:
-  - name: aug_blur
-    prob: 0.5
-    radius: [0.5, 2.5]
-  # ... other transforms ...
-
-mixup:
-  alpha: 0.2
-  background_class: noise
-```
-
-```bash
-train data/ --augmentation workspace/my_aug.yaml
-```
-
-To disable mixup, omit the `mixup:` section from the YAML entirely.
-
-| Field | Default | Description |
-|---|---|---|
-| `alpha` | — | Beta distribution shape parameter. 0.2 = standard (bimodal, mostly near-pure images). 0.4–0.5 = more uniform blending |
-| `background_class` | — | Class name treated as background/negative |
-
-**Alpha guidance:** `0.2` is the standard starting point — most blended images are strongly one class or the other, with occasional near-50/50 mixes. Increase to `0.4` if the model still overfits to strong signals and misses weak ones.

@@ -103,10 +103,7 @@ def run_training(
 
     if aug_file:
         from cvbench.core.config import load_aug_file
-        aug_cfg, mixup = load_aug_file(aug_file)
-        cfg.augmentation = aug_cfg
-        if mixup is not None:
-            cfg.training.mixup = mixup
+        cfg.augmentation = load_aug_file(aug_file)
 
     if output_dir is not None:
         exp_dir = output_dir
@@ -155,21 +152,6 @@ def run_training(
                 x_aug.set_shape(x.shape)
                 return x_aug, y
             train_ds = train_ds.map(_custom_aug_map, num_parallel_calls=tf.data.AUTOTUNE)
-
-    if cfg.training.mixup and cfg.training.mixup.alpha > 0:
-        from cvbench.augmentations.mixup import build_mixup_fn
-        mx = cfg.training.mixup
-        if mx.background_class not in class_names:
-            raise ValueError(
-                f"mixup background_class '{mx.background_class}' not found. "
-                f"Available classes: {class_names}"
-            )
-        bg_idx = class_names.index(mx.background_class)
-        train_ds = train_ds.map(
-            build_mixup_fn(background_class_idx=bg_idx, alpha=mx.alpha),
-            num_parallel_calls=tf.data.AUTOTUNE,
-        )
-        print(_fmt.dim(f" Mixup enabled: alpha={mx.alpha}, background='{mx.background_class}' (class {bg_idx})"))
 
     model = build_model(cfg)
 
