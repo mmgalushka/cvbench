@@ -1,3 +1,9 @@
+## v0.27.0 (2026-05-02)
+
+### Feat
+
+- add aug_rf_transmission augmentation with auto carrier placement and brightness calibration
+
 ## v0.26.0 (2026-04-30)
 
 ### Feat
