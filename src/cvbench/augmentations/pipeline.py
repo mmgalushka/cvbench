@@ -149,7 +149,10 @@ def _resolve(name: str, params: dict) -> callable:
                     resolved[k] = random.choice(v)
                 elif isinstance(v, (list, tuple)) and len(v) == 2:
                     lo, hi = v
-                    if isinstance(lo, int) and isinstance(hi, int):
+                    # bool must be checked before int — bool is a subclass of int
+                    if isinstance(lo, bool) or isinstance(hi, bool):
+                        resolved[k] = random.choice(v)
+                    elif isinstance(lo, int) and isinstance(hi, int):
                         resolved[k] = random.randint(lo, hi)
                     else:
                         resolved[k] = random.uniform(float(lo), float(hi))

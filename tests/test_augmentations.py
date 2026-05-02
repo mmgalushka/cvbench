@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 
 from cvbench.augmentations.blur import aug_blur
+from cvbench.augmentations.transmission import aug_rf_transmission
 from cvbench.augmentations.edges import (
     aug_brighten_edges_h,
     aug_brighten_edges_v,
@@ -77,6 +78,21 @@ class TestEachAugFunction:
         out = aug_fog(img, strength=0.3)
         assert out.shape == img.shape
 
+    def test_rf_transmission(self, img):
+        out = aug_rf_transmission(img, seed=0)
+        assert out.shape == img.shape
+        assert out.dtype == np.uint8
+
+    def test_rf_transmission_modifies_image(self, img):
+        # augmentation must change at least some pixels
+        out = aug_rf_transmission(img, seed=1)
+        assert not np.array_equal(out, img)
+
+    def test_rf_transmission_no_op_on_tiny(self, img):
+        # very narrow bandwidth on a small image — must not crash
+        out = aug_rf_transmission(img, bandwidth=0.01, seed=2)
+        assert out.shape == img.shape
+
 
 @pytest.mark.parametrize("batch", [BATCH_GRAY, BATCH_COLOR], ids=["gray", "color"])
 class TestPipelineBatch:
@@ -112,5 +128,10 @@ class TestPipelineBatch:
 
     def test_gamma_batch(self, batch):
         fn = build_aug_pipeline([self._t("aug_gamma", gamma=1.2)])
+        out = fn(batch)
+        assert out.shape == batch.shape
+
+    def test_rf_transmission_batch(self, batch):
+        fn = build_aug_pipeline([self._t("aug_rf_transmission", bandwidth=0.06)])
         out = fn(batch)
         assert out.shape == batch.shape
