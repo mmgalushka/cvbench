@@ -1,3 +1,9 @@
+## v0.29.2 (2026-05-03)
+
+### Fix
+
+- discard stale loadGalleryPage responses to prevent pagination freeze
+
 ## v0.29.1 (2026-05-03)
 
 ### Fix
