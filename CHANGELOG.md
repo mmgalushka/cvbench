@@ -1,3 +1,9 @@
+## v0.28.0 (2026-05-03)
+
+### Feat
+
+- add --optimizer and --lr-scheduler options with weight decay support
+
 ## v0.27.0 (2026-05-02)
 
 ### Feat
