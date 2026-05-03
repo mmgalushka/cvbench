@@ -130,6 +130,23 @@ _RANGES: dict[str, dict] = {
             "fill_value": {"min": 0, "max": 255, "step": 5},
         },
     },
+    "aug_chirp_artifacts": {
+        "label": "Chirp Artifacts",
+        "params": {
+            "num_chirps":      {"min": 1,    "max": 50,   "step": 1},
+            "min_length":      {"min": 5,    "max": 200,  "step": 5},
+            "max_length":      {"min": 20,   "max": 500,  "step": 10},
+            "min_thickness":   {"min": 1,    "max": 10,   "step": 1},
+            "max_thickness":   {"min": 1,    "max": 20,   "step": 1},
+            "brightness":      {"min": 0.05, "max": 1.0,  "step": 0.05},
+            "fade_ratio":      {"min": 0.0,  "max": 0.5,  "step": 0.05},
+            "cluster_vertically": {"choices": [True, False]},
+            "num_clusters":    {"min": 1,    "max": 10,   "step": 1},
+            "cluster_spread":  {"min": 1.0,  "max": 50.0, "step": 1.0},
+            "justification":   {"choices": ["left", "right", "center", "random"]},
+            "num_anchors":     {"min": 1,    "max": 10,   "step": 1},
+        },
+    },
     "aug_rf_transmission": {
         "label": "RF Transmission",
         "params": {

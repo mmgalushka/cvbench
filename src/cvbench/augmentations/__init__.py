@@ -6,3 +6,4 @@ from cvbench.augmentations.blur     import *    # noqa: F401, F403
 from cvbench.augmentations.profiles import *    # noqa: F401, F403
 from cvbench.augmentations.mask         import *    # noqa: F401, F403
 from cvbench.augmentations.transmission import *    # noqa: F401, F403
+from cvbench.augmentations.chirp        import *    # noqa: F401, F403
