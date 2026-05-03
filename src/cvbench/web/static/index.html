@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/css/shared.css" />
   <link rel="stylesheet" href="/css/experiments.css" />
   <link rel="stylesheet" href="/css/inference.css" />
+  <link rel="stylesheet" href="/css/datasets.css" />
 </head>
 <body>
   <div class="app-layout">
@@ -24,6 +25,10 @@
       </div>
 
       <nav class="sidebar-nav">
+        <a href="#/datasets" id="nav-datasets" class="nav-link" onclick="setActive('nav-datasets')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v4c0 1.657 4.03 3 9 3s9-1.343 9-3V5"/><path d="M3 9v4c0 1.657 4.03 3 9 3s9-1.343 9-3V9"/><path d="M3 13v4c0 1.657 4.03 3 9 3s9-1.343 9-3v-4"/></svg>
+          Datasets
+        </a>
         <a href="#/" id="nav-runs" class="nav-link" onclick="setActive('nav-runs')">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
           Experiments
@@ -59,5 +64,6 @@
   <script src="/js/shared.js"></script>
   <script src="/js/experiments.js"></script>
   <script src="/js/inference.js"></script>
+  <script src="/js/datasets.js"></script>
 </body>
 </html>

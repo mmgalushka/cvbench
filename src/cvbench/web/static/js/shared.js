@@ -11,6 +11,10 @@ function route() {
     showRunDetail(decodeURIComponent(hash.slice(7)));
   } else if (hash === '#/inference') {
     showInference();
+  } else if (hash === '#/datasets') {
+    showDatasetsList();
+  } else if (hash.startsWith('#/datasets/')) {
+    showDatasetGallery(decodeURIComponent(hash.slice(11)));
   }
 }
 
@@ -22,6 +26,20 @@ function navigate(hash) {
 
 async function api(path) {
   const res = await fetch('/api' + path);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+async function apiFetch(method, path, body) {
+  const opts = { method };
+  if (body !== undefined) {
+    opts.headers = { 'Content-Type': 'application/json' };
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch('/api' + path, opts);
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`${res.status} ${text}`);
