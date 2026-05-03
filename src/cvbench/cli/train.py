@@ -2,7 +2,7 @@ import json
 
 import click
 
-from cvbench.core.config import LossConfig
+from cvbench.core.config import LossConfig, OptimizerConfig, LRSchedulerConfig
 from cvbench.services.training import run_training
 
 
@@ -20,6 +20,44 @@ def _parse_class_weight(value: str | None):
         pass
     raise click.BadParameter(
         f"Expected null, auto, or a JSON dict like '{{\"cat\": 1.0, \"dog\": 2.5}}', got: {value!r}"
+    )
+
+
+def _parse_optimizer(value: str | None) -> OptimizerConfig | None:
+    if value is None:
+        return None
+    if ":" not in value:
+        opt_type = value.strip()
+        params = {}
+    else:
+        opt_type, params_str = value.split(":", 1)
+        params = {}
+        for kv in params_str.split(","):
+            k, v = kv.split("=", 1)
+            params[k.strip()] = v.strip()
+    known = {"adam", "sgd"}
+    if opt_type.strip() not in known:
+        raise click.BadParameter(
+            f"Unknown optimizer type '{opt_type}'. Valid options: {', '.join(sorted(known))}"
+        )
+    return OptimizerConfig(
+        type=opt_type.strip(),
+        weight_decay=float(params.get("weight_decay", 0.0)),
+        momentum=float(params.get("momentum", 0.9)),
+    )
+
+
+def _parse_lr_scheduler(value: str | None) -> LRSchedulerConfig | None:
+    if value is None:
+        return None
+    params = {}
+    for kv in value.split(","):
+        k, v = kv.split("=", 1)
+        params[k.strip()] = v.strip()
+    return LRSchedulerConfig(
+        patience=int(params.get("patience", 5)),
+        factor=float(params.get("factor", 0.5)),
+        min_lr=float(params.get("min", 1e-7)),
     )
 
 
@@ -65,12 +103,10 @@ def _parse_loss(value: str | None) -> LossConfig | None:
               help="Class weighting: null | auto | '{\"cat\": 1.0, \"dog\": 2.5}'")
 @click.option("--loss", "loss_raw", default=None,
               help="Loss function: crossentropy | focal | focal:gamma=2.0 | focal:gamma=2.0,label_smoothing=0.1")
-@click.option("--lr-patience", default=None, type=int,
-              help="Enable ReduceLROnPlateau: reduce LR after N epochs with no improvement.")
-@click.option("--lr-factor", default=None, type=float,
-              help="LR reduction factor (default 0.5). Requires --lr-patience.")
-@click.option("--lr-min", default=None, type=float,
-              help="Minimum LR floor (default 1e-7). Requires --lr-patience.")
+@click.option("--optimizer", "optimizer_raw", default=None,
+              help="Optimizer: adam | sgd | adam:weight_decay=1e-4 | sgd:weight_decay=1e-4,momentum=0.9")
+@click.option("--lr-scheduler", "lr_scheduler_raw", default=None,
+              help="LR scheduler: patience=5 | patience=5,factor=0.5,min=1e-7")
 @click.option("--fine-tune-from-layer", default=None, type=int,
               help="Unfreeze backbone from this layer index onward (0=frozen, -1=all layers).")
 @click.option("--val-split", default=None, type=float,
@@ -80,7 +116,7 @@ def _parse_loss(value: str | None) -> LossConfig | None:
 def train(
     data_dir, output_dir, from_dir, backbone, epochs, lr,
     batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
-    loss_raw, lr_patience, lr_factor, lr_min, fine_tune_from_layer, val_split, seed,
+    loss_raw, optimizer_raw, lr_scheduler_raw, fine_tune_from_layer, val_split, seed,
 ):
     """Train a model on DATA_DIR.
 
@@ -89,6 +125,8 @@ def train(
     """
     class_weight = _parse_class_weight(class_weight_raw)
     loss = _parse_loss(loss_raw)
+    optimizer = _parse_optimizer(optimizer_raw)
+    lr_scheduler = _parse_lr_scheduler(lr_scheduler_raw)
     run_training(
         data_dir=data_dir,
         output_dir=output_dir,
@@ -103,9 +141,8 @@ def train(
         resume=resume,
         class_weight=class_weight,
         loss=loss,
-        lr_patience=lr_patience,
-        lr_factor=lr_factor,
-        lr_min=lr_min,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
         fine_tune_from_layer=fine_tune_from_layer,
         val_split=val_split,
         seed=seed,

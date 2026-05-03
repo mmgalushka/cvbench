@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from datetime import date
 
-from cvbench.core.config import build_config, save_config, LossConfig
+from cvbench.core.config import build_config, save_config, LossConfig, OptimizerConfig, LRSchedulerConfig
 from cvbench.core.data import (
     build_datasets,
     get_class_distribution,
@@ -50,9 +50,8 @@ def run_training(
     resume: str | None = None,
     class_weight=None,
     loss: LossConfig | None = None,
-    lr_patience: int | None = None,
-    lr_factor: float | None = None,
-    lr_min: float | None = None,
+    optimizer: OptimizerConfig | None = None,
+    lr_scheduler: LRSchedulerConfig | None = None,
     fine_tune_from_layer: int | None = None,
     val_split: float | None = None,
     seed: int | None = None,
@@ -93,9 +92,8 @@ def run_training(
         dropout=dropout,
         class_weight=class_weight,
         loss=loss,
-        lr_patience=lr_patience,
-        lr_factor=lr_factor,
-        lr_min=lr_min,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
         fine_tune_from_layer=fine_tune_from_layer,
         val_split=val_split,
         seed=seed,

@@ -17,6 +17,13 @@ def _print_header(exp_dir: str, cfg: CVBenchConfig):
     print(f" Data      : {_fmt.dim(cfg.data.data_dir)}")
     print(f" Backbone  : {cfg.model.backbone}")
     print(f" Epochs    : {cfg.training.epochs}")
+    opt = cfg.training.optimizer
+    opt_label = opt.type.upper()
+    if opt.weight_decay > 0:
+        opt_label += f"  weight_decay={opt.weight_decay}"
+    if opt.type == "sgd":
+        opt_label += f"  momentum={opt.momentum}"
+    print(f" Optimizer : {opt_label}")
     lrs = cfg.training.lr_scheduler
     if lrs.patience > 0:
         print(f" LR        : {cfg.training.learning_rate}  →  reduce by {lrs.factor}x after {lrs.patience} flat epoch(s) (min {lrs.min_lr})")

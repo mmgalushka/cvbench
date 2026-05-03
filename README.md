@@ -148,7 +148,8 @@ docker exec cvbench tensorboard --logdir /home/cvbench/experiments --host 0.0.0.
 
 ```
 train         <data_dir> [--epochs N] [--backbone NAME] [--lr FLOAT] [--batch-size N]
-                         [--lr-patience N] [--lr-factor F] [--lr-min F]
+                         [--optimizer adam|sgd[:weight_decay=F][,momentum=F]]
+                         [--lr-scheduler patience=N[,factor=F][,min=F]]
                          [--loss crossentropy|focal[:gamma=F][,label_smoothing=F]]
                          [--fine-tune-from-layer N] [--augmentation FILE]
                          [--val-split FLOAT] [--resume CHECKPOINT] [--output DIR]
@@ -177,23 +178,46 @@ augmentations example    [light|standard|heavy|reference] [--output FILE]
 
 ---
 
-## Learning rate scheduling
+## Optimizer
 
-By default the learning rate is fixed for the entire training run. Use `--lr-patience` to enable **ReduceLROnPlateau** — the LR is multiplied by `--lr-factor` whenever `val_loss` fails to improve for N consecutive epochs.
+By default training uses Adam. Use `--optimizer` to switch to SGD or to add weight decay (L2 regularization).
 
 ```bash
-# Reduce LR by 0.5x after 5 flat epochs (default factor and floor)
-train data/ --lr 1e-3 --lr-patience 5
+# Adam with weight decay
+train data/ --optimizer adam:weight_decay=1e-4
 
-# Aggressive decay: cut to 20% after 3 flat epochs, floor at 1e-6
-train data/ --lr 1e-3 --lr-patience 3 --lr-factor 0.2 --lr-min 1e-6
+# SGD with momentum and weight decay
+train data/ --optimizer sgd:weight_decay=1e-4,momentum=0.9
 ```
 
 | Option | Default | Description |
 |---|---|---|
-| `--lr-patience N` | disabled | Epochs with no `val_loss` improvement before reducing LR |
-| `--lr-factor F` | `0.5` | Multiplicative reduction factor |
-| `--lr-min F` | `1e-7` | Minimum LR floor |
+| `--optimizer adam` | ✓ | Adam optimizer |
+| `--optimizer sgd` | — | SGD optimizer |
+| `weight_decay=F` | `0.0` | L2 regularization penalty |
+| `momentum=F` | `0.9` | Momentum (SGD only) |
+
+The optimizer config is saved to `config.yaml` and applied automatically when resuming a run.
+
+---
+
+## Learning rate scheduling
+
+By default the learning rate is fixed for the entire training run. Use `--lr-scheduler` to enable **ReduceLROnPlateau** — the LR is multiplied by `factor` whenever `val_loss` fails to improve for `patience` consecutive epochs.
+
+```bash
+# Reduce LR by 0.5x after 5 flat epochs (default factor and floor)
+train data/ --lr 1e-3 --lr-scheduler patience=5
+
+# Aggressive decay: cut to 20% after 3 flat epochs, floor at 1e-6
+train data/ --lr 1e-3 --lr-scheduler patience=3,factor=0.2,min=1e-6
+```
+
+| Parameter | Default | Description |
+|---|---|---|
+| `patience=N` | required | Epochs with no `val_loss` improvement before reducing LR |
+| `factor=F` | `0.5` | Multiplicative reduction factor |
+| `min=F` | `1e-7` | Minimum LR floor |
 
 The scheduler settings are saved to `config.yaml` and applied automatically when resuming a run.
 

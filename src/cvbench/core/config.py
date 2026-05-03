@@ -90,12 +90,20 @@ class LossConfig:
 
 
 @dataclass
+class OptimizerConfig:
+    type: str = "adam"           # "adam" | "sgd"
+    weight_decay: float = 0.0
+    momentum: float = 0.9        # only used when type="sgd"
+
+
+@dataclass
 class TrainingConfig:
     epochs: int = 10
     learning_rate: float = 1e-4
     seed: int | None = None
     class_weight: Any = None  # null | "auto" | {class_name: weight, ...}
     loss: LossConfig = field(default_factory=LossConfig)
+    optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
     lr_scheduler: LRSchedulerConfig = field(default_factory=LRSchedulerConfig)
     interrupt: InterruptConfig = field(default_factory=InterruptConfig)
     checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
@@ -183,6 +191,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
     ckpt = tr.get("checkpoints", {})
     lrs = tr.get("lr_scheduler", {})
     loss = tr.get("loss", {})
+    opt = tr.get("optimizer", {})
     cfg.training = TrainingConfig(
         epochs=tr.get("epochs", cfg.training.epochs),
         learning_rate=tr.get("learning_rate", cfg.training.learning_rate),
@@ -192,6 +201,11 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
             type=loss.get("type", cfg.training.loss.type),
             label_smoothing=loss.get("label_smoothing", cfg.training.loss.label_smoothing),
             focal_gamma=loss.get("focal_gamma", cfg.training.loss.focal_gamma),
+        ),
+        optimizer=OptimizerConfig(
+            type=opt.get("type", cfg.training.optimizer.type),
+            weight_decay=opt.get("weight_decay", cfg.training.optimizer.weight_decay),
+            momentum=opt.get("momentum", cfg.training.optimizer.momentum),
         ),
         lr_scheduler=LRSchedulerConfig(
             patience=lrs.get("patience", cfg.training.lr_scheduler.patience),
@@ -248,9 +262,8 @@ def build_config(
     dropout: float | None = None,
     class_weight: Any = None,
     loss: "LossConfig | None" = None,
-    lr_patience: int | None = None,
-    lr_factor: float | None = None,
-    lr_min: float | None = None,
+    optimizer: "OptimizerConfig | None" = None,
+    lr_scheduler: "LRSchedulerConfig | None" = None,
     fine_tune_from_layer: int | None = None,
     val_split: float | None = None,
     seed: int | None = None,
@@ -287,12 +300,10 @@ def build_config(
         cfg.training.class_weight = class_weight
     if loss is not None:
         cfg.training.loss = loss
-    if lr_patience is not None:
-        cfg.training.lr_scheduler.patience = lr_patience
-    if lr_factor is not None:
-        cfg.training.lr_scheduler.factor = lr_factor
-    if lr_min is not None:
-        cfg.training.lr_scheduler.min_lr = lr_min
+    if optimizer is not None:
+        cfg.training.optimizer = optimizer
+    if lr_scheduler is not None:
+        cfg.training.lr_scheduler = lr_scheduler
     if fine_tune_from_layer is not None:
         cfg.model.fine_tune_from_layer = fine_tune_from_layer
     if val_split is not None:

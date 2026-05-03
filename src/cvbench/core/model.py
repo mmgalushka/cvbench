@@ -3,7 +3,7 @@ from __future__ import annotations
 import keras
 import keras_hub
 
-from cvbench.core.config import CVBenchConfig, LossConfig
+from cvbench.core.config import CVBenchConfig, LossConfig, OptimizerConfig
 
 
 # Map config backbone names to keras-hub preset identifiers
@@ -25,6 +25,21 @@ def _build_loss(loss_cfg: LossConfig) -> keras.losses.Loss:
         )
     return keras.losses.CategoricalCrossentropy(
         label_smoothing=loss_cfg.label_smoothing,
+    )
+
+
+def _build_optimizer(cfg: CVBenchConfig) -> keras.optimizers.Optimizer:
+    opt = cfg.training.optimizer
+    lr = cfg.training.learning_rate
+    if opt.type == "sgd":
+        return keras.optimizers.SGD(
+            learning_rate=lr,
+            weight_decay=opt.weight_decay,
+            momentum=opt.momentum,
+        )
+    return keras.optimizers.Adam(
+        learning_rate=lr,
+        weight_decay=opt.weight_decay,
     )
 
 
@@ -72,7 +87,7 @@ def build_model(cfg: CVBenchConfig) -> keras.Model:
 
     model = keras.Model(inputs=inputs, outputs=outputs)
     model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=cfg.training.learning_rate),
+        optimizer=_build_optimizer(cfg),
         loss=_build_loss(cfg.training.loss),
         metrics=["accuracy"],
     )
