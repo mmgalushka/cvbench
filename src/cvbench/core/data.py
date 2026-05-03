@@ -8,6 +8,7 @@ import random
 from pathlib import Path
 
 import tensorflow as tf
+from sklearn.model_selection import train_test_split
 
 from cvbench.core.config import CVBenchConfig
 from cvbench.core import _fmt
@@ -100,6 +101,61 @@ def print_imbalance_warning(class_dist: dict[str, int], class_weight_cfg) -> Non
             print(f"   {_fmt.green('✓ custom class weights applied')}")
 
 
+def stratified_image_dataset_from_directory(
+    directory,
+    labels="inferred",
+    label_mode="categorical",
+    class_names=None,
+    image_size=(256, 256),
+    batch_size=32,
+    seed=None,
+    validation_split=None,
+    subset=None,
+    shuffle=True,
+) -> tf.data.Dataset:
+    """Like tf.keras.utils.image_dataset_from_directory but with stratified random split.
+
+    Guarantees each class is proportionally represented in both train and val subsets,
+    regardless of class imbalance or filename ordering.
+    """
+    directory = Path(directory)
+    if class_names is None:
+        class_names = sorted(p.name for p in directory.iterdir() if p.is_dir())
+
+    all_paths, all_labels = [], []
+    for class_idx, class_name in enumerate(class_names):
+        for f in sorted((directory / class_name).iterdir()):
+            if f.is_file():
+                all_paths.append(str(f))
+                all_labels.append(class_idx)
+
+    train_paths, val_paths, train_labels, val_labels = train_test_split(
+        all_paths, all_labels,
+        test_size=validation_split,
+        stratify=all_labels,
+        random_state=seed,
+    )
+
+    paths, label_indices = (
+        (train_paths, train_labels) if subset == "training" else (val_paths, val_labels)
+    )
+
+    one_hot_labels = tf.one_hot(label_indices, len(class_names))
+    ds = tf.data.Dataset.from_tensor_slices((tf.constant(paths), one_hot_labels))
+
+    if shuffle:
+        ds = ds.shuffle(len(paths), seed=seed, reshuffle_each_iteration=True)
+
+    def load(path, label):
+        img = tf.io.read_file(path)
+        img = tf.image.decode_image(img, channels=3, expand_animations=False)
+        img = tf.image.resize(img, image_size)
+        img = tf.cast(img, tf.float32)
+        return img, label
+
+    return ds.map(load, num_parallel_calls=tf.data.AUTOTUNE).batch(batch_size)
+
+
 def build_dataset(
     directory: str,
     class_names: list[str],
@@ -182,18 +238,16 @@ def build_datasets(
             seed=seed,
             validation_split=split,
         )
-        with contextlib.redirect_stdout(io.StringIO()):
-            train_ds = (
-                tf.keras.utils.image_dataset_from_directory(
-                    cfg.data.train_dir, subset="training", shuffle=True, **common_kwargs
-                )
-                .repeat()
-                .prefetch(tf.data.AUTOTUNE)
+        train_ds = (
+            stratified_image_dataset_from_directory(
+                cfg.data.train_dir, subset="training", shuffle=True, **common_kwargs
             )
-            _val_raw = tf.keras.utils.image_dataset_from_directory(
-                cfg.data.train_dir, subset="validation", shuffle=False, **common_kwargs
-            )
-            val_ds = _val_raw.prefetch(tf.data.AUTOTUNE)
+            .repeat()
+            .prefetch(tf.data.AUTOTUNE)
+        )
+        val_ds = stratified_image_dataset_from_directory(
+            cfg.data.train_dir, subset="validation", shuffle=False, **common_kwargs
+        ).prefetch(tf.data.AUTOTUNE)
         num_train_samples = math.floor(total_train * (1 - split))
         n_val_samples = total_train - num_train_samples
         print(_fmt.dim(
