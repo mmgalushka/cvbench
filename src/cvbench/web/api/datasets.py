@@ -1,5 +1,6 @@
 """Datasets API — browse and manage dataset image files."""
 import base64
+import secrets
 import shutil
 import os
 from pathlib import Path
@@ -155,20 +156,26 @@ async def upload_images(
         _assert_safe(dest_dir, root)
         dest_dir.mkdir(parents=True, exist_ok=True)
 
+    used_tokens: set[str] = set()
+
+    def _fresh_token(suffix: str) -> Path:
+        for _ in range(10_000):
+            token = secrets.token_hex(8)  # 16 hex chars
+            if token not in used_tokens:
+                dest = dest_dir / f"{token}{suffix}"
+                if not dest.exists():
+                    used_tokens.add(token)
+                    return dest
+        raise RuntimeError("Could not generate a unique token after 10 000 attempts.")
+
     saved = []
     for upload in files:
         if not upload.filename:
             continue
-        fname = Path(upload.filename).name
-        if Path(fname).suffix.lower() not in IMAGE_EXTS:
+        suffix = Path(upload.filename).suffix.lower()
+        if suffix not in IMAGE_EXTS:
             continue
-        dest = dest_dir / fname
-        if dest.exists():
-            stem, suffix = dest.stem, dest.suffix
-            i = 1
-            while dest.exists():
-                dest = dest_dir / f"{stem}_{i}{suffix}"
-                i += 1
+        dest = _fresh_token(suffix)
         with dest.open('wb') as f:
             shutil.copyfileobj(upload.file, f)
         saved.append(str(dest.relative_to(root)))
