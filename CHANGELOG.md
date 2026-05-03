@@ -1,3 +1,14 @@
+## v0.30.0 (2026-05-03)
+
+### Feat
+
+- stratified train/val split to ensure proportional class representation
+
+### Fix
+
+- chirp artifact thickness off-by-one due to PIL inclusive rectangle
+- abort in-flight gallery fetch on page change to prevent connection saturation
+
 ## v0.29.2 (2026-05-03)
 
 ### Fix
