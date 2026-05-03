@@ -11,7 +11,8 @@ const _ds = {
   classes:  [],
 };
 
-let _loadGen = 0; // incremented on every loadGalleryPage call; stale responses check this
+let _loadGen   = 0;    // incremented on every loadGalleryPage call; stale responses check this
+let _loadAbort = null; // AbortController for the in-flight loadGalleryPage request
 
 /* ── Datasets list ──────────────────────────────────────────────────────────── */
 
@@ -140,8 +141,14 @@ function buildGalleryShell(dataset, dirId) {
 }
 
 async function loadGalleryPage() {
-  const gen    = ++_loadGen;
-  const grid   = document.getElementById('ds-grid');
+  const gen = ++_loadGen;
+
+  // Cancel any in-flight request so we don't queue up stale fetches
+  if (_loadAbort) _loadAbort.abort();
+  const controller = new AbortController();
+  _loadAbort = controller;
+
+  const grid    = document.getElementById('ds-grid');
   const countEl = document.getElementById('ds-count');
   if (!grid) return;
 
@@ -152,14 +159,15 @@ async function loadGalleryPage() {
 
   let data;
   try {
-    data = await api(`/datasets/${encodeURIComponent(_ds.dirId)}/images?${params}`);
+    data = await api(`/datasets/${encodeURIComponent(_ds.dirId)}/images?${params}`, { signal: controller.signal });
   } catch (e) {
-    if (gen !== _loadGen) return;
+    if (controller.signal.aborted || gen !== _loadGen) return;
     grid.innerHTML = `<p class="error-msg">Failed to load images: ${escHtml(e.message)}</p>`;
     return;
   }
 
-  if (gen !== _loadGen) return; // a newer request is in flight — discard this response
+  if (gen !== _loadGen) return;
+  _loadAbort = null;
 
   _ds.total   = data.total;
   _ds.pages   = data.pages;

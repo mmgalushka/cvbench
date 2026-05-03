@@ -24,8 +24,8 @@ function navigate(hash) {
 
 /* ── API helper ────────────────────────────────────────────────────────────── */
 
-async function api(path) {
-  const res = await fetch('/api' + path);
+async function api(path, { signal } = {}) {
+  const res = await fetch('/api' + path, signal ? { signal } : {});
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`${res.status} ${text}`);
