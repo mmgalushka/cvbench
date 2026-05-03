@@ -1,3 +1,9 @@
+## v0.29.1 (2026-05-03)
+
+### Fix
+
+- show all datasets in data/ dir, not only those referenced by runs
+
 ## v0.29.0 (2026-05-03)
 
 ### Feat
