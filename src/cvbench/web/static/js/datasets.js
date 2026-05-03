@@ -11,6 +11,8 @@ const _ds = {
   classes:  [],
 };
 
+let _loadGen = 0; // incremented on every loadGalleryPage call; stale responses check this
+
 /* ── Datasets list ──────────────────────────────────────────────────────────── */
 
 async function showDatasetsList() {
@@ -138,8 +140,9 @@ function buildGalleryShell(dataset, dirId) {
 }
 
 async function loadGalleryPage() {
-  const grid     = document.getElementById('ds-grid');
-  const countEl  = document.getElementById('ds-count');
+  const gen    = ++_loadGen;
+  const grid   = document.getElementById('ds-grid');
+  const countEl = document.getElementById('ds-count');
   if (!grid) return;
 
   grid.innerHTML = buildSkeletons(_ds.pageSize);
@@ -151,9 +154,12 @@ async function loadGalleryPage() {
   try {
     data = await api(`/datasets/${encodeURIComponent(_ds.dirId)}/images?${params}`);
   } catch (e) {
+    if (gen !== _loadGen) return;
     grid.innerHTML = `<p class="error-msg">Failed to load images: ${escHtml(e.message)}</p>`;
     return;
   }
+
+  if (gen !== _loadGen) return; // a newer request is in flight — discard this response
 
   _ds.total   = data.total;
   _ds.pages   = data.pages;
