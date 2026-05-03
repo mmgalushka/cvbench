@@ -40,6 +40,32 @@ def _assert_safe(path: Path, root: Path) -> None:
         raise HTTPException(status_code=403, detail="Access denied")
 
 
+DATA_DIR = Path("data")
+
+SPLIT_NAMES = ('train', 'val', 'test')
+
+
+def _dataset_entry(data_dir: Path, classes: list[str] | None = None) -> dict:
+    splits: dict[str, dict] = {}
+    for split_name in SPLIT_NAMES:
+        sp = (data_dir / split_name).resolve()
+        if sp.is_dir():
+            splits[split_name] = {'id': _encode_dir(sp)}
+    if classes is None:
+        classes = sorted(
+            p.name for p in data_dir.iterdir()
+            if p.is_dir() and p.name not in SPLIT_NAMES
+        )
+    return {
+        'id':          _encode_dir(data_dir),
+        'name':        data_dir.name,
+        'path':        str(data_dir),
+        'num_classes': len(classes),
+        'classes':     classes,
+        'splits':      splits,
+    }
+
+
 @router.get("/datasets")
 def list_datasets():
     seen: dict[str, dict] = {}
@@ -75,6 +101,16 @@ def list_datasets():
             'classes':     cfg.data.classes,
             'splits':      splits,
         }
+
+    # Also include any dataset folders in data/ not referenced by any run
+    if DATA_DIR.is_dir():
+        for candidate in sorted(DATA_DIR.iterdir()):
+            if not candidate.is_dir():
+                continue
+            resolved = candidate.resolve()
+            if str(resolved) in seen:
+                continue
+            seen[str(resolved)] = _dataset_entry(resolved)
 
     return list(seen.values())
 
