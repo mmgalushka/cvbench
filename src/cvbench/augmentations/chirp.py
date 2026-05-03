@@ -157,7 +157,7 @@ def _draw_chirp(
     fade_pixels = max(1, int(length * fade_ratio))
     half_h = thickness // 2
     y_top = y0 - half_h
-    y_bot = y0 + (thickness - half_h)
+    y_bot = y0 + (thickness - half_h) - 1
     peak = int(brightness * 255)
 
     for col in range(length):
