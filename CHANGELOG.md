@@ -1,3 +1,11 @@
+## v0.29.0 (2026-05-03)
+
+### Feat
+
+- retokenize uploaded images with random hex names at upload time
+- add Datasets page with gallery, pagination, image upload and delete
+- add aug_chirp_artifacts augmentation with screen-blend horizontal chirp streaks
+
 ## v0.28.0 (2026-05-03)
 
 ### Feat
