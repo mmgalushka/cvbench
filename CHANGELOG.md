@@ -1,3 +1,10 @@
+## v0.31.0 (2026-05-04)
+
+### Feat
+
+- add aug_interference washup pattern augmentation
+- add aug_net diagonal fishing-net augmentation
+
 ## v0.30.0 (2026-05-03)
 
 ### Feat
