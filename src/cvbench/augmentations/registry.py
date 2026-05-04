@@ -147,6 +147,19 @@ _RANGES: dict[str, dict] = {
             "num_anchors":     {"min": 1,    "max": 10,   "step": 1},
         },
     },
+    "aug_net": {
+        "label": "Fishing Net",
+        "params": {
+            "mode":         {"choices": ["both", "positive", "negative"]},
+            "angle":        {"min": 1.0,  "max": 89.0, "step": 1.0},
+            "num_lines":    {"min": 1,    "max": 50,   "step": 1},
+            "line_width":   {"min": 1,    "max": 5,    "step": 1},
+            "line_brightness": {"min": 0, "max": 255,  "step": 5},
+            "stripe":       {"choices": ["none", "horizontal", "vertical"]},
+            "num_stripes":  {"min": 2,    "max": 12,   "step": 1},
+            "stripe_fill":  {"min": 10.0, "max": 90.0, "step": 5.0},
+        },
+    },
     "aug_rf_transmission": {
         "label": "RF Transmission",
         "params": {
