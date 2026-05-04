@@ -160,6 +160,15 @@ _RANGES: dict[str, dict] = {
             "stripe_fill":  {"min": 10.0, "max": 90.0, "step": 5.0},
         },
     },
+    "aug_interference": {
+        "label": "Interference Pattern",
+        "params": {
+            "pattern":     {"choices": ["random", "scanline", "stripes", "turbulent", "flow"]},
+            "alpha_min":   {"min": 0.0, "max": 1.0, "step": 0.05},
+            "alpha_max":   {"min": 0.0, "max": 1.0, "step": 0.05},
+            "orientation": {"choices": ["random", "horizontal", "vertical", "both"]},
+        },
+    },
     "aug_rf_transmission": {
         "label": "RF Transmission",
         "params": {
