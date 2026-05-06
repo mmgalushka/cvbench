@@ -1,3 +1,13 @@
+## v0.32.0 (2026-05-06)
+
+### Feat
+
+- add data upsample command for class-level dataset augmentation
+
+### Fix
+
+- prevent pagination freeze when navigating to or emptying the last page
+
 ## v0.31.0 (2026-05-04)
 
 ### Feat
