@@ -66,8 +66,8 @@ def aug_interference(
     """Blend a synthetic interference pattern over a spectrogram image.
 
     pattern     : 'scanline' | 'stripes' | 'turbulent' | 'flow' | 'random'
-    alpha_min   : minimum blend weight of the interference layer
-    alpha_max   : maximum blend weight of the interference layer
+    alpha_min   : minimum perturbation strength of the interference layer
+    alpha_max   : maximum perturbation strength of the interference layer
     orientation : scanline only — 'horizontal' | 'vertical' | 'both' | 'random'
     """
     rng = np.random.default_rng(seed)
@@ -89,8 +89,9 @@ def aug_interference(
         raise ValueError(f"Unknown pattern: {pat!r}")
 
     layer = noise.astype(float)
+    layer -= layer.mean()
     if img.ndim == 3:
         layer = layer[:, :, None]
 
-    out = (1.0 - alpha) * img.astype(float) + alpha * layer
+    out = img.astype(float) + alpha * layer
     return np.clip(out, 0, 255).astype(img.dtype)
