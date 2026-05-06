@@ -5,6 +5,44 @@ import keras
 
 from cvbench.core.config import OneOfConfig
 
+# Transforms that can erase or bury a weak signal when applied at full strength.
+# Their effective probability is scaled by the per-image SNR factor so that
+# low-SNR images are augmented less aggressively.
+_DESTRUCTIVE_TRANSFORMS = {
+    "aug_fog",
+    "aug_blur",
+    "aug_gamma",
+    "aug_mask_h",
+    "aug_mask_v",
+    "aug_fade_horizontal",
+    "aug_fade_vertical",
+    "aug_random_profile_h",
+    "aug_random_profile_v",
+    "aug_interference",
+    "aug_net",
+}
+
+
+def _compute_snr_factor(img: np.ndarray) -> float:
+    """Return (95th pct - 30th pct) / 255, clamped to [0, 1].
+
+    Approximates visible signal contrast. Strong signal → near 1.0,
+    noise-floor-only image → near 0.0. For batches, returns the minimum
+    across images so that any weak sample in the batch is protected.
+    """
+    if img.ndim == 4:
+        factors = []
+        for im in img:
+            gray = im.mean(axis=-1) if im.ndim == 3 else im
+            factors.append(float(np.percentile(gray, 95)) - float(np.percentile(gray, 30)))
+        return float(np.clip(min(factors) / 255.0, 0.0, 1.0))
+    gray = img.mean(axis=-1) if img.ndim == 3 else img
+    return float(np.clip(
+        (float(np.percentile(gray, 95)) - float(np.percentile(gray, 30))) / 255.0,
+        0.0, 1.0,
+    ))
+
+
 _KERAS_MAP = {
     "keras_flip":        (keras.layers.RandomFlip,        {"mode": "horizontal"}),
     "keras_rotation":    (keras.layers.RandomRotation,    {"factor": 0.1}),
@@ -99,23 +137,30 @@ def build_custom_aug_fn(transforms: list):
 
     Returns apply(img: np.ndarray) -> np.ndarray, or None if the list contains
     no aug_* transforms.
+
+    Destructive transforms (those in _DESTRUCTIVE_TRANSFORMS) have their
+    effective probability scaled by the per-image SNR factor so that weak
+    signals are augmented less aggressively.
     """
     steps = []
     for t in transforms:
         if isinstance(t, OneOfConfig):
             aug_candidates = [c for c in t.candidates if c.name.startswith("aug_")]
             if aug_candidates:
-                steps.append((_make_one_of_fn(aug_candidates), t.prob))
+                destructive = any(c.name in _DESTRUCTIVE_TRANSFORMS for c in aug_candidates)
+                steps.append((_make_one_of_fn(aug_candidates), t.prob, destructive))
         elif t.name.startswith("aug_"):
             fn = _resolve(t.name, t.params)
-            steps.append((fn, t.prob))
+            steps.append((fn, t.prob, t.name in _DESTRUCTIVE_TRANSFORMS))
 
     if not steps:
         return None
 
     def apply(img):
-        for fn, prob in steps:
-            if random.random() < prob:
+        snr = _compute_snr_factor(img)
+        for fn, prob, destructive in steps:
+            effective_prob = prob * snr if destructive else prob
+            if random.random() < effective_prob:
                 img = fn(img)
         return img
 
