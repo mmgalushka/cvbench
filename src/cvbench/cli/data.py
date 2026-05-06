@@ -1,5 +1,9 @@
 """Data management commands: generate synthetic datasets and explore data quality."""
 
+import hashlib
+import random
+import secrets
+import shutil
 from pathlib import Path
 
 import click
@@ -9,6 +13,20 @@ from cvbench.cli.generate import generate
 from cvbench.core.data import get_class_distribution, print_class_distribution
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
+_TOKEN_LEN = 16
+_MAX_RETRIES = 10
+
+
+def _fresh_token(used: set) -> str:
+    for _ in range(10_000):
+        token = secrets.token_hex(8)  # 8 bytes = 16 hex chars
+        if token not in used:
+            return token
+    raise RuntimeError("Could not generate a unique token after 10,000 attempts.")
+
+
+def _md5(arr: np.ndarray) -> str:
+    return hashlib.md5(arr.tobytes()).hexdigest()
 
 
 @click.group()
@@ -108,4 +126,120 @@ def explore(data_dir, split):
     imbalanced = std_of_counts > 0 and any(abs(c - mean_of_counts) > std_of_counts for c in counts)
     if not imbalanced:
         print(_fmt.green(" ✓ No significant class imbalance detected."))
+    print(_fmt.rule())
+
+
+@data.command("upsample")
+@click.argument("src_dir")
+@click.argument("dst_dir")
+@click.option("--augmentation", "aug_file", required=True,
+              help="Augmentation YAML spec file.")
+@click.option("--target", required=True, type=int,
+              help="Target number of images in the output folder.")
+def upsample(src_dir, dst_dir, aug_file, target):
+    """Upsample a class folder to TARGET images using augmentation.
+
+    SRC_DIR  source class folder (e.g. data/train/dog)\n
+    DST_DIR  destination class folder (e.g. data_aug/train/dog)\n
+
+    All originals are copied first with fresh random hex filenames,
+    then augmented variants are generated until TARGET is reached.
+    DST_DIR must be empty or non-existent.
+    """
+    from PIL import Image
+    from cvbench.core import _fmt
+    from cvbench.core.config import load_aug_file
+    from cvbench.augmentations.pipeline import build_aug_pipeline
+
+    src = Path(src_dir)
+    dst = Path(dst_dir)
+
+    if not src.is_dir():
+        raise click.ClickException(f"Source directory not found: '{src}'")
+
+    images = sorted(f for f in src.iterdir() if f.suffix.lower() in _IMAGE_EXTS)
+    if not images:
+        raise click.ClickException(f"No images found in '{src}'")
+
+    n_src = len(images)
+
+    if n_src >= target:
+        raise click.ClickException(
+            f"'{src.name}' already has {n_src} images — "
+            f"use 'data downsample' to reduce to {target}."
+        )
+
+    if dst.exists():
+        existing = [f for f in dst.iterdir() if f.suffix.lower() in _IMAGE_EXTS]
+        if existing:
+            raise click.ClickException(
+                f"Destination '{dst}' already contains {len(existing)} image(s). "
+                "Provide an empty or non-existent directory."
+            )
+    else:
+        dst.mkdir(parents=True)
+
+    aug_cfg = load_aug_file(aug_file)
+    pipeline = build_aug_pipeline(aug_cfg.transforms)
+
+    used_tokens: set[str] = set()
+    used_hashes: set[str] = set()
+
+    print(_fmt.rule())
+    print(f" {_fmt.bold('CVBench — data upsample')}")
+    print(_fmt.rule())
+    print(f"  Source  : {_fmt.dim(str(src))}  ({n_src} images)")
+    print(f"  Target  : {target} images  (+{target - n_src} to generate)")
+    print()
+
+    # --- copy originals ---
+    print(f" {_fmt.bold('Copying originals...')}")
+    for img_path in images:
+        token = _fresh_token(used_tokens)
+        used_tokens.add(token)
+        dst_path = dst / f"{token}{img_path.suffix.lower()}"
+        shutil.copy2(img_path, dst_path)
+        arr = np.array(Image.open(img_path).convert("RGB"))
+        used_hashes.add(_md5(arr))
+    print(f"  {_fmt.green('✓')} Copied {n_src} original(s)")
+    print()
+
+    # --- generate augmented samples ---
+    n_to_generate = target - n_src
+    print(f" {_fmt.bold(f'Generating {n_to_generate} augmented sample(s)...')}")
+
+    generated = 0
+    total_skipped = 0
+
+    with click.progressbar(length=n_to_generate, width=40) as bar:
+        while generated < n_to_generate:
+            src_path = random.choice(images)
+            arr = np.array(Image.open(src_path).convert("RGB")).astype(np.float32)
+            suffix = src_path.suffix.lower()
+
+            aug_uint8 = None
+            for _ in range(_MAX_RETRIES):
+                candidate = np.clip(pipeline(arr), 0, 255).astype(np.uint8)
+                if _md5(candidate) not in used_hashes:
+                    aug_uint8 = candidate
+                    break
+
+            if aug_uint8 is None:
+                total_skipped += 1
+                continue
+
+            h = _md5(aug_uint8)
+            used_hashes.add(h)
+            token = _fresh_token(used_tokens)
+            used_tokens.add(token)
+            Image.fromarray(aug_uint8).save(dst / f"{token}{suffix}")
+            generated += 1
+            bar.update(1)
+
+    print()
+    print(f"  {_fmt.green('✓')} Generated {generated} augmented image(s)")
+    if total_skipped:
+        print(f"  {_fmt.yellow('⚠')}  Skipped {total_skipped} duplicate(s) after {_MAX_RETRIES} retries each")
+    print()
+    print(f"  Output  : {_fmt.bold(str(dst))}  ({_fmt.green(str(len(list(dst.iterdir()))))} images total)")
     print(_fmt.rule())

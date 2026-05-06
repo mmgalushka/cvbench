@@ -110,9 +110,11 @@ def _render_chirp_mask(
     if justification != "random":
         anchors = [random.randint(0, width - 1) for _ in range(max(1, num_anchors))]
 
+    lo_t, hi_t = min(min_thickness, max_thickness), max(min_thickness, max_thickness)
+    lo_l, hi_l = min(min_length, max_length), max(min_length, max_length)
     for i in range(num_chirps):
-        length = random.randint(min_length, max_length)
-        thickness = random.randint(min_thickness, max_thickness)
+        length = random.randint(lo_l, hi_l)
+        thickness = random.randint(lo_t, hi_t)
 
         mode = random.choice(_JUSTIFY_MODES) if justification == "random" else justification
 

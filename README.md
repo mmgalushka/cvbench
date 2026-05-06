@@ -162,6 +162,7 @@ runs          rename     <experiment> <new-name>
 runs          export     <experiment> --format tflite|onnx|plan|hailo [--quantize none|float16|int8] [--output DIR]
 data          generate   [out_dir]  [--train N] [--val N] [--test N] [--image-size N]
 data          explore    <data_dir> [--split train|val|test] [--threshold N]
+data          upsample   <src_dir> <dst_dir> --augmentation <file> --target <N>
 augmentations list
 augmentations example    [light|standard|heavy|reference] [--output FILE]
 ```
@@ -288,6 +289,30 @@ train data/ --augmentation workspace/my_aug.yaml --epochs 30
 ```bash
 augmentations example reference --output workspace/aug_ref.yaml
 ```
+
+### Upsampling a class folder
+
+Use `data upsample` to materialise an augmented copy of a single class folder on disk. This is useful for correcting class imbalance before training — apply it only to the classes that need more samples (e.g. skip the `noise` class if it is already well-represented).
+
+```bash
+# Upsample the 'dog' class from however many originals it has to 1500 images.
+# The destination folder must be empty or non-existent.
+data upsample data/my_data/train/dog data/my_data_aug/train/dog \
+  --augmentation workspace/my_aug.yaml \
+  --target 1500
+```
+
+**What it does:**
+
+1. Copies every original image to `dst_dir` with a fresh 16-char random hex filename.
+2. Randomly picks source images and augments them until `--target` is reached.
+3. Uses MD5 hashing to detect exact duplicates; retries up to 10 times per sample before skipping.
+4. If the source already has ≥ `--target` images, the command exits with a hint to use `data downsample` instead (not yet implemented).
+
+| Option | Required | Description |
+|---|---|---|
+| `--augmentation FILE` | ✓ | Augmentation YAML spec (same format as `--augmentation` in `train`) |
+| `--target N` | ✓ | Total number of images the destination folder should contain |
 
 ---
 
