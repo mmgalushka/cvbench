@@ -1,3 +1,9 @@
+## v0.33.0 (2026-05-06)
+
+### Feat
+
+- SNR-gated augmentation pipeline to protect weak signals
+
 ## v0.32.1 (2026-05-06)
 
 ### Fix
