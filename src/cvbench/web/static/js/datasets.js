@@ -173,6 +173,14 @@ async function loadGalleryPage() {
   _ds.pages   = data.pages;
   _ds.classes = data.classes;
 
+  // Guard: if current page is beyond the available pages (e.g. items were deleted),
+  // correct it and reload — prevents the UI from getting stuck on a non-existent page.
+  if (_ds.page > _ds.pages) {
+    _ds.page = _ds.pages;
+    loadGalleryPage();
+    return;
+  }
+
   // Populate class filter
   const sel = document.getElementById('ds-class-select');
   if (sel && sel.options.length <= 1) {
@@ -363,6 +371,15 @@ async function dsConfirmDelete(btn) {
   tile.addEventListener('animationend', () => {
     tile.remove();
     _ds.total = Math.max(0, _ds.total - 1);
+    _ds.pages = Math.max(1, Math.ceil(_ds.total / _ds.pageSize));
+
+    // If we just emptied the last page, go back one page and reload
+    if (_ds.page > _ds.pages) {
+      _ds.page = _ds.pages;
+      loadGalleryPage();
+      return;
+    }
+
     const countEl = document.getElementById('ds-count');
     if (countEl) {
       const start = (_ds.page - 1) * _ds.pageSize + 1;
@@ -371,6 +388,7 @@ async function dsConfirmDelete(btn) {
         ? `${start}–${end} of ${_ds.total.toLocaleString()} images`
         : '0 images';
     }
+    renderPagination();
   }, { once: true });
 }
 
