@@ -1,3 +1,10 @@
+## v0.32.1 (2026-05-06)
+
+### Fix
+
+- aug_interference zero-mean pattern to preserve weak signals
+- aug_salt_pepper generates per-channel masks causing colored dots on RGB images
+
 ## v0.32.0 (2026-05-06)
 
 ### Feat
