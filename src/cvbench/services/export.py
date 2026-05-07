@@ -139,11 +139,13 @@ def _collect_images(directory: Path) -> list[Path]:
     return files
 
 
+_CALIB_MIN_PER_CLASS = 64
 _CALIB_TARGET = 1024
-_CALIB_MIN_PER_CLASS = 2
 
 
-def _build_calibration_set(cfg, output_path: Path) -> None:
+def _build_calibration_set(
+    cfg, output_path: Path, samples_per_class: int | None = None
+) -> tuple[int, int]:
     import numpy as np
     from PIL import Image
 
@@ -171,16 +173,27 @@ def _build_calibration_set(cfg, output_path: Path) -> None:
         raise RuntimeError(f"No images found in: {source_dir}")
 
     n_classes = len(per_class)
-    total_available = sum(len(v) for v in per_class.values())
-
-    # Stratified proportional sampling: allocate quota proportional to class
-    # size, with a minimum floor so rare classes are never dropped entirely.
     selected: list[Path] = []
-    for files in per_class.values():
-        proportion = len(files) / total_available
-        quota = max(_CALIB_MIN_PER_CLASS, round(proportion * _CALIB_TARGET))
-        take = min(quota, len(files))
-        selected.extend(rng.sample(files, take))
+
+    if samples_per_class is not None:
+        # Fixed quota per class — exact, balanced calibration set.
+        for files in per_class.values():
+            take = min(samples_per_class, len(files))
+            selected.extend(rng.sample(files, take))
+    else:
+        total_available = sum(len(v) for v in per_class.values())
+        # Effective target: whichever is larger — the fixed target or the per-class
+        # floor times the number of classes — so rare classes always get >= 64 samples
+        # even when the fixed target would allocate fewer.
+        calib_target = max(_CALIB_TARGET, _CALIB_MIN_PER_CLASS * n_classes)
+
+        # Stratified proportional sampling: allocate quota proportional to class
+        # size, with a minimum floor so rare classes are never under-represented.
+        for files in per_class.values():
+            proportion = len(files) / total_available
+            quota = max(_CALIB_MIN_PER_CLASS, round(proportion * calib_target))
+            take = min(quota, len(files))
+            selected.extend(rng.sample(files, take))
 
     # Shuffle so the array is not ordered by class — critical for Hailo
     # calibration algorithms that process images in sequential mini-batches.
@@ -203,16 +216,25 @@ def _build_calibration_set(cfg, output_path: Path) -> None:
     calib_set = np.array(calib_data)
     np.save(str(output_path), calib_set)
     print(_fmt.dim(f"  Written   calib_set.npy  shape={calib_set.shape}"))
+    return len(selected), n_classes
 
 
 def _write_alls(output_path: Path) -> None:
+    if output_path.exists():
+        print(_fmt.dim("  Reusing   model.alls"))
+        return
     output_path.write_text(
         "model_optimization_flavor(optimization_level=2, compression_level=1)\n"
+        "quantization_param(avgpool1, precision_mode=a16_w16)\n"
     )
     print(_fmt.dim("  Written   model.alls"))
 
 
-def _prepare_hailo_package(run_dir: Path, cfg) -> Path:
+def _prepare_hailo_package(
+    run_dir: Path, cfg, samples_per_class: int | None = None
+) -> tuple[Path, dict]:
+    import numpy as np
+
     export_dir = run_dir / "export" / "hailo"
     export_dir.mkdir(parents=True, exist_ok=True)
 
@@ -228,10 +250,24 @@ def _prepare_hailo_package(run_dir: Path, cfg) -> Path:
         print(_fmt.dim("  Converting to TFLite (float32)..."))
         _export_tflite(model, tflite_path, quantize="none")
 
-    _build_calibration_set(cfg, export_dir / "calib_set.npy")
+    calib_path = export_dir / "calib_set.npy"
+    if calib_path.exists():
+        print(_fmt.dim("  Reusing   calib_set.npy"))
+        shape = np.load(str(calib_path), mmap_mode="r").shape
+        calib_meta = {"calib_set_images": shape[0], "calib_set_shuffled": True}
+    else:
+        n_total, n_classes = _build_calibration_set(
+            cfg, calib_path, samples_per_class=samples_per_class
+        )
+        calib_meta = {
+            "calib_set_images": n_total,
+            "calib_set_classes": n_classes,
+            "calib_set_samples_per_class": samples_per_class,
+            "calib_set_shuffled": True,
+        }
     _write_alls(export_dir / "model.alls")
 
-    return export_dir
+    return export_dir, calib_meta
 
 
 def _print_hailo_instructions(run_name: str, export_dir: Path) -> None:
@@ -278,6 +314,7 @@ def run_export(
     format: str,
     quantize: str = "none",
     output_dir: str | None = None,
+    calib_samples_per_class: int | None = None,
 ) -> Path | None:
     """Export the best checkpoint of a run to TFLite, ONNX, or print Jetson plan instructions.
 
@@ -345,7 +382,9 @@ def run_export(
         print(f" Hailo package — '{run_dir.name}'")
         print(_fmt.rule())
 
-        export_dir = _prepare_hailo_package(run_dir, cfg)
+        export_dir, calib_meta = _prepare_hailo_package(
+            run_dir, cfg, samples_per_class=calib_samples_per_class
+        )
 
         export_info = {
             "source_checkpoint": str(checkpoint),
@@ -359,6 +398,7 @@ def run_export(
             "val_accuracy": cfg.run.val_accuracy,
             "val_loss": cfg.run.val_loss,
             "exported_at": datetime.now().isoformat(timespec="seconds"),
+            **calib_meta,
         }
         (export_dir / "export_info.json").write_text(
             json.dumps(export_info, indent=2)

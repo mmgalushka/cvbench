@@ -535,6 +535,10 @@ function buildExportTab(run) {
               <option value="int8">Int8</option>
             </select>
           </label>
+          <label id="calib-samples-wrap" style="display:none">
+            Samples per class
+            <input id="export-calib-samples" type="number" min="1" step="1" placeholder="auto">
+          </label>
         </div>
         <button id="export-generate-btn" onclick="generateExport('${escHtml(run.name)}')">Generate Export</button>
         <p id="export-error" class="error-msg" style="display:none;margin-top:0.5rem"></p>
@@ -567,6 +571,8 @@ function updateExportForm() {
   const fmt = document.getElementById('export-format')?.value;
   const wrap = document.getElementById('quantize-wrap');
   if (wrap) wrap.style.display = fmt === 'tflite' ? '' : 'none';
+  const calibWrap = document.getElementById('calib-samples-wrap');
+  if (calibWrap) calibWrap.style.display = fmt === 'hailo' ? '' : 'none';
 }
 
 function buildPlanInstructions(runName, cardMode = false) {
@@ -788,6 +794,8 @@ async function generateExport(runName) {
   const errEl = document.getElementById('export-error');
   const format = document.getElementById('export-format')?.value;
   const quantize = document.getElementById('export-quantize')?.value || 'none';
+  const calibSamplesRaw = document.getElementById('export-calib-samples')?.value;
+  const calib_samples_per_class = calibSamplesRaw ? parseInt(calibSamplesRaw, 10) : null;
   if (!btn || !format) return;
 
   btn.disabled = true;
@@ -796,10 +804,12 @@ async function generateExport(runName) {
   if (errEl) errEl.style.display = 'none';
 
   try {
+    const body = { format, quantize };
+    if (calib_samples_per_class !== null) body.calib_samples_per_class = calib_samples_per_class;
     const exports = await fetch(`/api/runs/${encodeURIComponent(runName)}/exports`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ format, quantize }),
+      body: JSON.stringify(body),
     });
     if (!exports.ok) {
       const err = await exports.json().catch(() => ({ detail: exports.statusText }));

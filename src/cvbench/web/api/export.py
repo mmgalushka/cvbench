@@ -62,6 +62,7 @@ def list_exports(name: str):
 class ExportRequest(BaseModel):
     format: str
     quantize: str = "none"
+    calib_samples_per_class: int | None = None
 
 
 @router.post("/runs/{name}/exports")
@@ -70,6 +71,8 @@ async def create_export(name: str, req: ExportRequest):
         raise HTTPException(status_code=400, detail=f"Invalid format. Choose from: {', '.join(sorted(_VALID_FORMATS))}")
     if req.format != "hailo" and req.quantize not in _VALID_QUANTIZE:
         raise HTTPException(status_code=400, detail=f"Invalid quantize. Choose from: {', '.join(sorted(_VALID_QUANTIZE))}")
+    if req.calib_samples_per_class is not None and req.calib_samples_per_class < 1:
+        raise HTTPException(status_code=400, detail="calib_samples_per_class must be at least 1")
 
     try:
         run_dir = Path(resolve_run_dir(name))
@@ -82,7 +85,13 @@ async def create_export(name: str, req: ExportRequest):
     from cvbench.services.export import run_export
     loop = asyncio.get_event_loop()
     try:
-        await loop.run_in_executor(None, lambda: run_export(name, req.format, req.quantize))
+        await loop.run_in_executor(
+            None,
+            lambda: run_export(
+                name, req.format, req.quantize,
+                calib_samples_per_class=req.calib_samples_per_class,
+            ),
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

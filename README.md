@@ -159,7 +159,7 @@ runs          list       [dir] [--sort val_accuracy|date|backbone]
 runs          compare    <experiment_a> <experiment_b>
 runs          best       [dir] [--metric val_accuracy|val_loss|test_accuracy]
 runs          rename     <experiment> <new-name>
-runs          export     <experiment> --format tflite|onnx|plan|hailo [--quantize none|float16|int8] [--output DIR]
+runs          export     <experiment> --format tflite|onnx|plan|hailo [--quantize none|float16|int8] [--output DIR] [--calib-samples-per-class N]
 data          generate   [out_dir]  [--train N] [--val N] [--test N] [--image-size N]
 data          explore    <data_dir> [--split train|val|test] [--threshold N]
 data          upsample   <src_dir> <dst_dir> --augmentation <file> --target <N>
