@@ -1,3 +1,9 @@
+## v0.34.0 (2026-05-07)
+
+### Feat
+
+- hailo calibration samples-per-class control
+
 ## v0.33.0 (2026-05-06)
 
 ### Feat
