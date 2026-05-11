@@ -139,7 +139,6 @@ def _collect_images(directory: Path) -> list[Path]:
     return files
 
 
-_CALIB_MIN_PER_CLASS = 64
 _CALIB_TARGET = 1024
 
 
@@ -182,16 +181,10 @@ def _build_calibration_set(
             selected.extend(rng.sample(files, take))
     else:
         total_available = sum(len(v) for v in per_class.values())
-        # Effective target: whichever is larger — the fixed target or the per-class
-        # floor times the number of classes — so rare classes always get >= 64 samples
-        # even when the fixed target would allocate fewer.
-        calib_target = max(_CALIB_TARGET, _CALIB_MIN_PER_CLASS * n_classes)
 
-        # Stratified proportional sampling: allocate quota proportional to class
-        # size, with a minimum floor so rare classes are never under-represented.
         for files in per_class.values():
             proportion = len(files) / total_available
-            quota = max(_CALIB_MIN_PER_CLASS, round(proportion * calib_target))
+            quota = max(1, round(proportion * _CALIB_TARGET))
             take = min(quota, len(files))
             selected.extend(rng.sample(files, take))
 
@@ -202,7 +195,7 @@ def _build_calibration_set(
     print(
         _fmt.dim(
             f"  Building  calib_set.npy ({len(selected)} images, "
-            f"stratified across {n_classes} class(es), {size}×{size})..."
+            f"proportional across {n_classes} class(es), {size}×{size})..."
         )
     )
 
