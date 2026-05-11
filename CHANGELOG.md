@@ -1,3 +1,13 @@
+## v0.35.0 (2026-05-11)
+
+### Feat
+
+- add per-image download button in dataset gallery
+
+### Fix
+
+- stream tar.gz export without buffering entire archive in memory
+
 ## v0.34.1 (2026-05-11)
 
 ### Fix
