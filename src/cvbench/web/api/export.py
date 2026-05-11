@@ -3,8 +3,10 @@
 import asyncio
 import io
 import json
+import os
 import shutil
 import tarfile
+import threading
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -98,6 +100,26 @@ async def create_export(name: str, req: ExportRequest):
     return _scan_exports(run_dir)
 
 
+def _stream_tar_gz(files: list[tuple[Path, str]], chunk_size: int = 65536):
+    """Yield tar.gz chunks while the archive is being built (no full-buffer wait)."""
+    read_fd, write_fd = os.pipe()
+
+    def _build():
+        with open(write_fd, "wb") as wf:
+            with tarfile.open(fileobj=wf, mode="w:gz") as tar:
+                for path, arcname in files:
+                    tar.add(path, arcname=arcname)
+
+    t = threading.Thread(target=_build, daemon=True)
+    t.start()
+
+    with open(read_fd, "rb") as rf:
+        while chunk := rf.read(chunk_size):
+            yield chunk
+
+    t.join()
+
+
 @router.get("/runs/{name}/exports/{subfolder}/download/{filename}")
 def download_export(name: str, subfolder: str, filename: str):
     try:
@@ -116,35 +138,29 @@ def download_export(name: str, subfolder: str, filename: str):
         raise HTTPException(status_code=404, detail="Export not found")
 
     archive_name = f"{name}_{subfolder}.tar.gz"
-    buf = io.BytesIO()
 
     if subfolder == "hailo":
-        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-            for fname in _HAILO_PACKAGE_FILES:
-                candidate = export_dir / fname
-                if candidate.exists():
-                    tar.add(candidate, arcname=fname)
-        if buf.tell() == 0:
+        files_to_pack = [
+            (export_dir / fname, fname)
+            for fname in _HAILO_PACKAGE_FILES
+            if (export_dir / fname).exists()
+        ]
+        if not files_to_pack:
             raise HTTPException(status_code=404, detail="Hailo package files not found")
     else:
-        model_file = None
-        for fname in _MODEL_FILENAMES:
-            candidate = export_dir / fname
-            if candidate.exists():
-                model_file = candidate
-                break
+        model_file = next(
+            (export_dir / f for f in _MODEL_FILENAMES if (export_dir / f).exists()),
+            None,
+        )
         if model_file is None:
             raise HTTPException(status_code=404, detail="Model file not found in export")
-        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-            tar.add(model_file, arcname=model_file.name)
-            info_path = export_dir / "export_info.json"
-            if info_path.exists():
-                tar.add(info_path, arcname="export_info.json")
-
-    buf.seek(0)
+        files_to_pack = [(model_file, model_file.name)]
+        info_path = export_dir / "export_info.json"
+        if info_path.exists():
+            files_to_pack.append((info_path, "export_info.json"))
 
     return StreamingResponse(
-        buf,
+        _stream_tar_gz(files_to_pack),
         media_type="application/gzip",
         headers={"Content-Disposition": f'attachment; filename="{archive_name}"'},
     )
