@@ -1,3 +1,9 @@
+## v0.34.1 (2026-05-11)
+
+### Fix
+
+- hailo calibration default to purely proportional sampling
+
 ## v0.34.0 (2026-05-07)
 
 ### Feat
