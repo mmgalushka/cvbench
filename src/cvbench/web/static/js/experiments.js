@@ -358,7 +358,7 @@ function showGallery(runName, trueClass, predClass, count) {
         <figure class="gallery-thumb" id="${thumbId}">
           <div class="thumb-img-wrap">
             <img class="thumb-original" src="${imgSrc}" alt="${escHtml(s.path)}" loading="lazy"
-                 onclick="openModal('${imgSrc}')" />
+                 onclick="openModal('${imgSrc}', '${escHtml(s.path)}')" />
           </div>
           <figcaption>
             <span>${(s.confidence * 100).toFixed(1)}%</span>

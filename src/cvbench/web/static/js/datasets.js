@@ -223,7 +223,7 @@ function buildTile(item) {
   return `
     <div class="ds-tile" data-path="${safeP}">
       <div class="ds-tile-img-wrap">
-        <img src="${imgUrl}" loading="lazy" alt="${escHtml(item.filename)}" onclick="openModal('${imgUrl}')">
+        <img src="${imgUrl}" loading="lazy" alt="${escHtml(item.filename)}" onclick="openModal('${imgUrl}', '${safeP}')">
         <button class="ds-delete-btn" title="Delete image" onclick="dsStartDelete(this)" data-path="${safeP}">×</button>
         <a class="ds-download-btn" href="${imgUrl}" download="${escHtml(item.filename)}" title="Download image">↓</a>
       </div>

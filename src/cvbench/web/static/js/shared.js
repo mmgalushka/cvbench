@@ -119,8 +119,15 @@ function fallbackCopy(text, onSuccess) {
 
 /* ── Image modal ───────────────────────────────────────────────────────────── */
 
-function openModal(src) {
-  document.getElementById('modal-content').innerHTML = `<img src="${src}" />`;
+function openModal(src, filename) {
+  const caption = filename
+    ? `<div class="modal-filename">
+        <span>${escHtml(filename)}</span>
+        <button class="outline" style="padding:0.1rem 0.5rem;font-size:0.75rem"
+                onclick="navigator.clipboard.writeText('${escHtml(filename)}');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+       </div>`
+    : '';
+  document.getElementById('modal-content').innerHTML = `<img src="${src}" />${caption}`;
   document.getElementById('modal-overlay').style.display = 'flex';
 }
 
