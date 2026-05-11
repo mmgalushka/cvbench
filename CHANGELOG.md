@@ -1,3 +1,9 @@
+## v0.36.0 (2026-05-11)
+
+### Feat
+
+- show filename with copy button in image modal
+
 ## v0.35.0 (2026-05-11)
 
 ### Feat
