@@ -1,3 +1,9 @@
+## v0.37.0 (2026-05-12)
+
+### Feat
+
+- add --pattern-focus flag for intensity-invariant gradient-based input transform
+
 ## v0.36.0 (2026-05-11)
 
 ### Feat
