@@ -1,3 +1,9 @@
+## v0.37.2 (2026-05-12)
+
+### Fix
+
+- normalize SobelGradientLayer outputs to [0,1] for backbone compatibility
+
 ## v0.37.1 (2026-05-12)
 
 ### Fix
