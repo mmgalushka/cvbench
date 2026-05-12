@@ -113,10 +113,13 @@ def _parse_loss(value: str | None) -> LossConfig | None:
               help="Fraction of train set to use for validation when no val/ directory exists (default: 0.2).")
 @click.option("--seed", default=None, type=int,
               help="Random seed for reproducibility (sets Python, NumPy, and TensorFlow seeds).")
+@click.option("--pattern-focus/--no-pattern-focus", default=None,
+              help="Focus on signal patterns rather than pixel brightness (log + Sobel gradient front-end).")
 def train(
     data_dir, output_dir, from_dir, backbone, epochs, lr,
     batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
     loss_raw, optimizer_raw, lr_scheduler_raw, fine_tune_from_layer, val_split, seed,
+    pattern_focus,
 ):
     """Train a model on DATA_DIR.
 
@@ -146,4 +149,5 @@ def train(
         fine_tune_from_layer=fine_tune_from_layer,
         val_split=val_split,
         seed=seed,
+        pattern_focus=pattern_focus,
     )

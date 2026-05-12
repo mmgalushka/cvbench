@@ -55,6 +55,7 @@ def run_training(
     fine_tune_from_layer: int | None = None,
     val_split: float | None = None,
     seed: int | None = None,
+    pattern_focus: bool | None = None,
 ) -> str:
     """Orchestrate a full training run.
 
@@ -97,6 +98,7 @@ def run_training(
         fine_tune_from_layer=fine_tune_from_layer,
         val_split=val_split,
         seed=seed,
+        pattern_focus=pattern_focus,
     )
 
     if aug_file:

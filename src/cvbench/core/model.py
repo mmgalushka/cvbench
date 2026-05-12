@@ -65,6 +65,11 @@ def build_model(cfg: CVBenchConfig) -> keras.Model:
 
     x = keras.layers.Rescaling(1.0 / 255.0)(x)
 
+    if cfg.model.pattern_focus:
+        from cvbench.core.preprocessing import LogNormalizeLayer, SobelGradientLayer
+        x = LogNormalizeLayer()(x)
+        x = SobelGradientLayer()(x)
+
     # Backbone (frozen by default; fine-tune top layers if configured)
     # fine_tune_from_layer == 0  → fully frozen
     # fine_tune_from_layer == -1 → fully unfrozen

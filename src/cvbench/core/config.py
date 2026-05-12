@@ -31,6 +31,7 @@ class ModelConfig:
     num_classes: int = 0
     dropout: float = 0.2
     fine_tune_from_layer: int = 0
+    pattern_focus: bool = False
 
 
 @dataclass
@@ -181,6 +182,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
         num_classes=m.get("num_classes", cfg.model.num_classes),
         dropout=m.get("dropout", cfg.model.dropout),
         fine_tune_from_layer=m.get("fine_tune_from_layer", cfg.model.fine_tune_from_layer),
+        pattern_focus=m.get("pattern_focus", cfg.model.pattern_focus),
     )
 
     aug = d.get("augmentation", {})
@@ -267,6 +269,7 @@ def build_config(
     fine_tune_from_layer: int | None = None,
     val_split: float | None = None,
     seed: int | None = None,
+    pattern_focus: bool | None = None,
 ) -> CVBenchConfig:
     """Build a CVBenchConfig from CLI options.
 
@@ -306,6 +309,8 @@ def build_config(
         cfg.training.lr_scheduler = lr_scheduler
     if fine_tune_from_layer is not None:
         cfg.model.fine_tune_from_layer = fine_tune_from_layer
+    if pattern_focus is not None:
+        cfg.model.pattern_focus = pattern_focus
     if val_split is not None:
         cfg.data.val_split = val_split
         cfg.data.val_split_explicit = True
