@@ -46,7 +46,7 @@ class SobelGradientLayer(keras.layers.Layer):
             kernel_initializer=keras.initializers.Constant(kernel),
             name="sobel_conv",
         )
-        self._conv.build(input_shape[:-1] + (1,))
+        self._conv.build(tuple(input_shape[:-1]) + (1,))
         super().build(input_shape)
 
     def call(self, x):
