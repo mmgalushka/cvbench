@@ -54,4 +54,9 @@ class SobelGradientLayer(keras.layers.Layer):
         grads = self._conv(gray)  # (B, H, W, 2)
         gx, gy = grads[..., :1], grads[..., 1:]
         mag = tf.sqrt(tf.square(gx) + tf.square(gy) + 1e-6)
+        # Normalize to [0, 1] for backbone compatibility. Hailo-safe: add + divide only.
+        # Sobel on [0,1] input: Gx/Gy ∈ [-4, 4], magnitude ∈ [0, 4√2 ≈ 5.657]
+        gx = (gx + 4.0) / 8.0
+        gy = (gy + 4.0) / 8.0
+        mag = mag / 5.657
         return tf.concat([gx, gy, mag], axis=-1)  # (B, H, W, 3)
