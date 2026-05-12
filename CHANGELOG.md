@@ -1,3 +1,9 @@
+## v0.37.1 (2026-05-12)
+
+### Fix
+
+- normalize input_shape to tuple in SobelGradientLayer.build to fix model deserialization
+
 ## v0.37.0 (2026-05-12)
 
 ### Feat
