@@ -1,3 +1,14 @@
+## v0.39.0 (2026-05-13)
+
+### Feat
+
+- add 'diverse' Hailo calibration strategy using k-means clustering on image features
+- show filename with copy button in image modal
+
+### Refactor
+
+- replace calib-samples-per-class with calib-total + calib-strategy for Hailo calibration
+
 ## v0.35.0 (2026-05-11)
 
 ### Feat
