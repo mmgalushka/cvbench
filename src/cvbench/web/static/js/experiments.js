@@ -540,6 +540,7 @@ function buildExportTab(run) {
             <select id="export-calib-strategy">
               <option value="proportional">Proportional</option>
               <option value="equal">Equal per class</option>
+              <option value="diverse">Diverse (k-means)</option>
             </select>
           </label>
           <label id="calib-total-wrap" style="display:none">

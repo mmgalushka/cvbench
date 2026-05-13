@@ -63,7 +63,7 @@ action_usage(){
     echo -e "  ${CMD}runs compare${OPT} <experiment_a> <experiment_b>${NC}"
     echo -e "  ${CMD}runs best${OPT} [dir] [--metric val_accuracy|val_loss|test_accuracy]${NC}"
     echo -e "  ${CMD}runs rename${OPT} <experiment> <new-name>${NC}"
-    echo -e "  ${CMD}runs export${OPT} <experiment> --format tflite|onnx|plan|hailo [--quantize none|float16|int8] [--output dir] [--calib-samples-per-class N]${NC}"
+    echo -e "  ${CMD}runs export${OPT} <experiment> --format tflite|onnx|plan|hailo [--quantize none|float16|int8] [--output dir] [--calib-total N] [--calib-strategy proportional|equal|diverse]${NC}"
     echo -e "  ${CMD}runs delete${OPT} <experiment> [--export <subfolder>] [--yes]${NC}"
     echo -e ""
     echo -e "${BOLD}WebUI Commands:${NC}"

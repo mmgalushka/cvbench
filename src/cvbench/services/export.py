@@ -176,6 +176,35 @@ def _build_calibration_set(
         for files in per_class.values():
             take = min(per_class_quota, len(files))
             selected.extend(rng.sample(files, take))
+    elif strategy == "diverse":
+        from sklearn.cluster import MiniBatchKMeans
+
+        all_files: list[Path] = []
+        for files in per_class.values():
+            all_files.extend(files)
+
+        # Extract compact feature: 8×8 grayscale thumbnail, flattened and normalised.
+        features = []
+        for p in all_files:
+            img = Image.open(str(p)).convert("L").resize((8, 8), Image.LANCZOS)
+            features.append(np.array(img, dtype=np.float32).flatten() / 255.0)
+        features_np = np.stack(features)
+
+        N_CLUSTERS = min(32, len(all_files))
+        kmeans = MiniBatchKMeans(n_clusters=N_CLUSTERS, random_state=42, n_init=3)
+        labels = kmeans.fit_predict(features_np)
+
+        clusters: list[list[Path]] = [[] for _ in range(N_CLUSTERS)]
+        for path, label in zip(all_files, labels):
+            clusters[label].append(path)
+
+        non_empty = [c for c in clusters if c]
+        per_cluster_quota = max(1, round(total / len(non_empty)))
+        for cluster in non_empty:
+            take = min(per_cluster_quota, len(cluster))
+            selected.extend(rng.sample(cluster, take))
+
+        n_classes = len(non_empty)
     else:
         total_available = sum(len(v) for v in per_class.values())
         for files in per_class.values():
@@ -188,10 +217,11 @@ def _build_calibration_set(
     # calibration algorithms that process images in sequential mini-batches.
     rng.shuffle(selected)
 
+    unit = "cluster(s)" if strategy == "diverse" else "class(es)"
     print(
         _fmt.dim(
             f"  Building  calib_set.npy ({len(selected)} images, "
-            f"{strategy} across {n_classes} class(es), {size}×{size})..."
+            f"{strategy} across {n_classes} {unit}, {size}×{size})..."
         )
     )
 

@@ -76,8 +76,8 @@ async def create_export(name: str, req: ExportRequest):
         raise HTTPException(status_code=400, detail=f"Invalid quantize. Choose from: {', '.join(sorted(_VALID_QUANTIZE))}")
     if req.calib_total < 1:
         raise HTTPException(status_code=400, detail="calib_total must be at least 1")
-    if req.calib_strategy not in {"proportional", "equal"}:
-        raise HTTPException(status_code=400, detail="calib_strategy must be 'proportional' or 'equal'")
+    if req.calib_strategy not in {"proportional", "equal", "diverse"}:
+        raise HTTPException(status_code=400, detail="calib_strategy must be 'proportional', 'equal', or 'diverse'")
 
     try:
         run_dir = Path(resolve_run_dir(name))
