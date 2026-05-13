@@ -535,9 +535,16 @@ function buildExportTab(run) {
               <option value="int8">Int8</option>
             </select>
           </label>
-          <label id="calib-samples-wrap" style="display:none">
-            Samples per class
-            <input id="export-calib-samples" type="number" min="1" step="1" placeholder="auto">
+          <label id="calib-strategy-wrap" style="display:none">
+            Calib strategy
+            <select id="export-calib-strategy">
+              <option value="proportional">Proportional</option>
+              <option value="equal">Equal per class</option>
+            </select>
+          </label>
+          <label id="calib-total-wrap" style="display:none">
+            Calib total
+            <input id="export-calib-total" type="number" min="1" step="1" value="1024">
           </label>
         </div>
         <button id="export-generate-btn" onclick="generateExport('${escHtml(run.name)}')">Generate Export</button>
@@ -571,8 +578,10 @@ function updateExportForm() {
   const fmt = document.getElementById('export-format')?.value;
   const wrap = document.getElementById('quantize-wrap');
   if (wrap) wrap.style.display = fmt === 'tflite' ? '' : 'none';
-  const calibWrap = document.getElementById('calib-samples-wrap');
-  if (calibWrap) calibWrap.style.display = fmt === 'hailo' ? '' : 'none';
+  const calibStrategyWrap = document.getElementById('calib-strategy-wrap');
+  if (calibStrategyWrap) calibStrategyWrap.style.display = fmt === 'hailo' ? '' : 'none';
+  const calibTotalWrap = document.getElementById('calib-total-wrap');
+  if (calibTotalWrap) calibTotalWrap.style.display = fmt === 'hailo' ? '' : 'none';
 }
 
 function buildPlanInstructions(runName, cardMode = false) {
@@ -794,8 +803,9 @@ async function generateExport(runName) {
   const errEl = document.getElementById('export-error');
   const format = document.getElementById('export-format')?.value;
   const quantize = document.getElementById('export-quantize')?.value || 'none';
-  const calibSamplesRaw = document.getElementById('export-calib-samples')?.value;
-  const calib_samples_per_class = calibSamplesRaw ? parseInt(calibSamplesRaw, 10) : null;
+  const calib_strategy = document.getElementById('export-calib-strategy')?.value || 'proportional';
+  const calibTotalRaw = document.getElementById('export-calib-total')?.value;
+  const calib_total = calibTotalRaw ? parseInt(calibTotalRaw, 10) : 1024;
   if (!btn || !format) return;
 
   btn.disabled = true;
@@ -805,7 +815,7 @@ async function generateExport(runName) {
 
   try {
     const body = { format, quantize };
-    if (calib_samples_per_class !== null) body.calib_samples_per_class = calib_samples_per_class;
+    if (format === 'hailo') { body.calib_total = calib_total; body.calib_strategy = calib_strategy; }
     const exports = await fetch(`/api/runs/${encodeURIComponent(runName)}/exports`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

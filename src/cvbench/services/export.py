@@ -139,11 +139,8 @@ def _collect_images(directory: Path) -> list[Path]:
     return files
 
 
-_CALIB_TARGET = 1024
-
-
 def _build_calibration_set(
-    cfg, output_path: Path, samples_per_class: int | None = None
+    cfg, output_path: Path, total: int = 1024, strategy: str = "proportional"
 ) -> tuple[int, int]:
     import numpy as np
     from PIL import Image
@@ -174,17 +171,16 @@ def _build_calibration_set(
     n_classes = len(per_class)
     selected: list[Path] = []
 
-    if samples_per_class is not None:
-        # Fixed quota per class — exact, balanced calibration set.
+    if strategy == "equal":
+        per_class_quota = max(1, round(total / n_classes))
         for files in per_class.values():
-            take = min(samples_per_class, len(files))
+            take = min(per_class_quota, len(files))
             selected.extend(rng.sample(files, take))
     else:
         total_available = sum(len(v) for v in per_class.values())
-
         for files in per_class.values():
             proportion = len(files) / total_available
-            quota = max(1, round(proportion * _CALIB_TARGET))
+            quota = max(1, round(proportion * total))
             take = min(quota, len(files))
             selected.extend(rng.sample(files, take))
 
@@ -195,7 +191,7 @@ def _build_calibration_set(
     print(
         _fmt.dim(
             f"  Building  calib_set.npy ({len(selected)} images, "
-            f"proportional across {n_classes} class(es), {size}×{size})..."
+            f"{strategy} across {n_classes} class(es), {size}×{size})..."
         )
     )
 
@@ -224,7 +220,7 @@ def _write_alls(output_path: Path) -> None:
 
 
 def _prepare_hailo_package(
-    run_dir: Path, cfg, samples_per_class: int | None = None
+    run_dir: Path, cfg, calib_total: int = 1024, calib_strategy: str = "proportional"
 ) -> tuple[Path, dict]:
     import numpy as np
 
@@ -250,12 +246,13 @@ def _prepare_hailo_package(
         calib_meta = {"calib_set_images": shape[0], "calib_set_shuffled": True}
     else:
         n_total, n_classes = _build_calibration_set(
-            cfg, calib_path, samples_per_class=samples_per_class
+            cfg, calib_path, total=calib_total, strategy=calib_strategy
         )
         calib_meta = {
             "calib_set_images": n_total,
             "calib_set_classes": n_classes,
-            "calib_set_samples_per_class": samples_per_class,
+            "calib_set_total": calib_total,
+            "calib_set_strategy": calib_strategy,
             "calib_set_shuffled": True,
         }
     _write_alls(export_dir / "model.alls")
@@ -307,7 +304,8 @@ def run_export(
     format: str,
     quantize: str = "none",
     output_dir: str | None = None,
-    calib_samples_per_class: int | None = None,
+    calib_total: int = 1024,
+    calib_strategy: str = "proportional",
 ) -> Path | None:
     """Export the best checkpoint of a run to TFLite, ONNX, or print Jetson plan instructions.
 
@@ -376,7 +374,7 @@ def run_export(
         print(_fmt.rule())
 
         export_dir, calib_meta = _prepare_hailo_package(
-            run_dir, cfg, samples_per_class=calib_samples_per_class
+            run_dir, cfg, calib_total=calib_total, calib_strategy=calib_strategy
         )
 
         export_info = {

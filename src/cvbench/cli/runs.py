@@ -173,13 +173,22 @@ def rename(experiment, new_name):
     help="Output directory (default: <experiment>/export/). Ignored for plan.",
 )
 @click.option(
-    "--calib-samples-per-class",
-    "calib_samples_per_class",
-    default=None,
+    "--calib-total",
+    "calib_total",
+    default=1024,
     type=int,
-    help="Images per class in the Hailo calibration set. Overrides the default stratified heuristic.",
+    show_default=True,
+    help="Target total images in the Hailo calibration set.",
 )
-def export(experiment, fmt, quantize, output_dir, calib_samples_per_class):
+@click.option(
+    "--calib-strategy",
+    "calib_strategy",
+    default="proportional",
+    type=click.Choice(["proportional", "equal"]),
+    show_default=True,
+    help="How to distribute calibration samples across classes.",
+)
+def export(experiment, fmt, quantize, output_dir, calib_total, calib_strategy):
     """Export the best checkpoint of EXPERIMENT to TFLite, ONNX, or Hailo package, or print Jetson deployment instructions (plan).
 
     EXPERIMENT is a run name or full path to a run directory.
@@ -187,7 +196,7 @@ def export(experiment, fmt, quantize, output_dir, calib_samples_per_class):
     try:
         run_export(
             experiment, format=fmt, quantize=quantize, output_dir=output_dir,
-            calib_samples_per_class=calib_samples_per_class,
+            calib_total=calib_total, calib_strategy=calib_strategy,
         )
     except FileNotFoundError as e:
         raise click.ClickException(str(e))
