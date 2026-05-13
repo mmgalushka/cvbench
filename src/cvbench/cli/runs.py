@@ -183,10 +183,10 @@ def rename(experiment, new_name):
 @click.option(
     "--calib-strategy",
     "calib_strategy",
-    default="proportional",
-    type=click.Choice(["proportional", "equal", "diverse"]),
+    default="stratified",
+    type=click.Choice(["stratified", "proportional", "equal", "diverse"]),
     show_default=True,
-    help="How to distribute calibration samples: proportional (by class size), equal (same per class), diverse (k-means clustering on image features).",
+    help="How to distribute calibration samples: stratified (equal per class + k-means within each class, recommended), proportional (by class size), equal (same per class), diverse (k-means across all images).",
 )
 def export(experiment, fmt, quantize, output_dir, calib_total, calib_strategy):
     """Export the best checkpoint of EXPERIMENT to TFLite, ONNX, or Hailo package, or print Jetson deployment instructions (plan).

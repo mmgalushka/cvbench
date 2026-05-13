@@ -538,6 +538,7 @@ function buildExportTab(run) {
           <label id="calib-strategy-wrap" style="display:none">
             Calib strategy
             <select id="export-calib-strategy">
+              <option value="stratified">Stratified (recommended)</option>
               <option value="proportional">Proportional</option>
               <option value="equal">Equal per class</option>
               <option value="diverse">Diverse (k-means)</option>

@@ -140,7 +140,7 @@ def _collect_images(directory: Path) -> list[Path]:
 
 
 def _build_calibration_set(
-    cfg, output_path: Path, total: int = 1024, strategy: str = "proportional"
+    cfg, output_path: Path, total: int = 1024, strategy: str = "stratified"
 ) -> tuple[int, int]:
     import numpy as np
     from PIL import Image
@@ -171,7 +171,30 @@ def _build_calibration_set(
     n_classes = len(per_class)
     selected: list[Path] = []
 
-    if strategy == "equal":
+    if strategy == "stratified":
+        from sklearn.cluster import MiniBatchKMeans
+
+        per_class_quota = max(1, round(total / n_classes))
+        for files in per_class.values():
+            quota = min(per_class_quota, len(files))
+            n_clusters = min(quota, len(files))
+            if n_clusters < len(files):
+                feats = []
+                for p in files:
+                    img = Image.open(str(p)).convert("L").resize((8, 8), Image.LANCZOS)
+                    feats.append(np.array(img, dtype=np.float32).flatten() / 255.0)
+                feats_np = np.stack(feats)
+                labels = MiniBatchKMeans(
+                    n_clusters=n_clusters, random_state=42, n_init=3
+                ).fit_predict(feats_np)
+                clusters: dict[int, list[Path]] = {}
+                for path, label in zip(files, labels):
+                    clusters.setdefault(int(label), []).append(path)
+                for bucket in clusters.values():
+                    selected.append(rng.choice(bucket))
+            else:
+                selected.extend(files)
+    elif strategy == "equal":
         per_class_quota = max(1, round(total / n_classes))
         for files in per_class.values():
             take = min(per_class_quota, len(files))
@@ -217,7 +240,7 @@ def _build_calibration_set(
     # calibration algorithms that process images in sequential mini-batches.
     rng.shuffle(selected)
 
-    unit = "cluster(s)" if strategy == "diverse" else "class(es)"
+    unit = "cluster(s)" if strategy == "diverse" else "class(es)"  # stratified also uses class(es)
     print(
         _fmt.dim(
             f"  Building  calib_set.npy ({len(selected)} images, "
@@ -245,6 +268,8 @@ def _write_alls(output_path: Path) -> None:
     output_path.write_text(
         "model_optimization_flavor(optimization_level=2, compression_level=1)\n"
         "quantization_param(avgpool1, precision_mode=a16_w16)\n"
+        "quantization_param(avgpool3, precision_mode=a16_w16)\n"
+        "quantization_param(fc11, precision_mode=a16_w16)\n"
     )
     print(_fmt.dim("  Written   model.alls"))
 
