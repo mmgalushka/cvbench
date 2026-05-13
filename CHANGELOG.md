@@ -1,3 +1,9 @@
+## v0.40.0 (2026-05-13)
+
+### Feat
+
+- add 'stratified' Hailo calibration strategy (equal per class + k-means within class) as new default
+
 ## v0.39.0 (2026-05-13)
 
 ### Feat
