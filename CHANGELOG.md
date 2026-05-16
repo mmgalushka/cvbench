@@ -1,3 +1,13 @@
+## v0.41.0 (2026-05-16)
+
+### Feat
+
+- add --weights flag for random (scratch) vs imagenet backbone init
+
+### Fix
+
+- restore optimizer state on resume by loading full model instead of weights-only
+
 ## v0.40.0 (2026-05-13)
 
 ### Feat
