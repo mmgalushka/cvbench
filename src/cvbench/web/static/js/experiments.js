@@ -529,7 +529,7 @@ function buildExportTab(run) {
           </label>
           <label id="quantize-wrap">
             Quantization
-            <select id="export-quantize">
+            <select id="export-quantize" onchange="updateExportForm()">
               <option value="none">None (float32)</option>
               <option value="float16">Float16</option>
               <option value="int8">Int8</option>
@@ -537,7 +537,7 @@ function buildExportTab(run) {
           </label>
           <label id="calib-strategy-wrap" style="display:none">
             Calib strategy
-            <select id="export-calib-strategy">
+            <select id="export-calib-strategy" onchange="updateExportForm()">
               <option value="stratified">Stratified (recommended)</option>
               <option value="proportional">Proportional</option>
               <option value="equal">Equal per class</option>
@@ -546,11 +546,19 @@ function buildExportTab(run) {
           </label>
           <label id="calib-total-wrap" style="display:none">
             Calib total
-            <input id="export-calib-total" type="number" min="1" step="1" value="1024">
+            <input id="export-calib-total" type="number" min="1" step="1" value="1024" oninput="updateExportForm()">
           </label>
         </div>
         <button id="export-generate-btn" onclick="generateExport('${escHtml(run.name)}')">Generate Export</button>
         <p id="export-error" class="error-msg" style="display:none;margin-top:0.5rem"></p>
+        <div class="export-cli-alt">
+          <span class="export-cli-alt-label">or run from terminal</span>
+          <div class="cli-command-bar" id="export-cli-cmd">
+            <svg class="cli-label" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <code class="cli-code">cvbench runs export ${escHtml(run.name)} --format tflite</code>
+            <button class="cli-copy-btn" data-cmd="cvbench runs export ${escHtml(run.name)} --format tflite" onclick="copyCliCommand(this)">Copy</button>
+          </div>
+        </div>
       `}
     </article>
   `;
@@ -576,6 +584,20 @@ function updateFormatDropdown(exports) {
   updateExportForm();
 }
 
+function buildExportCliCmd(runName) {
+  const fmt = document.getElementById('export-format')?.value || 'tflite';
+  let cmd = `cvbench runs export ${runName} --format ${fmt}`;
+  if (fmt === 'tflite') {
+    const q = document.getElementById('export-quantize')?.value || 'none';
+    if (q !== 'none') cmd += ` --quantize ${q}`;
+  } else if (fmt === 'hailo') {
+    const strategy = document.getElementById('export-calib-strategy')?.value || 'stratified';
+    const total = document.getElementById('export-calib-total')?.value || '1024';
+    cmd += ` --calib-strategy ${strategy} --calib-total ${total}`;
+  }
+  return cmd;
+}
+
 function updateExportForm() {
   const fmt = document.getElementById('export-format')?.value;
   const wrap = document.getElementById('quantize-wrap');
@@ -584,13 +606,22 @@ function updateExportForm() {
   if (calibStrategyWrap) calibStrategyWrap.style.display = fmt === 'hailo' ? '' : 'none';
   const calibTotalWrap = document.getElementById('calib-total-wrap');
   if (calibTotalWrap) calibTotalWrap.style.display = fmt === 'hailo' ? '' : 'none';
+
+  const cliBar = document.getElementById('export-cli-cmd');
+  if (cliBar && currentRun) {
+    const cmd = buildExportCliCmd(currentRun.name);
+    const code = cliBar.querySelector('.cli-code');
+    const btn = cliBar.querySelector('.cli-copy-btn');
+    if (code) code.textContent = cmd;
+    if (btn) btn.dataset.cmd = cmd;
+  }
 }
 
 function buildPlanInstructions(runName, cardMode = false) {
   const onnxExists = currentExports.some(e => e.format === 'onnx' || e.subfolder === 'onnx');
   const scp = `scp experiments/${runName}/export/onnx/model.onnx user@jetson:/home/user/model.onnx`;
   const trtexec = `trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32`;
-  const cliCmd = `cvbench runs export ${runName} --format plan`;
+
   const termIcon = `<svg class="cli-label" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`;
 
   const onnxWarning = onnxExists ? '' : `
@@ -633,15 +664,6 @@ function buildPlanInstructions(runName, cardMode = false) {
         <span class="plan-step-label">Step 3</span>
         <span class="plan-step-desc">Run inference using the TensorRT Python API or DeepStream.</span>
       </div>
-      <div class="plan-step plan-cli-equivalent">
-        <span class="plan-step-label">CLI</span>
-        <span class="plan-step-desc">Equivalent command (prints these instructions):</span>
-        <div class="cli-command-bar">
-          ${termIcon}
-          <code class="cli-code">${escHtml(cliCmd)}</code>
-          <button class="cli-copy-btn" data-cmd="${escHtml(cliCmd)}" onclick="copyCliCommand(this)">Copy</button>
-        </div>
-      </div>
     </div>
   `;
 }
@@ -649,7 +671,7 @@ function buildPlanInstructions(runName, cardMode = false) {
 function buildHailoInstructions(runName, cardMode = false) {
   const rel = `experiments/${runName}/export/hailo`;
   const termIcon = `<svg class="cli-label" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`;
-  const cliCmd = `cvbench runs export ${runName} --format hailo`;
+
 
   const step1cmd = `hailo parser tf model.tflite`;
   const step2cmd = `hailo optimize --hw-arch hailo8l --calib-set-path calib_set.npy --model-script model.alls --output-har-path model_optimized.har model.har`;
@@ -687,15 +709,6 @@ function buildHailoInstructions(runName, cardMode = false) {
           ${termIcon}
           <code class="cli-code">${escHtml(step3cmd)}</code>
           <button class="cli-copy-btn" data-cmd="${escHtml(step3cmd)}" onclick="copyCliCommand(this)">Copy</button>
-        </div>
-      </div>
-      <div class="plan-step plan-cli-equivalent">
-        <span class="plan-step-label">CLI</span>
-        <span class="plan-step-desc">Equivalent command (generates the package):</span>
-        <div class="cli-command-bar">
-          ${termIcon}
-          <code class="cli-code">${escHtml(cliCmd)}</code>
-          <button class="cli-copy-btn" data-cmd="${escHtml(cliCmd)}" onclick="copyCliCommand(this)">Copy</button>
         </div>
       </div>
     </div>
