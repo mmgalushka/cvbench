@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -7,6 +8,19 @@ import keras
 
 from cvbench.core import _fmt
 from cvbench.core.config import CVBenchConfig
+
+
+def _append_best_event(run_dir: str, epoch: int, monitor: str, value: float | None) -> None:
+    record = {"epoch": epoch + 1, "metric": monitor, "value": round(float(value), 6) if value is not None else None}
+    with open(Path(run_dir) / "best_history.jsonl", "a") as f:
+        f.write(json.dumps(record) + "\n")
+
+
+def load_best_history(run_dir: str) -> list[dict]:
+    path = Path(run_dir) / "best_history.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
 def build_checkpoint_callback(cfg: CVBenchConfig, run_dir: str) -> keras.callbacks.ModelCheckpoint | None:
@@ -24,6 +38,7 @@ def build_checkpoint_callback(cfg: CVBenchConfig, run_dir: str) -> keras.callbac
                 if self.best != prev_best:
                     val = logs.get(monitor) if logs else None
                     val_str = f"{val:.4f}" if val is not None else "—"
+                    _append_best_event(run_dir, epoch, monitor, val)
                     print(f"\n  {_fmt.green('✓ New best saved')}  {_fmt.dim(monitor)} = {_fmt.bold(val_str)}")
 
         return _BestOnly(

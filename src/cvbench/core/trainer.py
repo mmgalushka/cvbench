@@ -5,7 +5,7 @@ from pathlib import Path
 
 import keras
 
-from cvbench.core.checkpoint import build_checkpoint_callback, prune_checkpoints
+from cvbench.core.checkpoint import build_checkpoint_callback, load_best_history, prune_checkpoints
 from cvbench.core.config import CVBenchConfig, update_run_status
 from cvbench.core import _fmt
 
@@ -207,7 +207,14 @@ def train(
         max_k = max(len(k) for k in final_metrics)
         for k, v in final_metrics.items():
             print(f"   {_fmt.bold(f'{k:<{max_k}}')} : {v:.4f}")
-    print(f" Run directory → {_fmt.dim(str(run_dir))}")
+    best_events = load_best_history(str(run_dir))
+    if best_events:
+        metric_name = best_events[0]["metric"]
+        print(f"\n {_fmt.bold('Best weights history')}  ({_fmt.dim(metric_name)})")
+        for e in best_events:
+            val_str = f"{e['value']:.4f}" if e["value"] is not None else "—"
+            print(f"   epoch {_fmt.bold(f\"{e['epoch']:>4}\")}  →  {val_str}")
+    print(f"\n Run directory → {_fmt.dim(str(run_dir))}")
     print(_fmt.rule())
 
     return str(run_dir)
