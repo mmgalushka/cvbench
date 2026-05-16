@@ -27,6 +27,7 @@ class DataConfig:
 @dataclass
 class ModelConfig:
     backbone: str = "efficientnet_b0"
+    weights: str = "imagenet"  # "imagenet" | "none"
     input_size: int = 224
     num_classes: int = 0
     dropout: float = 0.2
@@ -177,6 +178,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
     m = d.get("model", {})
     cfg.model = ModelConfig(
         backbone=m.get("backbone", cfg.model.backbone),
+        weights=m.get("weights", cfg.model.weights),
         input_size=m.get("input_size", cfg.model.input_size),
         num_classes=m.get("num_classes", cfg.model.num_classes),
         dropout=m.get("dropout", cfg.model.dropout),
@@ -255,6 +257,7 @@ def build_config(
     data_dir: str,
     from_dir: str | None = None,
     backbone: str | None = None,
+    weights: str | None = None,
     epochs: int | None = None,
     lr: float | None = None,
     batch_size: int | None = None,
@@ -286,6 +289,8 @@ def build_config(
 
     if backbone is not None:
         cfg.model.backbone = backbone
+    if weights is not None:
+        cfg.model.weights = weights
     if epochs is not None:
         cfg.training.epochs = epochs
     if lr is not None:

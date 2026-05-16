@@ -90,6 +90,8 @@ def _parse_loss(value: str | None) -> LossConfig | None:
 @click.option("--from", "from_dir", default=None, type=click.Path(exists=True),
               help="Load config from an existing experiment as baseline.")
 @click.option("--backbone", default=None, help="Backbone name (e.g. efficientnet_b0).")
+@click.option("--weights", default=None, type=click.Choice(["imagenet", "none"]),
+              help="Backbone weight init: imagenet (pretrained, default) or none (random/scratch).")
 @click.option("--epochs", default=None, type=int, help="Number of training epochs.")
 @click.option("--lr", default=None, type=float, help="Learning rate.")
 @click.option("--batch-size", default=None, type=int, help="Batch size.")
@@ -114,7 +116,7 @@ def _parse_loss(value: str | None) -> LossConfig | None:
 @click.option("--seed", default=None, type=int,
               help="Random seed for reproducibility (sets Python, NumPy, and TensorFlow seeds).")
 def train(
-    data_dir, output_dir, from_dir, backbone, epochs, lr,
+    data_dir, output_dir, from_dir, backbone, weights, epochs, lr,
     batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
     loss_raw, optimizer_raw, lr_scheduler_raw, fine_tune_from_layer, val_split, seed,
 ):
@@ -132,6 +134,7 @@ def train(
         output_dir=output_dir,
         from_dir=from_dir,
         backbone=backbone,
+        weights=weights,
         epochs=epochs,
         lr=lr,
         batch_size=batch_size,

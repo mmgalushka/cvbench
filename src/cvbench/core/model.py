@@ -69,7 +69,10 @@ def build_model(cfg: CVBenchConfig) -> keras.Model:
     # fine_tune_from_layer == 0  → fully frozen
     # fine_tune_from_layer == -1 → fully unfrozen
     # fine_tune_from_layer >  0  → layers[:N] frozen, rest trainable
-    backbone = keras_hub.models.EfficientNetBackbone.from_preset(preset)
+    backbone = keras_hub.models.EfficientNetBackbone.from_preset(
+        preset,
+        load_weights=(cfg.model.weights != "none"),
+    )
     ftl = cfg.model.fine_tune_from_layer
     if ftl == 0:
         backbone.trainable = False

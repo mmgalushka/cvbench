@@ -41,6 +41,7 @@ def run_training(
     #       the WebUI training endpoint (tracked in a follow-up GitHub issue).
     from_dir: str | None = None,
     backbone: str | None = None,
+    weights: str | None = None,
     epochs: int | None = None,
     lr: float | None = None,
     batch_size: int | None = None,
@@ -85,6 +86,7 @@ def run_training(
         data_dir=data_dir,
         from_dir=from_dir,
         backbone=backbone,
+        weights=weights,
         epochs=epochs,
         lr=lr,
         batch_size=batch_size,
