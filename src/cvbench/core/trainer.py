@@ -36,6 +36,28 @@ def _print_header(exp_dir: str, cfg: CVBenchConfig):
     print()  # breathing room before epoch output
 
 
+def _apply_fine_tune_flags(model: keras.Model, fine_tune_from_layer: int) -> None:
+    """Re-apply backbone trainable flags to a loaded checkpoint model.
+
+    Needed when resuming with a different fine_tune_from_layer than Phase 1
+    (e.g. Phase 2 unfreezes the backbone while the checkpoint still has it frozen).
+    """
+    backbone = next(
+        (l for l in model.layers if isinstance(l, keras.Model) and l is not model),
+        None,
+    )
+    if backbone is None:
+        return
+    if fine_tune_from_layer == 0:
+        backbone.trainable = False
+    elif fine_tune_from_layer == -1:
+        backbone.trainable = True
+    else:
+        backbone.trainable = True
+        for layer in backbone.layers[:fine_tune_from_layer]:
+            layer.trainable = False
+
+
 def train(
     cfg: CVBenchConfig,
     exp_dir: str,
@@ -58,7 +80,19 @@ def train(
     initial_epoch = 0
     if resume_checkpoint:
         print(f" Resuming from: {resume_checkpoint}")
-        model.load_weights(resume_checkpoint)
+        # Load the full model (weights + Adam moment accumulators) so the head's
+        # optimizer state carries over smoothly. model.load_weights() would restore
+        # weight values but reset all moments to zero, causing an amplified effective
+        # LR at the start of the resumed run (identical to the zero-moment problem
+        # we're trying to avoid in the backbone during two-phase training).
+        model = keras.saving.load_model(resume_checkpoint)
+        # Re-apply trainable flags — the checkpoint reflects Phase 1's config
+        # (backbone frozen); Phase 2 may need a different setting.
+        _apply_fine_tune_flags(model, cfg.model.fine_tune_from_layer)
+        # Sync the optimizer LR to the current config. Phase 2 typically uses
+        # a much lower LR; without this the checkpoint's Phase 1 LR would persist.
+        model.optimizer.learning_rate.assign(cfg.training.learning_rate)
+
         if cfg.run.epochs_run > 0:
             # Use the epoch count stored in config (reliable for all checkpoint names,
             # including best.keras which carries no epoch number in its filename).
