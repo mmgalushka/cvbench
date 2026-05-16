@@ -73,7 +73,10 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    environment:
+      - CVBENCH_URL=http://<server-ip>:8000
     ports:
+      - "0.0.0.0:8000:8000"
       - "0.0.0.0:8888:8888"
       - "0.0.0.0:6006:6006"
     volumes:
@@ -90,7 +93,10 @@ services:
   cvbench:
     image: mmgalushka/cvbench:latest
     container_name: cvbench
+    environment:
+      - CVBENCH_URL=http://<server-ip>:8000
     ports:
+      - "0.0.0.0:8000:8000"
       - "0.0.0.0:8888:8888"
       - "0.0.0.0:6006:6006"
     volumes:
@@ -100,11 +106,14 @@ services:
     restart: unless-stopped
 ```
 
+Replace `<server-ip>` with the actual IP or hostname of your Docker host.
+
 After starting:
 
 ```bash
-# JupyterLab → http://<server-ip>:8888
-# TensorBoard → http://<server-ip>:6006
+# CVBench WebUI → http://<server-ip>:8000  (set via CVBENCH_URL)
+# JupyterLab    → http://<server-ip>:8888
+# TensorBoard   → http://<server-ip>:6006
 ```
 
 ---
