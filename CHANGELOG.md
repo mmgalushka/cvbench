@@ -1,3 +1,12 @@
+## v0.42.0 (2026-05-17)
+
+### Feat
+
+- three-layer signal-preserving augmentation (magnitude scaling + blend-back + SNR hard floor)
+- record best-weights save events to best_history.jsonl
+- support CVBENCH_URL env var for external server address
+- move export CLI command into form as live-updating alternative to Generate button
+
 ## v0.41.0 (2026-05-16)
 
 ### Feat
