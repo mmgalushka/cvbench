@@ -217,7 +217,7 @@ def _resolve(name: str, params: dict, magnitude_params: list[str] | None = None)
         merged = {**defaults, **params}
         layer = cls(**merged)
 
-        def keras_fn(img, _snr_factor=1.0, _layer=layer):
+        def keras_fn(img, snr_factor=1.0, _layer=layer):  # noqa: ARG001
             if img.ndim == 3:
                 return _layer(img[None], training=True)[0].numpy()
             return _layer(img, training=True).numpy()
