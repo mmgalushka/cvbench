@@ -12,7 +12,13 @@ from cvbench.augmentations.edges import (
 )
 from cvbench.augmentations.lines import aug_lines_h, aug_lines_v
 from cvbench.augmentations.noise import aug_salt_pepper
-from cvbench.augmentations.pipeline import build_aug_pipeline
+from cvbench.augmentations.pipeline import (
+    build_aug_pipeline,
+    build_custom_aug_fn,
+    _compute_snr_factor,
+    _ABSOLUTE_SNR_FLOOR,
+    _SNR_PRESERVATION_RATIO,
+)
 from cvbench.augmentations.profiles import aug_random_profile_h, aug_random_profile_v
 from cvbench.augmentations.tone import aug_fog, aug_gamma
 from cvbench.core.config import TransformConfig
@@ -135,3 +141,69 @@ class TestPipelineBatch:
         fn = build_aug_pipeline([self._t("aug_rf_transmission", bandwidth=0.06)])
         out = fn(batch)
         assert out.shape == batch.shape
+
+
+def _weak_signal_image():
+    """128×128 grayscale image with a faint 8-pixel stripe — SNR ≈ 0.07."""
+    img = np.zeros((128, 128, 1), dtype=np.float32)
+    img[60:68, :] = 20  # 20/255 brightness
+    return img
+
+
+class TestSignalPreservation:
+    """Verify the three-layer signal-preservation system."""
+
+    def _cfg(self, name, prob=1.0, **params):
+        return TransformConfig(name=name, prob=prob, params=params)
+
+    def test_magnitude_scaling_caps_fog_strength(self):
+        # With a weak-signal image (SNR ~0.07), aug_fog must not wash out the signal stripe.
+        # Run 20 times — magnitude scaling should keep every application gentle enough
+        # that the stripe region stays above the absolute noise floor.
+        img = _weak_signal_image()
+        pipeline = build_custom_aug_fn([self._cfg("aug_fog", strength=[0.0, 0.8])])
+        for _ in range(20):
+            out = pipeline(img.copy())
+            # stripe should not be completely whited out; its mean should stay below 255*0.9
+            assert out[60:68].mean() < 255 * 0.9, "fog whited out the weak signal"
+
+    def test_blend_back_preserves_snr_floor(self):
+        # Force extreme fog (prob=1, full strength range) on a weak-signal image.
+        # The blend-back mechanism should ensure post-augmentation SNR doesn't fall
+        # below snr_before * _SNR_PRESERVATION_RATIO.
+        img = _weak_signal_image()
+        snr_before = _compute_snr_factor(img)
+        pipeline = build_custom_aug_fn([self._cfg("aug_fog", strength=[0.9, 0.99])])
+        out = pipeline(img.copy())
+        snr_after = _compute_snr_factor(out)
+        min_allowed = snr_before * _SNR_PRESERVATION_RATIO
+        assert snr_after >= min_allowed * 0.95, (  # 5% tolerance for float rounding
+            f"SNR dropped from {snr_before:.3f} to {snr_after:.3f}, "
+            f"below floor {min_allowed:.3f}"
+        )
+
+    def test_hard_floor_skips_destructive_on_near_invisible(self):
+        # Image with SNR < _ABSOLUTE_SNR_FLOOR — destructive transforms must be skipped.
+        img = np.zeros((64, 64, 1), dtype=np.float32)  # pure black, SNR = 0
+        assert _compute_snr_factor(img) < _ABSOLUTE_SNR_FLOOR
+
+        original = img.copy()
+        pipeline = build_custom_aug_fn([self._cfg("aug_fog", strength=[0.5, 0.9])])
+        out = pipeline(img.copy())
+        # fog on pure black produces pure white; hard floor must prevent this
+        assert out.mean() < 10, "destructive transform fired below SNR hard floor"
+
+    def test_strong_signal_unaffected_by_preservation(self):
+        # A high-SNR image (dark background, bright stripe) should receive full-strength
+        # augmentation and NOT be blended back toward the original.
+        img = np.zeros((64, 64, 1), dtype=np.float32)
+        img[20:44, :] = 220  # bright stripe — strong contrast, SNR well above floor
+        snr = _compute_snr_factor(img)
+        assert snr > 0.5
+
+        pipeline = build_custom_aug_fn([self._cfg("aug_fog", strength=[0.3, 0.3])])
+        out = pipeline(img.copy())
+        # fog at strength=0.3: pixel = original * 0.7 + 255 * 0.3
+        # stripe region expected ≈ 220 * 0.7 + 76.5 = 230.5
+        expected = img * 0.7 + 255 * 0.3
+        np.testing.assert_allclose(out, expected, atol=2.0)

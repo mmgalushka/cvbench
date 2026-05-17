@@ -22,6 +22,31 @@ _DESTRUCTIVE_TRANSFORMS = {
     "aug_net",
 }
 
+# Which parameters control destructive intensity for each transform.
+# When SNR is low, the upper bound of these parameters is compressed toward the
+# lower bound: scaled_hi = lo + (hi - lo) * snr_factor.
+# Transforms with no magnitude params rely solely on probability scaling.
+_DESTRUCTIVE_MAGNITUDE_PARAMS: dict[str, list[str]] = {
+    "aug_fog":             ["strength"],
+    "aug_blur":            ["radius"],
+    "aug_gamma":           [],
+    "aug_mask_h":          ["max_width"],
+    "aug_mask_v":          ["max_width"],
+    "aug_fade_horizontal": ["strength"],
+    "aug_fade_vertical":   ["strength"],
+    "aug_random_profile_h":["max_delta"],
+    "aug_random_profile_v":["max_delta"],
+    "aug_interference":    [],
+    "aug_net":             [],
+}
+
+# Below this SNR, all destructive transforms are skipped entirely (hard floor).
+_ABSOLUTE_SNR_FLOOR = 0.05
+# If post-augmentation SNR drops below snr_before * this ratio, blend back toward original.
+_SNR_PRESERVATION_RATIO = 0.40
+# Maximum fraction of the original image to blend back (never return fully unaugmented).
+_MAX_BLEND_BACK = 0.80
+
 
 def _compute_snr_factor(img: np.ndarray) -> float:
     """Return (95th pct - 30th pct) / 255, clamped to [0, 1].
@@ -80,17 +105,20 @@ def build_aug_pipeline(transforms: list) -> callable:
 
 def _make_one_of_fn(candidates: list):
     """Build a function that picks one candidate by weight and applies it."""
-    fns_weights = [(_resolve(c.name, c.params), c.weight) for c in candidates]
+    fns_weights = [
+        (_resolve(c.name, c.params, _DESTRUCTIVE_MAGNITUDE_PARAMS.get(c.name, [])), c.weight)
+        for c in candidates
+    ]
     total = sum(w for _, w in fns_weights)
 
-    def one_of_fn(img):
+    def one_of_fn(img, snr_factor=1.0):
         r = random.uniform(0, total)
         cumul = 0.0
         for fn, w in fns_weights:
             cumul += w
             if r <= cumul:
-                return fn(img)
-        return fns_weights[-1][0](img)
+                return fn(img, snr_factor=snr_factor)
+        return fns_weights[-1][0](img, snr_factor=snr_factor)
 
     return one_of_fn
 
@@ -138,9 +166,11 @@ def build_custom_aug_fn(transforms: list):
     Returns apply(img: np.ndarray) -> np.ndarray, or None if the list contains
     no aug_* transforms.
 
-    Destructive transforms (those in _DESTRUCTIVE_TRANSFORMS) have their
-    effective probability scaled by the per-image SNR factor so that weak
-    signals are augmented less aggressively.
+    Destructive transforms have three layers of signal protection:
+    1. Probability scaling by SNR (existing) — fires less often for weak signals.
+    2. Magnitude scaling by SNR (new) — when it fires, strength is capped by SNR.
+    3. Post-augmentation blend-back (new) — if cumulative SNR drop exceeds
+       _SNR_PRESERVATION_RATIO, the output is blended back toward the original.
     """
     steps = []
     for t in transforms:
@@ -150,30 +180,44 @@ def build_custom_aug_fn(transforms: list):
                 destructive = any(c.name in _DESTRUCTIVE_TRANSFORMS for c in aug_candidates)
                 steps.append((_make_one_of_fn(aug_candidates), t.prob, destructive))
         elif t.name.startswith("aug_"):
-            fn = _resolve(t.name, t.params)
+            mag_params = _DESTRUCTIVE_MAGNITUDE_PARAMS.get(t.name, [])
+            fn = _resolve(t.name, t.params, mag_params)
             steps.append((fn, t.prob, t.name in _DESTRUCTIVE_TRANSFORMS))
 
     if not steps:
         return None
 
     def apply(img):
-        snr = _compute_snr_factor(img)
+        snr_before = _compute_snr_factor(img)
+        original = img.copy()
+
         for fn, prob, destructive in steps:
-            effective_prob = prob * snr if destructive else prob
+            effective_prob = prob * snr_before if destructive else prob
             if random.random() < effective_prob:
-                img = fn(img)
+                if destructive and snr_before < _ABSOLUTE_SNR_FLOOR:
+                    continue  # hard floor: skip entirely for near-invisible signals
+                img = fn(img, snr_factor=snr_before) if destructive else fn(img)
+
+        # Blend-back: if cumulative augmentation degraded SNR too much, mix in original.
+        snr_after = _compute_snr_factor(img)
+        if snr_before > _ABSOLUTE_SNR_FLOOR:
+            floor = snr_before * _SNR_PRESERVATION_RATIO
+            if snr_after < floor:
+                blend = min((floor - snr_after) / floor, _MAX_BLEND_BACK)
+                img = img * (1.0 - blend) + original * blend
+
         return img
 
     return apply
 
 
-def _resolve(name: str, params: dict) -> callable:
+def _resolve(name: str, params: dict, magnitude_params: list[str] | None = None) -> callable:
     if name in _KERAS_MAP:
         cls, defaults = _KERAS_MAP[name]
         merged = {**defaults, **params}
         layer = cls(**merged)
 
-        def keras_fn(img, _layer=layer):
+        def keras_fn(img, _snr_factor=1.0, _layer=layer):
             if img.ndim == 3:
                 return _layer(img[None], training=True)[0].numpy()
             return _layer(img, training=True).numpy()
@@ -187,7 +231,9 @@ def _resolve(name: str, params: dict) -> callable:
             available = [n for n in dir(aug_mod) if n.startswith("aug_")]
             raise ValueError(f"Unknown augmentation '{name}'. Available: {available}")
 
-        def _resolve_params(_params):
+        mag_params = list(magnitude_params) if magnitude_params else []
+
+        def _resolve_params(_params, snr_factor=1.0):
             resolved = {}
             for k, v in _params.items():
                 if isinstance(v, (list, tuple)) and len(v) >= 2 and all(isinstance(e, str) for e in v):
@@ -198,20 +244,29 @@ def _resolve(name: str, params: dict) -> callable:
                     if isinstance(lo, bool) or isinstance(hi, bool):
                         resolved[k] = random.choice(v)
                     elif isinstance(lo, int) and isinstance(hi, int):
-                        resolved[k] = random.randint(lo, hi)
+                        if k in mag_params and snr_factor < 1.0:
+                            scaled_hi = int(round(lo + (hi - lo) * snr_factor))
+                            scaled_hi = max(scaled_hi, lo)
+                            resolved[k] = random.randint(lo, scaled_hi)
+                        else:
+                            resolved[k] = random.randint(lo, hi)
                     else:
-                        resolved[k] = random.uniform(float(lo), float(hi))
+                        if k in mag_params and snr_factor < 1.0:
+                            scaled_hi = float(lo) + (float(hi) - float(lo)) * snr_factor
+                            resolved[k] = random.uniform(float(lo), scaled_hi)
+                        else:
+                            resolved[k] = random.uniform(float(lo), float(hi))
                 else:
                     resolved[k] = v
             return resolved
 
-        def custom_fn(img, _fn=fn, _params=params):
+        def custom_fn(img, snr_factor=1.0, _fn=fn, _params=params):
             if img.ndim == 4:
                 return np.stack([
-                    _fn(im.astype(np.uint8), **_resolve_params(_params)).astype(np.float32)
+                    _fn(im.astype(np.uint8), **_resolve_params(_params, snr_factor)).astype(np.float32)
                     for im in img
                 ])
-            return _fn(img.astype(np.uint8), **_resolve_params(_params)).astype(np.float32)
+            return _fn(img.astype(np.uint8), **_resolve_params(_params, snr_factor)).astype(np.float32)
 
         return custom_fn
 
