@@ -1,3 +1,9 @@
+## v0.42.1 (2026-05-17)
+
+### Fix
+
+- restore snr_factor param name in keras_fn to match call-site keyword arg
+
 ## v0.42.0 (2026-05-17)
 
 ### Feat
