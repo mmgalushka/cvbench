@@ -213,7 +213,8 @@ def train(
         print(f"\n {_fmt.bold('Best weights history')}  ({_fmt.dim(metric_name)})")
         for e in best_events:
             val_str = f"{e['value']:.4f}" if e["value"] is not None else "—"
-            print(f"   epoch {_fmt.bold(f\"{e['epoch']:>4}\")}  →  {val_str}")
+            epoch_str = f"{e['epoch']:>4}"
+            print(f"   epoch {_fmt.bold(epoch_str)}  →  {val_str}")
     print(f"\n Run directory → {_fmt.dim(str(run_dir))}")
     print(_fmt.rule())
 
