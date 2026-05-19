@@ -52,7 +52,7 @@ def resolve_class_weights(
     if class_weight_cfg == "auto":
         return compute_auto_weights(class_dist, class_names)
     if isinstance(class_weight_cfg, dict):
-        return {class_names.index(cls): float(w) for cls, w in class_weight_cfg.items()}
+        return {class_names.index(cls): float(class_weight_cfg.get(cls, 1.0)) for cls in class_names}
     return None
 
 
