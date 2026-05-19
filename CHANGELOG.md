@@ -1,3 +1,20 @@
+## v0.43.0 (2026-05-19)
+
+### Feat
+
+- allow partial --class-weight dict, defaulting unspecified classes to 1.0
+- record best-weights save events to best_history.jsonl
+- support CVBENCH_URL env var for external server address
+- move export CLI command into form as live-updating alternative to Generate button
+
+### Fix
+
+- avoid backslash in f-string for Python <3.12 compatibility
+
+### Refactor
+
+- remove hidden SNR-based augmentation probability scaling
+
 ## v0.41.0 (2026-05-16)
 
 ### Feat
