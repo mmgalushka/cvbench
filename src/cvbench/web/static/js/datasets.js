@@ -1,15 +1,27 @@
 /* ── Datasets state ─────────────────────────────────────────────────────────── */
 
 const _ds = {
-  dirId:    null,
-  dataset:  null,   // full dataset object from /api/datasets
-  page:     1,
-  pageSize: 60,
-  cls:      null,
-  total:    0,
-  pages:    1,
-  classes:  [],
+  dirId:     null,
+  dataset:   null,   // full dataset object from /api/datasets
+  page:      1,
+  pageSize:  60,
+  cls:       null,
+  total:     0,
+  pages:     1,
+  classes:   [],
+  format:    'classification',
+  showBoxes: true,
 };
+
+// Per-class bounding-box colours, indexed by YOLO class id.
+const _BOX_COLORS = [
+  '#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
+  '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990',
+];
+
+function boxColor(classId) {
+  return _BOX_COLORS[((classId % _BOX_COLORS.length) + _BOX_COLORS.length) % _BOX_COLORS.length];
+}
 
 let _loadGen   = 0;    // incremented on every loadGalleryPage call; stale responses check this
 let _loadAbort = null; // AbortController for the in-flight loadGalleryPage request
@@ -50,9 +62,12 @@ function buildDatasetsList(datasets) {
       ? `#/datasets/${encodeURIComponent(defaultSplit.id)}`
       : '#/datasets';
 
+    const fmt = `<span class="badge badge-format">${ds.format === 'yolo' ? 'YOLO' : 'classification'}</span>`;
+
     return `
       <tr class="ds-row" onclick="navigate('${rowHref}')">
         <td><strong>${escHtml(ds.name)}</strong></td>
+        <td>${fmt}</td>
         <td>${ds.num_classes}</td>
         <td class="ds-splits-cell">${splitBadges || '—'}</td>
         <td class="ds-path-cell" title="${escHtml(ds.path)}">${escHtml(ds.path)}</td>
@@ -69,6 +84,7 @@ function buildDatasetsList(datasets) {
         <thead>
           <tr>
             <th>Name</th>
+            <th>Format</th>
             <th>Classes</th>
             <th>Splits</th>
             <th>Path</th>
@@ -98,7 +114,10 @@ async function showDatasetGallery(dirId) {
     }
   } catch (_) { /* optional context */ }
 
-  Object.assign(_ds, { dirId, dataset, page: 1, cls: null, total: 0, pages: 1, classes: [] });
+  Object.assign(_ds, {
+    dirId, dataset, page: 1, cls: null, total: 0, pages: 1, classes: [],
+    format: (dataset && dataset.format) || 'classification',
+  });
 
   page.innerHTML = buildGalleryShell(dataset, dirId);
   await loadGalleryPage();
@@ -131,6 +150,10 @@ function buildGalleryShell(dataset, dirId) {
       </select>
       <button class="ds-upload-btn" onclick="dsOpenUpload()">+ Add Images</button>
       <input type="file" id="ds-file-input" multiple accept="image/*" style="display:none" onchange="dsHandleUpload(this.files)">
+      <label class="ds-boxes-toggle" id="ds-boxes-toggle" style="display:none">
+        <input type="checkbox" id="ds-boxes-check" checked onchange="dsToggleBoxes(this.checked)">
+        Show boxes
+      </label>
       <span class="ds-upload-status" id="ds-upload-status"></span>
       <span class="ds-count" id="ds-count"></span>
     </div>
@@ -172,6 +195,10 @@ async function loadGalleryPage() {
   _ds.total   = data.total;
   _ds.pages   = data.pages;
   _ds.classes = data.classes;
+  _ds.format  = data.format || _ds.format;
+
+  const boxToggle = document.getElementById('ds-boxes-toggle');
+  if (boxToggle) boxToggle.style.display = _ds.format === 'yolo' ? '' : 'none';
 
   // Guard: if current page is beyond the available pages (e.g. items were deleted),
   // correct it and reload — prevents the UI from getting stuck on a non-existent page.
@@ -207,6 +234,9 @@ async function loadGalleryPage() {
     ? '<p style="grid-column:1/-1;color:var(--pico-muted-color)">No images found.</p>'
     : data.items.map(item => buildTile(item)).join('');
 
+  // Images restored from cache may not fire `load`, so fit their overlays too.
+  requestAnimationFrame(refitBoxOverlays);
+
   renderPagination();
 }
 
@@ -216,14 +246,40 @@ function buildSkeletons(n) {
   ).join('');
 }
 
+function boxSummary(boxes) {
+  if (boxes.length === 0) return 'no objects';
+  const counts = new Map();
+  boxes.forEach(b => counts.set(b.class, (counts.get(b.class) || 0) + 1));
+  return [...counts].map(([cls, n]) => (n > 1 ? `${cls} ×${n}` : cls)).join(', ');
+}
+
+function buildBoxLayer(boxes, fill) {
+  const rects = boxes.map(b => `
+    <div class="ds-box" style="left:${b.x * 100}%;top:${b.y * 100}%;
+         width:${b.w * 100}%;height:${b.h * 100}%;--ds-box-color:${boxColor(b.class_id)}">
+      <span class="ds-box-label">${escHtml(b.class)}</span>
+    </div>
+  `).join('');
+  return `<div class="ds-boxes${fill ? ' ds-boxes--fill' : ''}">${rects}</div>`;
+}
+
 function buildTile(item) {
   const imgUrl  = `/api/datasets/${encodeURIComponent(_ds.dirId)}/file/${encodeURIComponent(item.path).replace(/%2F/g, '/')}`;
-  const label   = escHtml(item.class || item.filename);
+  const boxes   = item.boxes || [];
+  const hasBox  = boxes.length > 0 || _ds.format === 'yolo';
+  const label   = escHtml(item.boxes ? boxSummary(boxes) : (item.class || item.filename));
   const safeP   = escHtml(item.path);
+  const hidden  = _ds.showBoxes ? '' : ' ds-tile--boxes-off';
+  const onClick = hasBox ? 'dsOpenTileModal(this)' : `openModal('${imgUrl}', '${safeP}')`;
   return `
-    <div class="ds-tile" data-path="${safeP}">
+    <div class="ds-tile${hidden}" data-path="${safeP}"
+         data-boxes="${escHtml(JSON.stringify(boxes))}">
       <div class="ds-tile-img-wrap">
-        <img src="${imgUrl}" loading="lazy" alt="${escHtml(item.filename)}" onclick="openModal('${imgUrl}', '${safeP}')">
+        <img src="${imgUrl}" loading="lazy" alt="${escHtml(item.filename)}"
+             class="${hasBox ? 'ds-tile-img--contain' : ''}"
+             onload="${hasBox ? 'fitBoxOverlay(this)' : ''}"
+             onclick="${onClick}">
+        ${hasBox ? buildBoxLayer(boxes, false) : ''}
         <button class="ds-delete-btn" title="Delete image" onclick="dsStartDelete(this)" data-path="${safeP}">×</button>
         <a class="ds-download-btn" href="${imgUrl}" download="${escHtml(item.filename)}" title="Download image">↓</a>
       </div>
@@ -237,6 +293,60 @@ function buildTile(item) {
       <div class="ds-tile-label" title="${escHtml(item.filename)}">${label}</div>
     </div>
   `;
+}
+
+/* ── Bounding-box overlay ────────────────────────────────────────────────────── */
+
+// Tiles are fixed squares while images are not, so the overlay has to be sized
+// to the letterboxed ("object-fit: contain") image rather than to the wrapper.
+function fitBoxOverlay(img) {
+  const layer = img.parentElement && img.parentElement.querySelector('.ds-boxes');
+  if (!layer || !img.naturalWidth || !img.naturalHeight) return;
+  const cw = img.clientWidth;
+  const ch = img.clientHeight;
+  const scale = Math.min(cw / img.naturalWidth, ch / img.naturalHeight);
+  const w = img.naturalWidth * scale;
+  const h = img.naturalHeight * scale;
+  layer.style.left   = `${(cw - w) / 2}px`;
+  layer.style.top    = `${(ch - h) / 2}px`;
+  layer.style.width  = `${w}px`;
+  layer.style.height = `${h}px`;
+}
+
+function refitBoxOverlays() {
+  document.querySelectorAll('.ds-tile-img--contain').forEach(fitBoxOverlay);
+}
+
+window.addEventListener('resize', refitBoxOverlays);
+
+function dsToggleBoxes(on) {
+  _ds.showBoxes = on;
+  document.querySelectorAll('.ds-tile').forEach(t => t.classList.toggle('ds-tile--boxes-off', !on));
+  const modal = document.getElementById('modal-content');
+  if (modal) {
+    const layer = modal.querySelector('.ds-boxes');
+    if (layer) layer.style.display = on ? '' : 'none';
+  }
+}
+
+function dsOpenTileModal(img) {
+  const tile = img.closest('.ds-tile');
+  let boxes = [];
+  try { boxes = JSON.parse(tile.dataset.boxes || '[]'); } catch (_) { /* no annotations */ }
+  const path = tile.dataset.path;
+
+  const layer = _ds.showBoxes ? buildBoxLayer(boxes, true) : '';
+  document.getElementById('modal-content').innerHTML = `
+    <div class="ds-modal-img-wrap">
+      <img src="${img.src}" alt="${escHtml(path)}">
+      ${layer}
+    </div>
+    <div class="modal-filename">
+      <span>${escHtml(path)}</span>
+      <span class="ds-modal-objects">${escHtml(boxSummary(boxes))}</span>
+    </div>
+  `;
+  document.getElementById('modal-overlay').style.display = 'flex';
 }
 
 /* ── Gallery pagination ──────────────────────────────────────────────────────── */

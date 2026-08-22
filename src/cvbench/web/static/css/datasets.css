@@ -288,3 +288,77 @@
   padding: 0 0.15rem;
   line-height: 32px;
 }
+
+/* ── Format badge ────────────────────────────────────────────────────────────── */
+
+.badge-format {
+  display: inline-block;
+  padding: 0.1em 0.5em;
+  border-radius: 9999px;
+  font-size: 0.692rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--pico-card-border-color, var(--card-border-color));
+  color: var(--pico-muted-color, var(--muted-color));
+  white-space: nowrap;
+}
+
+/* ── Bounding boxes ──────────────────────────────────────────────────────────── */
+
+.ds-tile-img--contain { object-fit: contain !important; }
+
+.ds-boxes {
+  position: absolute;
+  pointer-events: none;
+}
+.ds-boxes--fill { inset: 0; }
+
+.ds-tile--boxes-off .ds-boxes { display: none; }
+
+.ds-box {
+  position: absolute;
+  border: 1.5px solid var(--ds-box-color, #e6194b);
+  box-sizing: border-box;
+  border-radius: 1px;
+}
+
+.ds-box-label {
+  position: absolute;
+  left: -1.5px;
+  bottom: 100%;
+  padding: 0 0.25em;
+  font-size: 0.6rem;
+  line-height: 1.35;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--ds-box-color, #e6194b);
+  border-radius: 2px 2px 0 0;
+}
+
+.ds-boxes-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  font-size: 0.769rem;
+  color: var(--pico-muted-color, var(--muted-color));
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ds-boxes-toggle input {
+  margin: 0;
+  width: 1em;
+  height: 1em;
+}
+
+.ds-modal-img-wrap {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+.ds-modal-objects {
+  font-size: 0.769rem;
+  color: var(--pico-muted-color, var(--muted-color));
+}

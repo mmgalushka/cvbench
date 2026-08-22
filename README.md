@@ -131,6 +131,55 @@ docker exec -it cvbench bash
 train data/synthetic --epochs 5 --backbone efficientnet_b0
 ```
 
+#### Classification dataset
+
+```bash
+data generate data/synthetic --train 200 --val 50 --test 50
+```
+
+```
+data/synthetic/
+├── train/
+│   ├── circle/0000.jpg
+│   ├── square/0000.jpg
+│   ├── triangle/0000.jpg
+│   └── star/0000.jpg
+├── val/     (same 4 class folders)
+└── test/    (same 4 class folders)
+```
+
+- One shape per image; the class is the folder name — no label files.
+- `--train/--val/--test` count images **per class**.
+
+#### YOLO txt dataset
+
+```bash
+data generate data/synthetic_yolo --format yolo \
+    --train 200 --val 50 --test 50 --image-size 160 --max-objects 4
+```
+
+```
+data/synthetic_yolo/
+├── data.yaml                # class names + split paths
+├── images/
+│   ├── train/0000.jpg
+│   ├── val/0000.jpg
+│   └── test/0000.jpg
+└── labels/
+    ├── train/0000.txt       # one "class_id xc yc w h" line per shape, normalized
+    ├── val/0000.txt
+    └── test/0000.txt
+```
+
+- 1–`--max-objects` shapes per image (default 3), each with a bounding box.
+- `--train/--val/--test` count images **per split**, since one image can hold
+  several classes.
+- Every image has a same-named `.txt` next to it in `labels/`.
+
+The WebUI **Datasets** page reads both: it labels each dataset's format and, for
+YOLO, draws the bounding boxes over every thumbnail (*Show boxes* toggles the
+overlay, the class filter keeps only images containing a given class).
+
 ---
 
 ## Training
@@ -169,7 +218,8 @@ runs          compare    <experiment_a> <experiment_b>
 runs          best       [dir] [--metric val_accuracy|val_loss|test_accuracy]
 runs          rename     <experiment> <new-name>
 runs          export     <experiment> --format tflite|onnx|plan|hailo [--quantize none|float16|int8] [--output DIR] [--calib-total N] [--calib-strategy stratified|proportional|equal|diverse]
-data          generate   [out_dir]  [--train N] [--val N] [--test N] [--image-size N]
+data          generate   [out_dir]  [--format classification|yolo] [--train N] [--val N] [--test N]
+                                    [--image-size N] [--max-objects N] [--seed N] [--overwrite]
 data          explore    <data_dir> [--split train|val|test] [--threshold N]
 data          upsample   <src_dir> <dst_dir> --augmentation <file> --target <N>
 augmentations list
