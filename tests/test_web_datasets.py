@@ -5,7 +5,10 @@ import pytest
 from click.testing import CliRunner
 
 from cvbench.cli.generate import CLASSES, generate
-from cvbench.web.api import datasets as api
+
+pytest.importorskip("fastapi", reason="requires the 'web' extra")
+
+from cvbench.web.api import datasets as api  # noqa: E402
 
 
 @pytest.fixture
