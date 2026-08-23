@@ -10,6 +10,7 @@ from cvbench.core.config import TransformConfig
 from cvbench.core.task import DatasetSpec, Task
 from cvbench.datasets.layout import list_images, yolo_class_names
 from cvbench.detection.data import build_detection_dataset
+from cvbench.detection.losses import CenterNetLoss
 
 # The 5 geometric transforms move pixels, so they'd desynchronize an image
 # from its (untouched) boxes. The 18 custom aug_* transforms and the 3
@@ -91,9 +92,20 @@ class DetectionTask(Task):
         return kept
 
     def build_model(self, cfg):
-        raise NotImplementedError(
-            "Detection model construction lands in a follow-up step (issue #50)."
-        )
+        from cvbench.detection.model import build_model
+        return build_model(cfg)
+
+    def load_model(self, path: str):
+        # Force-imports cvbench.detection.losses (above) so
+        # register_keras_serializable can resolve "CenterNetLoss" by name —
+        # belt-and-braces, also pass it explicitly as custom_objects.
+        import warnings
+
+        import keras
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
+            return keras.saving.load_model(path, custom_objects={"CenterNetLoss": CenterNetLoss})
 
     def headline_metrics(self, final_metrics: dict) -> dict:
         # Detection has no classification accuracy; the training headline

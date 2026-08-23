@@ -46,11 +46,20 @@ def _apply_fine_tune_flags(model: keras.Model, fine_tune_from_layer: int) -> Non
     Needed when resuming with a different fine_tune_from_layer than Phase 1
     (e.g. Phase 2 unfreezes the backbone while the checkpoint still has it frozen).
     """
-    backbone = next(
-        (l for l in model.layers if isinstance(l, keras.Model) and l is not model),
-        None,
-    )
+    try:
+        backbone = model.get_layer("backbone")
+    except ValueError:
+        # Checkpoint saved before backbone layers were named "backbone" —
+        # fall back to the old isinstance scan.
+        backbone = next(
+            (l for l in model.layers if isinstance(l, keras.Model) and l is not model),
+            None,
+        )
     if backbone is None:
+        print(_fmt.yellow(
+            "⚠️  Could not locate the backbone layer to apply fine_tune_from_layer;"
+            " leaving the reloaded checkpoint's trainable flags unchanged."
+        ))
         return
     if fine_tune_from_layer == 0:
         backbone.trainable = False

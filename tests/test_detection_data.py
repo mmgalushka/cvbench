@@ -214,10 +214,13 @@ def test_detection_task_filter_transforms_drops_geometric_only():
     assert kept_names == {"keras_brightness", "aug_blur"}
 
 
-def test_detection_task_build_model_not_implemented_yet():
-    from cvbench.core.config import CVBenchConfig
+def test_detection_task_build_model_delegates_to_detection_model():
+    from cvbench.core.config import build_config
     from cvbench.tasks import get_task
 
+    cfg = build_config("data", task="detection", backbone="efficientnet_b0", input_size=64)
+    cfg.model.num_classes = 3
     task = get_task("detection")
-    with pytest.raises(NotImplementedError):
-        task.build_model(CVBenchConfig())
+    model = task.build_model(cfg)
+    G = 64 // cfg.detection.grid_stride
+    assert model.output_shape == (None, G, G, 3 + 4)
