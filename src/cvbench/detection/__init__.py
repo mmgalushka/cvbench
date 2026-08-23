@@ -113,9 +113,19 @@ class DetectionTask(Task):
         return {"val_accuracy": None, "val_loss": final_metrics.get("val_loss")}
 
     def evaluate(self, model, eval_ds, cfg, spec: DatasetSpec, run_dir, output_dir=None) -> dict:
-        raise NotImplementedError(
-            "Detection evaluation lands in a follow-up step (issue #50)."
+        from cvbench.detection.evaluator import evaluate as _evaluate
+        return _evaluate(
+            model=model,
+            test_ds=eval_ds,
+            class_names=spec.class_names,
+            run_dir=run_dir,
+            test_dir=spec.test_dir,
+            ds_root=cfg.data.data_dir,
+            conf_threshold=cfg.detection.conf_threshold,
+            iou_threshold=cfg.detection.iou_threshold,
+            max_detections=cfg.detection.max_detections,
+            output_dir=output_dir,
         )
 
     def test_score(self, report: dict) -> tuple[str, float | None]:
-        return "map50", report.get("overall", {}).get("value")
+        return "map50", report["overall"]["value"]
