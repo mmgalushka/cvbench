@@ -7,7 +7,7 @@ import numpy as np
 import tqdm
 
 from cvbench.core import _fmt
-from cvbench.core.report import write_report
+from cvbench.core.report import report_envelope, write_report
 
 _MAX_SAMPLES_PER_CELL = 20
 
@@ -126,18 +126,28 @@ def evaluate(
     paths = _collect_test_paths(test_dir, class_names)
     samples = _collect_samples(y_true, y_pred, all_preds_np, paths, class_names)
 
-    report = {
-        "split": "test",
-        "n_images": n,
-        "overall_accuracy": round(overall_acc, 4),
-        "top3_accuracy": round(top3_acc, 4) if top3_acc is not None else None,
-        "per_class": per_class,
-        "confusion_matrix": {
-            "classes": class_names,
-            "matrix": cm.tolist(),
+    rounded_top3 = round(top3_acc, 4) if top3_acc is not None else None
+    confusion_matrix = {"classes": class_names, "matrix": cm.tolist()}
+
+    report = report_envelope(
+        task="classification",
+        split="test",
+        n_images=n,
+        overall_metric="accuracy",
+        overall_value=round(overall_acc, 4),
+        overall_label="Overall Accuracy",
+        per_class=per_class,
+        samples=samples,
+        classification={
+            "top3_accuracy": rounded_top3,
+            "confusion_matrix": confusion_matrix,
         },
-        "samples": samples,
-    }
+        # Legacy top-level mirrors for readers written before the envelope
+        # existed (core/runs.py, web/api/runs.py fall back to these).
+        overall_accuracy=round(overall_acc, 4),
+        top3_accuracy=rounded_top3,
+        confusion_matrix=confusion_matrix,
+    )
 
     write_report(report, out_dir)
 

@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import signal
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import keras
 
 from cvbench.core.checkpoint import build_checkpoint_callback, load_best_history, prune_checkpoints
 from cvbench.core.config import CVBenchConfig, update_run_status
 from cvbench.core import _fmt
+
+if TYPE_CHECKING:
+    from cvbench.core.task import Task
 
 
 def _print_header(exp_dir: str, cfg: CVBenchConfig):
@@ -65,6 +69,7 @@ def train(
     val_ds,
     class_names: list[str],
     model: keras.Model,
+    task: "Task",
     resume_checkpoint: str | None = None,
     num_train_samples: int | None = None,
     class_weight: dict | None = None,
@@ -141,11 +146,6 @@ def train(
 
     # Steps per epoch (needed because train_ds uses repeat())
     import math
-    if num_train_samples is None:
-        import tensorflow as tf
-        num_train_samples = sum(1 for _ in tf.data.Dataset.list_files(
-            str(Path(cfg.data.train_dir) / "*" / "*"), shuffle=False
-        ))
     steps_per_epoch = math.ceil(num_train_samples / cfg.data.batch_size)
 
     history = model.fit(
@@ -192,10 +192,9 @@ def train(
         exp_dir,
         status="interrupted" if interrupted else "done",
         epochs_run=last_epoch,
-        val_accuracy=final_metrics.get("val_accuracy"),
-        val_loss=final_metrics.get("val_loss"),
         resumable=interrupted,
         resume_checkpoint=interrupt_ckpt,
+        **task.headline_metrics(final_metrics),
     )
 
     status_label = "interrupted" if interrupted else "complete"

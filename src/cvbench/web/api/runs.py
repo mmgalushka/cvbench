@@ -76,9 +76,20 @@ def get_run(name: str):
         with open(eval_path) as f:
             eval_report = json.load(f)
 
+    if cfg.run.test_accuracy is not None:
+        test_accuracy = cfg.run.test_accuracy
+    else:
+        report_overall = (eval_report or {}).get("overall")
+        test_accuracy = (
+            report_overall.get("value") if isinstance(report_overall, dict)
+            # Back-compat: reports written before the "overall" envelope existed.
+            else (eval_report or {}).get("overall_accuracy")
+        )
+
     return {
         "name": cfg.run.name or run_path.name,
         "dir": run_dir,
+        "task": cfg.task,
         "status": cfg.run.status,
         "date": cfg.run.date,
         "backbone": cfg.model.backbone,
@@ -87,8 +98,8 @@ def get_run(name: str):
         "epochs_run": cfg.run.epochs_run,
         "val_accuracy": cfg.run.val_accuracy,
         "val_loss": cfg.run.val_loss,
-        "test_accuracy": cfg.run.test_accuracy if cfg.run.test_accuracy is not None
-            else (eval_report or {}).get("overall_accuracy"),
+        "test_accuracy": test_accuracy,
+        "test_metric": cfg.run.test_metric,
         "resumable": cfg.run.resumable,
         "notes": cfg.run.notes,
         "cli_command": cfg.run.cli_command or "",

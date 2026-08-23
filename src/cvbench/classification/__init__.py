@@ -69,4 +69,4 @@ class ClassificationTask(Task):
         )
 
     def test_score(self, report: dict) -> tuple[str, float | None]:
-        return "accuracy", report.get("overall_accuracy")
+        return "accuracy", report["overall"]["value"]

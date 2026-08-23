@@ -1,18 +1,10 @@
 from __future__ import annotations
 
-import contextlib
-import io
-import warnings
-from pathlib import Path
-
-import keras
-
-from cvbench.classification.data import build_dataset, get_class_names
-from cvbench.classification import evaluator as _evaluator
 from cvbench.core.config import load_config, save_config
 from cvbench.core.runs import resolve_run_dir
 from cvbench.core import _fmt
 from cvbench.services._runtime import print_device_banner
+from cvbench.tasks import resolve_task
 
 
 def run_evaluation(
@@ -46,28 +38,28 @@ def run_evaluation(
     print_device_banner("evaluating")
 
     cfg = load_config(run_dir)
+    task = resolve_task(cfg)
 
-    class_names = get_class_names(cfg.data.train_dir)
-    with contextlib.redirect_stdout(io.StringIO()):
-        test_ds = build_dataset(cfg.data.test_dir, class_names, cfg, training=False)
+    spec = task.resolve_layout(cfg)
+    test_ds = task.build_eval_dataset(cfg, spec)
 
-    n_test = sum(1 for _ in Path(cfg.data.test_dir).glob("*/*"))
-    print(_fmt.dim(f" Found {n_test} files for evaluation ({len(class_names)} classes)."))
+    n_test = task.count_images(cfg.data.test_dir)
+    print(_fmt.dim(f" Found {n_test} files for evaluation ({len(spec.class_names)} classes)."))
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
-        model = keras.saving.load_model(f"{run_dir}/best.keras")
+    model = task.load_model(f"{run_dir}/best.keras")
 
-    report = _evaluator.evaluate(
+    report = task.evaluate(
         model=model,
-        test_ds=test_ds,
-        class_names=class_names,
+        eval_ds=test_ds,
+        cfg=cfg,
+        spec=spec,
         run_dir=run_dir,
-        test_dir=cfg.data.test_dir,
         output_dir=output_dir,
     )
 
-    cfg.run.test_accuracy = report["overall_accuracy"]
+    metric, value = task.test_score(report)
+    cfg.run.test_accuracy = value
+    cfg.run.test_metric = metric
     save_config(cfg, run_dir)
 
     return report

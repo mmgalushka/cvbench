@@ -103,7 +103,12 @@ def _resolve_test_accuracy(exp_dir: Path, config_value):
     if report_path.exists():
         try:
             with open(report_path) as f:
-                return json.load(f).get("overall_accuracy")
+                report = json.load(f)
+            overall = report.get("overall")
+            if isinstance(overall, dict):
+                return overall.get("value")
+            # Back-compat: reports written before the "overall" envelope existed.
+            return report.get("overall_accuracy")
         except Exception:
             pass
     return None
@@ -120,12 +125,14 @@ def _read_entry(exp_dir: Path) -> dict | None:
     return {
         "name": cfg.run.name or exp_dir.name,
         "dir": str(exp_dir),
+        "task": cfg.task,
         "backbone": cfg.model.backbone,
         "lr": cfg.training.learning_rate,
         "epochs": cfg.training.epochs,
         "val_accuracy": cfg.run.val_accuracy,
         "val_loss": cfg.run.val_loss,
         "test_accuracy": _resolve_test_accuracy(exp_dir, cfg.run.test_accuracy),
+        "test_metric": cfg.run.test_metric,
         "epochs_run": cfg.run.epochs_run,
         "status": cfg.run.status,
         "date": cfg.run.date,
