@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 # name -> (module to import, attribute holding the Task subclass)
 _TASKS: dict[str, tuple[str, str]] = {
     "classification": ("cvbench.classification", "ClassificationTask"),
+    "detection": ("cvbench.detection", "DetectionTask"),
 }
 
 TASK_NAMES: tuple[str, ...] = tuple(_TASKS)
