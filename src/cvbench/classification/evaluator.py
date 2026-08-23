@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import keras
@@ -8,7 +7,7 @@ import numpy as np
 import tqdm
 
 from cvbench.core import _fmt
-
+from cvbench.core.report import write_report
 
 _MAX_SAMPLES_PER_CELL = 20
 
@@ -75,7 +74,6 @@ def evaluate(
     Returns the report dict.
     """
     out_dir = Path(output_dir or run_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
 
     # Single pass: collect predictions, ground truth, and raw scores
     n_batches = test_ds.cardinality().numpy()
@@ -141,9 +139,7 @@ def evaluate(
         "samples": samples,
     }
 
-    report_path = out_dir / "eval_report.json"
-    with open(report_path, "w") as f:
-        json.dump(report, f, indent=2)
+    write_report(report, out_dir)
 
     _print_report(report, class_names, run_dir, out_dir, cm)
     return report

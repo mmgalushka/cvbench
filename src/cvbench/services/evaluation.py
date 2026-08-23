@@ -7,11 +7,12 @@ from pathlib import Path
 
 import keras
 
+from cvbench.classification.data import build_dataset, get_class_names
+from cvbench.classification import evaluator as _evaluator
 from cvbench.core.config import load_config, save_config
-from cvbench.core.data import build_dataset, get_class_names
 from cvbench.core.runs import resolve_run_dir
-from cvbench.core import evaluator as _evaluator
 from cvbench.core import _fmt
+from cvbench.services._runtime import print_device_banner
 
 
 def run_evaluation(
@@ -34,7 +35,6 @@ def run_evaluation(
 
     Returns the evaluation report dict (same structure written to eval_report.json).
     """
-    import platform
     import tensorflow as tf
 
     tf.get_logger().setLevel("ERROR")
@@ -43,15 +43,7 @@ def run_evaluation(
 
     run_dir = resolve_run_dir(experiment)
 
-    gpus = tf.config.list_physical_devices("GPU")
-    if gpus:
-        if platform.system() == "Darwin" and platform.machine() == "arm64":
-            print(_fmt.green(f"🟢 Apple Silicon GPU (Metal) detected — evaluating on {len(gpus)} device(s)"))
-        else:
-            names = ", ".join(g.name for g in gpus)
-            print(_fmt.green(f"🟢 GPU detected: {len(gpus)} device(s) — {names}"))
-    else:
-        print(_fmt.yellow("⚠️  GPU not available, evaluating on CPU"))
+    print_device_banner("evaluating")
 
     cfg = load_config(run_dir)
 

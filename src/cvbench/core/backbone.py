@@ -1,10 +1,14 @@
+"""Shared backbone construction — the part of the model every task reuses.
+
+Everything past the backbone (head, loss, metrics) is task-specific and lives
+in the task package (e.g. ``cvbench.classification.model``).
+"""
 from __future__ import annotations
 
 import keras
 import keras_hub
 
-from cvbench.core.config import CVBenchConfig, LossConfig, OptimizerConfig
-
+from cvbench.core.config import CVBenchConfig
 
 # Map config backbone names to keras-hub preset identifiers
 _BACKBONE_PRESETS = {
@@ -17,18 +21,7 @@ _BACKBONE_PRESETS = {
 }
 
 
-def _build_loss(loss_cfg: LossConfig) -> keras.losses.Loss:
-    if loss_cfg.type == "focal":
-        return keras.losses.CategoricalFocalCrossentropy(
-            gamma=loss_cfg.focal_gamma,
-            label_smoothing=loss_cfg.label_smoothing,
-        )
-    return keras.losses.CategoricalCrossentropy(
-        label_smoothing=loss_cfg.label_smoothing,
-    )
-
-
-def _build_optimizer(cfg: CVBenchConfig) -> keras.optimizers.Optimizer:
+def build_optimizer(cfg: CVBenchConfig) -> keras.optimizers.Optimizer:
     opt = cfg.training.optimizer
     lr = cfg.training.learning_rate
     if opt.type == "sgd":
@@ -43,14 +36,16 @@ def _build_optimizer(cfg: CVBenchConfig) -> keras.optimizers.Optimizer:
     )
 
 
-def build_model(cfg: CVBenchConfig) -> keras.Model:
-    """Build and return a compiled Keras model.
+def build_backbone_stem(cfg: CVBenchConfig):
+    """Build Input -> Rescaling -> EfficientNet backbone.
 
     Args:
         cfg: Resolved experiment config.
 
     Returns:
-        Compiled keras.Model ready for training.
+        (inputs, backbone, x): the Input tensor, the backbone sub-model (with
+        fine_tune_from_layer freeze semantics already applied), and the output
+        tensor of the backbone — the point a task-specific head attaches to.
     """
     preset = _BACKBONE_PRESETS.get(cfg.model.backbone)
     if preset is None:
@@ -84,14 +79,4 @@ def build_model(cfg: CVBenchConfig) -> keras.Model:
             layer.trainable = False
 
     x = backbone(x)
-    x = keras.layers.GlobalAveragePooling2D()(x)
-    x = keras.layers.Dropout(cfg.model.dropout)(x)
-    outputs = keras.layers.Dense(cfg.model.num_classes, activation="softmax", name="predictions")(x)
-
-    model = keras.Model(inputs=inputs, outputs=outputs)
-    model.compile(
-        optimizer=_build_optimizer(cfg),
-        loss=_build_loss(cfg.training.loss),
-        metrics=["accuracy"],
-    )
-    return model
+    return inputs, backbone, x
