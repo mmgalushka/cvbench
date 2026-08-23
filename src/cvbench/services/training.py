@@ -4,14 +4,9 @@ import sys
 from datetime import date
 
 from cvbench.core.config import build_config, save_config, LossConfig, OptimizerConfig, LRSchedulerConfig
-from cvbench.core.data import (
-    build_datasets,
-    get_class_distribution,
-    get_class_names,
-    print_imbalance_warning,
-    resolve_class_weights,
-)
+from cvbench.core.data import build_datasets, get_class_names
 from cvbench.core.model import build_model
+from cvbench.datasets.stats import get_class_distribution, print_imbalance_warning, resolve_class_weights
 from cvbench.core.runs import make_run_name, make_unique_dir, EXPERIMENTS_DIR
 from cvbench.core import trainer as _trainer
 

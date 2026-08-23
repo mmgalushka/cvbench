@@ -6,23 +6,17 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import yaml
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from cvbench.core.runs import EXPERIMENTS_DIR, scan_experiments, resolve_run_dir
 from cvbench.core.config import load_config
+from cvbench.datasets import layout as dataset_layout
 
 router = APIRouter()
 
-IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp'}
 PAGE_SIZE_DEFAULT = 60
 PAGE_SIZE_MAX = 200
-
-IMAGES_DIRNAME = 'images'
-LABELS_DIRNAME = 'labels'
-# Cap on label files scanned when class names have to be inferred without data.yaml.
-NAME_SCAN_LIMIT = 500
 
 
 def _encode_dir(path: Path) -> str:
@@ -53,79 +47,12 @@ SPLIT_NAMES = ('train', 'val', 'test')
 
 # ── YOLO datasets ───────────────────────────────────────────────────────────
 #
-# Layout produced by `data generate --format yolo`:
-#   <root>/images/<split>/<stem>.jpg
-#   <root>/labels/<split>/<stem>.txt   ("class_id xc yc w h", normalized)
-#   <root>/data.yaml                   (class names)
-
-
-def _is_yolo_dataset(data_dir: Path) -> bool:
-    return (data_dir / IMAGES_DIRNAME).is_dir() and (data_dir / LABELS_DIRNAME).is_dir()
-
-
-def _yolo_root(split_dir: Path) -> Optional[Path]:
-    """Return the dataset root if SPLIT_DIR is a YOLO split image directory."""
-    parent = split_dir.parent
-    if parent.name == IMAGES_DIRNAME and _is_yolo_dataset(parent.parent):
-        return parent.parent
-    return None
-
-
-def _yolo_label_dir(split_dir: Path, root: Path) -> Path:
-    return root / LABELS_DIRNAME / split_dir.name
-
-
-def _yolo_class_names(root: Path) -> list[str]:
-    """Class names from data.yaml, falling back to ids found in the label files."""
-    cfg_path = root / 'data.yaml'
-    if cfg_path.is_file():
-        try:
-            raw = yaml.safe_load(cfg_path.read_text()) or {}
-            names = raw.get('names')
-            if isinstance(names, dict):
-                return [str(names[k]) for k in sorted(names, key=lambda k: int(k))]
-            if isinstance(names, list):
-                return [str(n) for n in names]
-        except Exception:
-            pass
-
-    max_id = -1
-    scanned = 0
-    for label_path in sorted((root / LABELS_DIRNAME).rglob('*.txt')):
-        for cls_id, _ in _read_yolo_boxes(label_path):
-            max_id = max(max_id, cls_id)
-        scanned += 1
-        if scanned >= NAME_SCAN_LIMIT:
-            break
-    return [str(i) for i in range(max_id + 1)]
-
-
-def _read_yolo_boxes(label_path: Path) -> list[tuple[int, tuple[float, float, float, float]]]:
-    """Parse a YOLO txt file into ``(class_id, (x, y, w, h))`` with top-left origin."""
-    if not label_path.is_file():
-        return []
-    boxes = []
-    try:
-        lines = label_path.read_text().splitlines()
-    except OSError:
-        return []
-    for line in lines:
-        parts = line.split()
-        if len(parts) < 5:
-            continue
-        try:
-            cls_id = int(float(parts[0]))
-            xc, yc, w, h = (float(p) for p in parts[1:5])
-        except ValueError:
-            continue
-        x = min(max(xc - w / 2, 0.0), 1.0)
-        y = min(max(yc - h / 2, 0.0), 1.0)
-        boxes.append((cls_id, (x, y, min(w, 1.0 - x), min(h, 1.0 - y))))
-    return boxes
+# Layout rules and parsing live in cvbench.datasets.layout; this module only
+# shapes the HTTP responses on top of them.
 
 
 def _yolo_item(img_path: Path, root: Path, label_dir: Path, names: list[str]) -> dict:
-    raw = _read_yolo_boxes(label_dir / f"{img_path.stem}.txt")
+    raw = dataset_layout.read_yolo_boxes(label_dir / f"{img_path.stem}.txt")
     boxes = [
         {
             'class_id': cls_id,
@@ -145,10 +72,10 @@ def _yolo_item(img_path: Path, root: Path, label_dir: Path, names: list[str]) ->
 def _yolo_dataset_entry(data_dir: Path) -> dict:
     splits: dict[str, dict] = {}
     for split_name in SPLIT_NAMES:
-        sp = (data_dir / IMAGES_DIRNAME / split_name).resolve()
+        sp = (data_dir / 'images' / split_name).resolve()
         if sp.is_dir():
             splits[split_name] = {'id': _encode_dir(sp)}
-    classes = _yolo_class_names(data_dir)
+    classes = dataset_layout.yolo_class_names(data_dir)
     return {
         'id':          _encode_dir(data_dir),
         'name':        data_dir.name,
@@ -161,7 +88,7 @@ def _yolo_dataset_entry(data_dir: Path) -> dict:
 
 
 def _dataset_entry(data_dir: Path, classes: list[str] | None = None) -> dict:
-    if _is_yolo_dataset(data_dir):
+    if dataset_layout.is_yolo_dataset(data_dir):
         return _yolo_dataset_entry(data_dir)
 
     splits: dict[str, dict] = {}
@@ -200,7 +127,7 @@ def list_datasets():
         if not data_dir.is_dir() or str(data_dir) in seen:
             continue
 
-        if _is_yolo_dataset(data_dir):
+        if dataset_layout.is_yolo_dataset(data_dir):
             seen[str(data_dir)] = _yolo_dataset_entry(data_dir)
             continue
 
@@ -239,16 +166,13 @@ def list_datasets():
     return list(seen.values())
 
 
-def _list_yolo_images(root: Path, yolo_root: Path, cls: Optional[str],
+def _list_yolo_images(root: Path, ds_root: Path, cls: Optional[str],
                       page: int, page_size: int) -> dict:
     """Paginate a YOLO split directory, attaching annotations to every item."""
-    label_dir = _yolo_label_dir(root, yolo_root)
-    names = _yolo_class_names(yolo_root)
+    label_dir = dataset_layout.yolo_label_dir(root, ds_root)
+    names = dataset_layout.yolo_class_names(ds_root)
 
-    all_images = sorted(
-        f for f in root.rglob('*')
-        if f.is_file() and f.suffix.lower() in IMAGE_EXTS
-    )
+    all_images = dataset_layout.list_images(root)
 
     if cls:
         if cls not in names:
@@ -289,9 +213,9 @@ def list_images(
     if not root.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")
 
-    yolo_root = _yolo_root(root)
-    if yolo_root is not None:
-        return _list_yolo_images(root, yolo_root, cls, page, page_size)
+    ds_root = dataset_layout.yolo_root(root)
+    if ds_root is not None:
+        return _list_yolo_images(root, ds_root, cls, page, page_size)
 
     if cls:
         search_dir = (root / cls).resolve()
@@ -301,10 +225,7 @@ def list_images(
     else:
         search_dir = root
 
-    all_images = sorted(
-        f for f in search_dir.rglob('*')
-        if f.is_file() and f.suffix.lower() in IMAGE_EXTS
-    )
+    all_images = dataset_layout.list_images(search_dir)
 
     classes = sorted(p.name for p in root.iterdir() if p.is_dir())
 
@@ -377,7 +298,7 @@ async def upload_images(
         if not upload.filename:
             continue
         suffix = Path(upload.filename).suffix.lower()
-        if suffix not in IMAGE_EXTS:
+        if suffix not in dataset_layout.IMAGE_EXTS:
             continue
         dest = _fresh_token(suffix)
         with dest.open('wb') as f:
@@ -401,9 +322,9 @@ def delete_image(dir_id: str, path: str):
     img_path.unlink()
 
     # For YOLO splits the annotation file is worthless without its image.
-    yolo_root = _yolo_root(root)
-    if yolo_root is not None:
-        label_path = _yolo_label_dir(root, yolo_root) / f"{img_path.stem}.txt"
+    ds_root = dataset_layout.yolo_root(root)
+    if ds_root is not None:
+        label_path = dataset_layout.yolo_label_dir(root, ds_root) / f"{img_path.stem}.txt"
         if label_path.is_file():
             label_path.unlink()
 

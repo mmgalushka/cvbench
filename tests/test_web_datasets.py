@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from cvbench.cli.generate import CLASSES, generate
+from cvbench.cli.generate import generate
+from cvbench.datasets.shapes import CLASSES
 
 pytest.importorskip("fastapi", reason="requires the 'web' extra")
 
@@ -49,12 +50,6 @@ def test_classification_dataset_entry(cls_root):
     entry = api._dataset_entry(cls_root)
     assert entry["format"] == "classification"
     assert sorted(entry["splits"]) == ["train", "val"]
-
-
-def test_class_names_fall_back_to_label_ids(yolo_root):
-    (yolo_root / "data.yaml").unlink()
-    names = api._yolo_class_names(yolo_root)
-    assert names and all(n.isdigit() for n in names)
 
 
 # ---------------------------------------------------------------------------

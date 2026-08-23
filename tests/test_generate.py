@@ -5,14 +5,9 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from cvbench.cli.generate import (
-    CLASSES,
-    generate,
-    generate_detection_image,
-    random_shape,
-    shape_bbox,
-    to_yolo_line,
-)
+from cvbench.cli.generate import generate
+from cvbench.datasets.shapes import CLASSES, random_shape, shape_bbox
+from cvbench.datasets.synth import generate_detection_image, to_yolo_line
 
 
 # ---------------------------------------------------------------------------
