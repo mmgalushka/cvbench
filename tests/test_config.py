@@ -112,3 +112,113 @@ def test_update_run_status_interrupted(tmp_path):
     assert reloaded.run.status == "interrupted"
     assert reloaded.run.resumable is True
     assert reloaded.run.resume_checkpoint == "/path/to/ckpt.keras"
+
+
+# ---------------------------------------------------------------------------
+# task field
+# ---------------------------------------------------------------------------
+
+def test_build_config_defaults_to_classification_task():
+    cfg = build_config("data")
+    assert cfg.task == "classification"
+
+
+def test_build_config_task_override():
+    cfg = build_config("data", task="detection")
+    assert cfg.task == "detection"
+
+
+def test_task_round_trips(tmp_path):
+    cfg = build_config("data", task="detection")
+    save_config(cfg, str(tmp_path))
+
+    reloaded = load_config(str(tmp_path))
+    assert reloaded.task == "detection"
+
+
+def test_config_yaml_without_task_key_loads_as_classification(tmp_path):
+    # Simulates a config.yaml written before the `task` field existed.
+    (tmp_path / "config.yaml").write_text("data:\n  data_dir: data\n")
+
+    reloaded = load_config(str(tmp_path))
+    assert reloaded.task == "classification"
+
+
+def test_detection_config_round_trips(tmp_path):
+    cfg = build_config("data", task="detection")
+    cfg.detection.grid_stride = 8
+    cfg.detection.conf_threshold = 0.4
+    cfg.detection.iou_threshold = 0.6
+    cfg.detection.max_detections = 50
+    save_config(cfg, str(tmp_path))
+
+    reloaded = load_config(str(tmp_path))
+    assert reloaded.detection.grid_stride == 8
+    assert reloaded.detection.conf_threshold == 0.4
+    assert reloaded.detection.iou_threshold == 0.6
+    assert reloaded.detection.max_detections == 50
+
+
+def test_test_metric_round_trips(tmp_path):
+    cfg = build_config("data")
+    cfg.run.test_metric = "map50"
+    save_config(cfg, str(tmp_path))
+
+    reloaded = load_config(str(tmp_path))
+    assert reloaded.run.test_metric == "map50"
+
+
+def test_val_split_round_trips(tmp_path):
+    # Regression test: _dict_to_config used to silently drop val_split and
+    # val_split_explicit, so --from would reset val_split to the 0.2 default.
+    cfg = build_config("data", val_split=0.3)
+    assert cfg.data.val_split == 0.3
+    assert cfg.data.val_split_explicit is True
+    save_config(cfg, str(tmp_path))
+
+    reloaded = load_config(str(tmp_path))
+    assert reloaded.data.val_split == 0.3
+    assert reloaded.data.val_split_explicit is True
+
+
+# ---------------------------------------------------------------------------
+# Reflective round-trip: every scalar field must survive save_config/load_config.
+#
+# _dict_to_config builds each section explicitly from a raw dict and silently
+# falls back to the default for any key it forgets to read (it already lost
+# val_split/val_split_explicit this way once). This test makes that bug class
+# structurally impossible to reintroduce, for every field present today and
+# any added later — including a future task's own config section.
+# ---------------------------------------------------------------------------
+
+def _mutate_scalar_fields(obj):
+    """Set every scalar leaf field on a (possibly nested) dataclass to a value
+    distinct from its default, recursing into nested dataclasses. List/dict
+    fields are left alone — they're exercised by dedicated tests elsewhere."""
+    import dataclasses
+
+    for f in dataclasses.fields(obj):
+        value = getattr(obj, f.name)
+        if dataclasses.is_dataclass(value):
+            _mutate_scalar_fields(value)
+        elif isinstance(value, bool):
+            setattr(obj, f.name, not value)
+        elif isinstance(value, int):
+            setattr(obj, f.name, value + 1)
+        elif isinstance(value, float):
+            setattr(obj, f.name, value + 0.5)
+        elif isinstance(value, str):
+            setattr(obj, f.name, value + "_x")
+        # None, list, dict fields: left untouched.
+
+
+def test_every_scalar_field_survives_round_trip(tmp_path):
+    import dataclasses
+
+    cfg = build_config("data")
+    _mutate_scalar_fields(cfg)
+
+    save_config(cfg, str(tmp_path))
+    reloaded = load_config(str(tmp_path))
+
+    assert dataclasses.asdict(reloaded) == dataclasses.asdict(cfg)

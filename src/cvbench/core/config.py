@@ -119,6 +119,7 @@ class RunConfig:
     val_accuracy: Any = None
     val_loss: Any = None
     test_accuracy: Any = None
+    test_metric: str = "accuracy"  # label for test_accuracy: "accuracy" | "map50" | ...
     resumable: bool = False
     resume_checkpoint: Any = None
     notes: str = ""
@@ -126,11 +127,23 @@ class RunConfig:
 
 
 @dataclass
+class DetectionConfig:
+    """Detection-only settings. Present (with defaults) even for classification runs —
+    it is simply unused, the same way TrainingConfig.class_weight is unused by detection."""
+    grid_stride: int = 4          # output feature-map stride (input_size / grid_stride = G)
+    conf_threshold: float = 0.25  # minimum score for a decoded detection to count
+    iou_threshold: float = 0.5    # IoU at which a prediction counts as matching a ground truth
+    max_detections: int = 100     # top-k cap on decoded detections per image
+
+
+@dataclass
 class CVBenchConfig:
+    task: str = "classification"  # "classification" | "detection" | ...
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
+    detection: DetectionConfig = field(default_factory=DetectionConfig)
     run: RunConfig = field(default_factory=RunConfig)
 
 
@@ -165,6 +178,8 @@ def _parse_transforms(raw: list) -> list:
 def _dict_to_config(d: dict) -> CVBenchConfig:
     cfg = CVBenchConfig()
 
+    cfg.task = d.get("task", cfg.task)
+
     dt = d.get("data", {})
     cfg.data = DataConfig(
         data_dir=dt.get("data_dir", cfg.data.data_dir),
@@ -173,6 +188,8 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
         test_dir=dt.get("test_dir", cfg.data.test_dir),
         classes=dt.get("classes", cfg.data.classes),
         batch_size=dt.get("batch_size", cfg.data.batch_size),
+        val_split=dt.get("val_split", cfg.data.val_split),
+        val_split_explicit=dt.get("val_split_explicit", cfg.data.val_split_explicit),
     )
 
     m = d.get("model", {})
@@ -231,6 +248,14 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
         ),
     )
 
+    det = d.get("detection", {})
+    cfg.detection = DetectionConfig(
+        grid_stride=det.get("grid_stride", cfg.detection.grid_stride),
+        conf_threshold=det.get("conf_threshold", cfg.detection.conf_threshold),
+        iou_threshold=det.get("iou_threshold", cfg.detection.iou_threshold),
+        max_detections=det.get("max_detections", cfg.detection.max_detections),
+    )
+
     r = d.get("run", {})
     cfg.run = RunConfig(
         name=r.get("name", cfg.run.name),
@@ -240,6 +265,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
         val_accuracy=r.get("val_accuracy", cfg.run.val_accuracy),
         val_loss=r.get("val_loss", cfg.run.val_loss),
         test_accuracy=r.get("test_accuracy", cfg.run.test_accuracy),
+        test_metric=r.get("test_metric", cfg.run.test_metric),
         resumable=r.get("resumable", cfg.run.resumable),
         resume_checkpoint=r.get("resume_checkpoint", cfg.run.resume_checkpoint),
         notes=r.get("notes", cfg.run.notes),
@@ -256,6 +282,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
 def build_config(
     data_dir: str,
     from_dir: str | None = None,
+    task: str | None = None,
     backbone: str | None = None,
     weights: str | None = None,
     epochs: int | None = None,
@@ -287,6 +314,8 @@ def build_config(
     cfg.data.val_dir = str(Path(data_dir) / "val")
     cfg.data.test_dir = str(Path(data_dir) / "test")
 
+    if task is not None:
+        cfg.task = task
     if backbone is not None:
         cfg.model.backbone = backbone
     if weights is not None:
