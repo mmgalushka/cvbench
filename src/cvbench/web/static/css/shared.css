@@ -280,3 +280,94 @@ body { margin: 0; }
   color: var(--pico-muted-color, #888);
   word-break: break-all;
 }
+
+/* ── Bounding-box overlay ──────────────────────────────────────────────────────
+   Shared by the dataset gallery (datasets.js) and the detection Evaluation
+   tab's sample gallery (experiments.js) — one overlay, drawn over an
+   `object-fit: contain` image via fitBoxOverlay()/refitBoxOverlays(). */
+
+.ds-boxes {
+  position: absolute;
+  pointer-events: none;
+}
+.ds-boxes--fill { inset: 0; }
+
+.ds-box {
+  position: absolute;
+  border: 1.5px solid var(--ds-box-color, #e6194b);
+  box-sizing: border-box;
+  border-radius: 1px;
+}
+
+/* Prediction boxes (vs. ground truth) render dashed, so the two are
+   distinguishable when overlaid on the same image. */
+.ds-box--pred {
+  border-style: dashed;
+}
+
+.ds-box-label {
+  position: absolute;
+  left: -1.5px;
+  bottom: 100%;
+  padding: 0 0.25em;
+  font-size: 0.6rem;
+  line-height: 1.35;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--ds-box-color, #e6194b);
+  border-radius: 2px 2px 0 0;
+}
+
+.ds-metric-label {
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 400;
+}
+
+/* ── Error-bucket chips (detection Evaluation tab) ────────────────────────────── */
+
+.bucket-chips {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0 1rem;
+}
+
+.bucket-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.35em 0.9em;
+  border-radius: 9999px;
+  border: 1px solid var(--pico-card-border-color, var(--card-border-color));
+  background: var(--pico-card-background-color, transparent);
+  /* Pico's default <button> styling is white-on-color; override explicitly
+     or the chip's own (unset) text falls back to that white and disappears
+     against this light/transparent background. */
+  color: var(--pico-color, inherit);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bucket-chip .bucket-chip-count {
+  font-weight: 700;
+}
+
+.bucket-chip--tp        { border-color: #22c55e; color: #15803d; }
+.bucket-chip--fp        { border-color: #ef4444; color: #b91c1c; }
+.bucket-chip--fn        { border-color: #f59e0b; color: #b45309; }
+.bucket-chip--confusion { border-color: #a855f7; color: #7e22ce; }
+
+[data-theme="dark"] .bucket-chip--tp        { color: #81c995; }
+[data-theme="dark"] .bucket-chip--fp        { color: #f48a8a; }
+[data-theme="dark"] .bucket-chip--fn        { color: #f5a623; }
+[data-theme="dark"] .bucket-chip--confusion { color: #d8a8f5; }
+
+.bucket-chip.active {
+  color: #fff;
+}
+.bucket-chip--tp.active        { background: #22c55e; }
+.bucket-chip--fp.active        { background: #ef4444; }
+.bucket-chip--fn.active        { background: #f59e0b; }
+.bucket-chip--confusion.active { background: #a855f7; }

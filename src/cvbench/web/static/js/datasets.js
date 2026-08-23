@@ -13,15 +13,8 @@ const _ds = {
   showBoxes: true,
 };
 
-// Per-class bounding-box colours, indexed by YOLO class id.
-const _BOX_COLORS = [
-  '#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
-  '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990',
-];
-
-function boxColor(classId) {
-  return _BOX_COLORS[((classId % _BOX_COLORS.length) + _BOX_COLORS.length) % _BOX_COLORS.length];
-}
+// boxColor()/buildBoxLayer()/fitBoxOverlay()/refitBoxOverlays() live in
+// shared.js — this gallery and the detection Evaluation tab share one overlay.
 
 let _loadGen   = 0;    // incremented on every loadGalleryPage call; stale responses check this
 let _loadAbort = null; // AbortController for the in-flight loadGalleryPage request
@@ -253,16 +246,6 @@ function boxSummary(boxes) {
   return [...counts].map(([cls, n]) => (n > 1 ? `${cls} ×${n}` : cls)).join(', ');
 }
 
-function buildBoxLayer(boxes, fill) {
-  const rects = boxes.map(b => `
-    <div class="ds-box" style="left:${b.x * 100}%;top:${b.y * 100}%;
-         width:${b.w * 100}%;height:${b.h * 100}%;--ds-box-color:${boxColor(b.class_id)}">
-      <span class="ds-box-label">${escHtml(b.class)}</span>
-    </div>
-  `).join('');
-  return `<div class="ds-boxes${fill ? ' ds-boxes--fill' : ''}">${rects}</div>`;
-}
-
 function buildTile(item) {
   const imgUrl  = `/api/datasets/${encodeURIComponent(_ds.dirId)}/file/${encodeURIComponent(item.path).replace(/%2F/g, '/')}`;
   const boxes   = item.boxes || [];
@@ -294,30 +277,6 @@ function buildTile(item) {
     </div>
   `;
 }
-
-/* ── Bounding-box overlay ────────────────────────────────────────────────────── */
-
-// Tiles are fixed squares while images are not, so the overlay has to be sized
-// to the letterboxed ("object-fit: contain") image rather than to the wrapper.
-function fitBoxOverlay(img) {
-  const layer = img.parentElement && img.parentElement.querySelector('.ds-boxes');
-  if (!layer || !img.naturalWidth || !img.naturalHeight) return;
-  const cw = img.clientWidth;
-  const ch = img.clientHeight;
-  const scale = Math.min(cw / img.naturalWidth, ch / img.naturalHeight);
-  const w = img.naturalWidth * scale;
-  const h = img.naturalHeight * scale;
-  layer.style.left   = `${(cw - w) / 2}px`;
-  layer.style.top    = `${(ch - h) / 2}px`;
-  layer.style.width  = `${w}px`;
-  layer.style.height = `${h}px`;
-}
-
-function refitBoxOverlays() {
-  document.querySelectorAll('.ds-tile-img--contain').forEach(fitBoxOverlay);
-}
-
-window.addEventListener('resize', refitBoxOverlays);
 
 function dsToggleBoxes(on) {
   _ds.showBoxes = on;

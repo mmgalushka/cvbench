@@ -162,13 +162,16 @@ def compute_detection_metrics(
     }
 
 
-def _box_dict(class_id: int, class_names: list[str], box: Box) -> dict:
+def _box_dict(class_id: int, class_names: list[str], box: Box, confidence: float | None = None) -> dict:
     x, y, w, h = box
-    return {
+    d = {
         "class_id": class_id,
         "class": class_names[class_id] if 0 <= class_id < len(class_names) else str(class_id),
         "x": x, "y": y, "w": w, "h": h,
     }
+    if confidence is not None:
+        d["confidence"] = round(confidence, 4)
+    return d
 
 
 def bucket_samples(
@@ -214,7 +217,8 @@ def bucket_samples(
                 kind = "tp" if gts[best_j]["class_id"] == d["class_id"] else "confusion"
             else:
                 kind = "fp"
-            _add_sample(kind, path, gt_dicts, [_box_dict(d["class_id"], class_names, d["box"])])
+            _add_sample(kind, path, gt_dicts,
+                        [_box_dict(d["class_id"], class_names, d["box"], confidence=d["confidence"])])
 
         for j, g in enumerate(gts):
             if not claimed[j]:

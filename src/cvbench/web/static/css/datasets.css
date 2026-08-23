@@ -304,37 +304,12 @@
 }
 
 /* ── Bounding boxes ──────────────────────────────────────────────────────────── */
+/* Box-drawing rules (.ds-box, .ds-boxes, .ds-box-label) live in shared.css —
+   the Evaluation tab's detection gallery reuses the same overlay. */
 
 .ds-tile-img--contain { object-fit: contain !important; }
 
-.ds-boxes {
-  position: absolute;
-  pointer-events: none;
-}
-.ds-boxes--fill { inset: 0; }
-
 .ds-tile--boxes-off .ds-boxes { display: none; }
-
-.ds-box {
-  position: absolute;
-  border: 1.5px solid var(--ds-box-color, #e6194b);
-  box-sizing: border-box;
-  border-radius: 1px;
-}
-
-.ds-box-label {
-  position: absolute;
-  left: -1.5px;
-  bottom: 100%;
-  padding: 0 0.25em;
-  font-size: 0.6rem;
-  line-height: 1.35;
-  font-weight: 600;
-  white-space: nowrap;
-  color: #fff;
-  background: var(--ds-box-color, #e6194b);
-  border-radius: 2px 2px 0 0;
-}
 
 .ds-boxes-toggle {
   display: flex;

@@ -35,17 +35,27 @@ function buildRunsList(runs) {
     `;
   }
 
-  const rows = runs.map(r => `
+  // "Test" column header/value adapt per row's own test_metric, since the
+  // list can mix classification (accuracy) and detection (mAP@50) runs.
+  const rows = runs.map(r => {
+    const testLabel = r.test_metric && r.test_metric !== 'accuracy'
+      ? (r.test_metric === 'map50' ? 'mAP@50' : r.test_metric)
+      : null;
+    const testCell = r.test_accuracy != null
+      ? (r.test_accuracy * 100).toFixed(1) + '%' + (testLabel ? ` <small class="ds-metric-label">${testLabel}</small>` : '')
+      : '—';
+    return `
     <tr onclick="navigate('#/runs/${encodeURIComponent(r.name)}')">
       <td><strong>${r.name}</strong></td>
       <td>${r.backbone}</td>
       <td>${r.date || '—'}</td>
       <td><span class="badge badge-${r.status}">${r.status}</span></td>
       <td>${r.val_accuracy != null ? (r.val_accuracy * 100).toFixed(1) + '%' : '—'}</td>
-      <td>${r.test_accuracy != null ? (r.test_accuracy * 100).toFixed(1) + '%' : '—'}</td>
+      <td>${testCell}</td>
       <td>${r.epochs_run} / ${r.epochs}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
   return `
     <div class="page-header"><h2>Experiments <small style="font-size:0.85rem;font-weight:400;color:var(--muted-color)">${runs.length} run${runs.length !== 1 ? 's' : ''}</small></h2></div>
@@ -54,7 +64,7 @@ function buildRunsList(runs) {
         <thead>
           <tr>
             <th>Name</th><th>Backbone</th><th>Date</th><th>Status</th>
-            <th>Val Acc</th><th>Test Acc</th><th>Epochs</th>
+            <th>Val Acc</th><th>Test</th><th>Epochs</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -79,13 +89,37 @@ async function showRunDetail(name) {
   }
 }
 
+function isDetectionRun(run) {
+  return run.task === 'detection';
+}
+
+// Label + value for a run's primary test-score metric card, whatever the
+// task — "Test Accuracy" for classification, "Test mAP@50" (etc.) for
+// anything with its own test_metric.
+function testScoreCard(run) {
+  const label = run.test_metric && run.test_metric !== 'accuracy'
+    ? `Test ${run.test_metric === 'map50' ? 'mAP@50' : run.test_metric}`
+    : 'Test Accuracy';
+  return card(label, fmtAcc(run.test_accuracy));
+}
+
 function buildRunDetail(run) {
   const hasEval = run.eval_report != null;
+  const detection = isDetectionRun(run);
+
+  // Detection has no classification accuracy — the training headline stays
+  // val_loss, with mAP surfaced as the post-hoc test score instead.
+  const primaryCards = detection
+    ? `${card('Val Loss', run.val_loss != null ? run.val_loss.toFixed(4) : '—')}
+       ${testScoreCard(run)}`
+    : `${card('Val Accuracy', fmtAcc(run.val_accuracy))}
+       ${testScoreCard(run)}`;
+
   return `
     <div class="page-header">
       <div>
         <a href="#/" class="back-link" onclick="setActive('nav-runs')">← Experiments</a>
-        <h2>${run.name} <span class="badge badge-${run.status}">${run.status}</span></h2>
+        <h2>${run.name} <span class="badge badge-${run.status}">${run.status}</span>${detection ? ' <span class="badge badge-format">detection</span>' : ''}</h2>
       </div>
       <div class="run-actions-menu" id="run-actions-menu">
         <button class="run-actions-trigger" onclick="toggleRunMenu(event)" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
@@ -97,8 +131,7 @@ function buildRunDetail(run) {
     </div>
 
     <div class="metric-cards">
-      ${card('Val Accuracy',  fmtAcc(run.val_accuracy))}
-      ${card('Test Accuracy', fmtAcc(run.test_accuracy))}
+      ${primaryCards}
       ${card('Backbone',      run.backbone)}
       ${card('Epochs',        run.epochs_run + ' / ' + run.epochs)}
       ${card('Learning Rate', run.lr)}
@@ -211,31 +244,40 @@ function renderChart(run) {
   const ctx = document.getElementById('training-chart');
   if (!ctx) return;
 
+  // Detection's training_log has no accuracy/val_accuracy columns (the model
+  // isn't compiled with an "accuracy" metric) — fall back to a loss-only chart.
+  const hasAccuracy = run.training_log[0].accuracy !== undefined;
+
   const labels   = run.training_log.map(r => `Ep ${r.epoch + 1}`);
-  const trainAcc = run.training_log.map(r => +(r.accuracy   * 100).toFixed(2));
-  const valAcc   = run.training_log.map(r => +(r.val_accuracy * 100).toFixed(2));
   const trainLoss= run.training_log.map(r => +r.loss.toFixed(4));
   const valLoss  = run.training_log.map(r => +r.val_loss.toFixed(4));
 
+  const datasets = [
+    { label: 'Train Loss', data: trainLoss, borderColor: '#a78bfa', backgroundColor: 'transparent', yAxisID: 'yLoss', tension: 0.3, borderDash: hasAccuracy ? [5,3] : [] },
+    { label: 'Val Loss',   data: valLoss,   borderColor: '#4ade80', backgroundColor: 'transparent', yAxisID: 'yLoss', tension: 0.3, borderDash: hasAccuracy ? [5,3] : [] },
+  ];
+  const scales = {
+    yLoss: { type: 'linear', position: hasAccuracy ? 'right' : 'left', title: { display: true, text: 'Loss' }, grid: { drawOnChartArea: !hasAccuracy } },
+  };
+
+  if (hasAccuracy) {
+    const trainAcc = run.training_log.map(r => +(r.accuracy   * 100).toFixed(2));
+    const valAcc   = run.training_log.map(r => +(r.val_accuracy * 100).toFixed(2));
+    datasets.unshift(
+      { label: 'Train Acc', data: trainAcc, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.07)', yAxisID: 'yAcc', tension: 0.3, fill: true },
+      { label: 'Val Acc',   data: valAcc,   borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.07)',  yAxisID: 'yAcc', tension: 0.3, fill: true },
+    );
+    scales.yAcc = { type: 'linear', position: 'left', title: { display: true, text: 'Accuracy (%)' }, min: 0, max: 100 };
+  }
+
   chartInstance = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels,
-      datasets: [
-        { label: 'Train Acc',  data: trainAcc,  borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.07)', yAxisID: 'yAcc', tension: 0.3, fill: true },
-        { label: 'Val Acc',    data: valAcc,    borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.07)',  yAxisID: 'yAcc', tension: 0.3, fill: true },
-        { label: 'Train Loss', data: trainLoss, borderColor: '#a78bfa', backgroundColor: 'transparent',           yAxisID: 'yLoss', tension: 0.3, borderDash: [5,3] },
-        { label: 'Val Loss',   data: valLoss,   borderColor: '#4ade80', backgroundColor: 'transparent',           yAxisID: 'yLoss', tension: 0.3, borderDash: [5,3] },
-      ],
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
       plugins: { legend: { position: 'top' } },
-      scales: {
-        yAcc:  { type: 'linear', position: 'left',  title: { display: true, text: 'Accuracy (%)' }, min: 0, max: 100 },
-        yLoss: { type: 'linear', position: 'right', title: { display: true, text: 'Loss' }, grid: { drawOnChartArea: false } },
-      },
+      scales,
     },
   });
 }
@@ -246,6 +288,10 @@ function buildEvalTab(run) {
   const report = run.eval_report;
   if (!report) return '<p class="error-msg">No evaluation report. Run <kbd>evaluate</kbd> first.</p>';
 
+  return report.task === 'detection' ? buildDetectionEvalTab(run, report) : buildClassificationEvalTab(run, report);
+}
+
+function buildClassificationEvalTab(run, report) {
   const classes = Object.keys(report.per_class);
   const perClassRows = classes.map(cls => {
     const m = report.per_class[cls];
@@ -286,6 +332,120 @@ function buildEvalTab(run) {
       <div id="gallery-panel" class="gallery-panel" style="display:none"></div>
     </div>
   `;
+}
+
+/* ── Detection Evaluation tab ──────────────────────────────────────────────── */
+//
+// Detection has no confusion matrix (there's no fixed N×N class grid the way
+// classification has); instead the same report.samples array — bucketed
+// server-side into tp/fp/fn/confusion — drives a set of clickable chips that
+// filter a gallery of GT-vs-prediction box overlays (solid vs dashed, via the
+// shared buildBoxLayer()/fitBoxOverlay() from shared.js).
+
+const _BUCKET_LABELS = {
+  tp: 'True Positive', fp: 'False Positive', fn: 'False Negative', confusion: 'Class Confusion',
+};
+
+function buildDetectionEvalTab(run, report) {
+  const classes = Object.keys(report.per_class);
+  const det = report.detection || {};
+  const counts = det.counts || { tp: 0, fp: 0, fn: 0 };
+  const confusionCount = (report.samples || []).filter(s => s.bucket === 'confusion').length;
+
+  const perClassRows = classes.map(cls => {
+    const m = report.per_class[cls];
+    const apStr = m.ap != null ? (m.ap * 100).toFixed(1) + '%' : 'n/a';
+    return `
+      <tr>
+        <td>${cls}</td>
+        <td>${apStr}</td>
+        <td>${(m.precision * 100).toFixed(1)}%</td>
+        <td>${(m.recall    * 100).toFixed(1)}%</td>
+        <td>${m.support}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const bucketCounts = { tp: counts.tp, fp: counts.fp, fn: counts.fn, confusion: confusionCount };
+  const chips = Object.entries(_BUCKET_LABELS).map(([bucket, label]) => `
+    <button class="bucket-chip bucket-chip--${bucket}" id="bucket-chip-${bucket}"
+            onclick="showDetectionGallery('${bucket}')">
+      ${label} <span class="bucket-chip-count">${bucketCounts[bucket]}</span>
+    </button>
+  `).join('');
+
+  return `
+    <div class="metric-cards">
+      ${card('mAP@50',      fmtAcc(report.overall.value))}
+      ${card('Test Images', report.n_images)}
+      ${card('Classes',     classes.length)}
+      ${card('conf ≥ / IoU ≥', `${det.conf_threshold} / ${det.iou_threshold}`)}
+    </div>
+
+    <article class="eval-table-card">
+      <h4>Per-Class Metrics</h4>
+      <div class="overflow-x">
+        <table>
+          <thead><tr><th>Class</th><th>AP</th><th>Precision</th><th>Recall</th><th>Support</th></tr></thead>
+          <tbody>${perClassRows}</tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="cm-card">
+      <h4>Detections <small class="cm-hint">— click a chip to browse images</small></h4>
+      <div class="bucket-chips">${chips}</div>
+      <div id="gallery-panel" class="gallery-panel" style="display:none"></div>
+    </article>
+  `;
+}
+
+function showDetectionGallery(bucket) {
+  document.querySelectorAll('.bucket-chip').forEach(c => c.classList.toggle('active', c.id === `bucket-chip-${bucket}`));
+
+  const panel = document.getElementById('gallery-panel');
+  if (!panel) return;
+
+  const samples = (currentRun.eval_report.samples || []).filter(s => s.bucket === bucket);
+  const label = `<strong>${_BUCKET_LABELS[bucket]}</strong> (${samples.length}${samples.length >= 20 ? '+' : ''})`;
+
+  let body;
+  if (samples.length === 0) {
+    body = `<p class="gallery-empty">No sample images stored for this bucket.</p>`;
+  } else {
+    const runName = currentRun.name;
+    const thumbs = samples.map(s => {
+      const imgSrc = `/api/runs/${encodeURIComponent(runName)}/images/${imgPath(s.path)}`;
+      const overlayBoxes = [
+        ...(s.gt || []),
+        ...(s.pred || []).map(b => ({ ...b, variant: 'pred' })),
+      ];
+      return `
+        <figure class="gallery-thumb">
+          <div class="thumb-img-wrap ds-modal-img-wrap" style="height:130px">
+            <img class="thumb-original ds-tile-img--contain" src="${imgSrc}" alt="${escHtml(s.path)}" loading="lazy"
+                 style="width:100%;height:100%"
+                 onload="fitBoxOverlay(this)"
+                 onclick="openModal('${imgSrc}', '${escHtml(s.path)}')" />
+            ${buildBoxLayer(overlayBoxes, false)}
+          </div>
+          <figcaption><span>${escHtml(s.path.split('/').pop())}</span></figcaption>
+        </figure>
+      `;
+    }).join('');
+    body = `<div class="gallery-grid">${thumbs}</div>`;
+  }
+
+  panel.innerHTML = `
+    <div class="gallery-header">
+      <h5>${label}</h5>
+      <button class="outline" style="padding:0.2rem 0.6rem;font-size:0.8rem"
+              onclick="document.getElementById('gallery-panel').style.display='none';document.querySelectorAll('.bucket-chip').forEach(c=>c.classList.remove('active'))">✕</button>
+    </div>
+    ${body}
+  `;
+  panel.style.display = 'block';
+  requestAnimationFrame(refitBoxOverlays);
 }
 
 /* ── Confusion matrix ──────────────────────────────────────────────────────── */
