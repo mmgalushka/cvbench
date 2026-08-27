@@ -27,6 +27,7 @@ class DataConfig:
 @dataclass
 class ModelConfig:
     backbone: str = "efficientnet_b0"
+    backbone_explicit: bool = False  # True when --backbone was passed explicitly by the user
     weights: str = "imagenet"  # "imagenet" | "none"
     input_size: int = 224
     num_classes: int = 0
@@ -130,7 +131,14 @@ class RunConfig:
 class DetectionConfig:
     """Detection-only settings. Present (with defaults) even for classification runs —
     it is simply unused, the same way TrainingConfig.class_weight is unused by detection."""
-    grid_stride: int = 4          # output feature-map stride (input_size / grid_stride = G)
+    strides: list = field(default_factory=lambda: [16, 32])  # output strides of the YOLO heads
+    anchors: list = field(default_factory=list)  # resolved once (see detection/anchors.py),
+    # then persisted here — [[ [w, h] x anchors_per_scale ] x len(strides)], smallest-area
+    # anchors first (assigned to the smallest stride).
+    anchors_per_scale: int = 3
+    ignore_iou_threshold: float = 0.5  # non-assigned anchors overlapping a GT above this are
+    # excluded from the objectness loss entirely (neither positive nor negative)
+    noobj_weight: float = 0.5     # objectness loss weight on negative (non-object) cells
     conf_threshold: float = 0.25  # minimum score for a decoded detection to count
     iou_threshold: float = 0.5    # IoU at which a prediction counts as matching a ground truth
     max_detections: int = 100     # top-k cap on decoded detections per image
@@ -195,6 +203,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
     m = d.get("model", {})
     cfg.model = ModelConfig(
         backbone=m.get("backbone", cfg.model.backbone),
+        backbone_explicit=m.get("backbone_explicit", cfg.model.backbone_explicit),
         weights=m.get("weights", cfg.model.weights),
         input_size=m.get("input_size", cfg.model.input_size),
         num_classes=m.get("num_classes", cfg.model.num_classes),
@@ -250,7 +259,11 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
 
     det = d.get("detection", {})
     cfg.detection = DetectionConfig(
-        grid_stride=det.get("grid_stride", cfg.detection.grid_stride),
+        strides=det.get("strides", cfg.detection.strides),
+        anchors=det.get("anchors", cfg.detection.anchors),
+        anchors_per_scale=det.get("anchors_per_scale", cfg.detection.anchors_per_scale),
+        ignore_iou_threshold=det.get("ignore_iou_threshold", cfg.detection.ignore_iou_threshold),
+        noobj_weight=det.get("noobj_weight", cfg.detection.noobj_weight),
         conf_threshold=det.get("conf_threshold", cfg.detection.conf_threshold),
         iou_threshold=det.get("iou_threshold", cfg.detection.iou_threshold),
         max_detections=det.get("max_detections", cfg.detection.max_detections),
@@ -318,6 +331,7 @@ def build_config(
         cfg.task = task
     if backbone is not None:
         cfg.model.backbone = backbone
+        cfg.model.backbone_explicit = True
     if weights is not None:
         cfg.model.weights = weights
     if epochs is not None:

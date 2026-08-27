@@ -146,14 +146,22 @@ def test_config_yaml_without_task_key_loads_as_classification(tmp_path):
 
 def test_detection_config_round_trips(tmp_path):
     cfg = build_config("data", task="detection")
-    cfg.detection.grid_stride = 8
+    cfg.detection.strides = [8, 16]
+    cfg.detection.anchors = [[[0.1, 0.1], [0.2, 0.2]], [[0.4, 0.4], [0.6, 0.6]]]
+    cfg.detection.anchors_per_scale = 2
+    cfg.detection.ignore_iou_threshold = 0.4
+    cfg.detection.noobj_weight = 0.3
     cfg.detection.conf_threshold = 0.4
     cfg.detection.iou_threshold = 0.6
     cfg.detection.max_detections = 50
     save_config(cfg, str(tmp_path))
 
     reloaded = load_config(str(tmp_path))
-    assert reloaded.detection.grid_stride == 8
+    assert reloaded.detection.strides == [8, 16]
+    assert reloaded.detection.anchors == [[[0.1, 0.1], [0.2, 0.2]], [[0.4, 0.4], [0.6, 0.6]]]
+    assert reloaded.detection.anchors_per_scale == 2
+    assert reloaded.detection.ignore_iou_threshold == 0.4
+    assert reloaded.detection.noobj_weight == 0.3
     assert reloaded.detection.conf_threshold == 0.4
     assert reloaded.detection.iou_threshold == 0.6
     assert reloaded.detection.max_detections == 50

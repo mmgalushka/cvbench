@@ -11,14 +11,19 @@ import keras_hub
 
 from cvbench.core.config import CVBenchConfig
 
-# Map config backbone names to keras-hub preset identifiers
+# Map config backbone names to (keras-hub backbone class, preset identifier).
+# EfficientNet uses Swish/SiLU activations, which are known to quantize
+# poorly to INT8 (see hailo-quantization backlog) — the resnet_* entries are
+# pure-ReLU alternatives for tasks that need a quantization-friendly graph.
 _BACKBONE_PRESETS = {
-    "efficientnet_b0": "efficientnet_b0_ra_imagenet",
-    "efficientnet_b1": "efficientnet_b1_ft_imagenet",
-    "efficientnet_b2": "efficientnet_b2_ra_imagenet",
-    "efficientnet_b3": "efficientnet_b3_ra2_imagenet",
-    "efficientnet_b4": "efficientnet_b4_ra2_imagenet",
-    "efficientnet_b5": "efficientnet_b5_sw_imagenet",
+    "efficientnet_b0": (keras_hub.models.EfficientNetBackbone, "efficientnet_b0_ra_imagenet"),
+    "efficientnet_b1": (keras_hub.models.EfficientNetBackbone, "efficientnet_b1_ft_imagenet"),
+    "efficientnet_b2": (keras_hub.models.EfficientNetBackbone, "efficientnet_b2_ra_imagenet"),
+    "efficientnet_b3": (keras_hub.models.EfficientNetBackbone, "efficientnet_b3_ra2_imagenet"),
+    "efficientnet_b4": (keras_hub.models.EfficientNetBackbone, "efficientnet_b4_ra2_imagenet"),
+    "efficientnet_b5": (keras_hub.models.EfficientNetBackbone, "efficientnet_b5_sw_imagenet"),
+    "resnet_18": (keras_hub.models.ResNetBackbone, "resnet_18_imagenet"),
+    "resnet_50": (keras_hub.models.ResNetBackbone, "resnet_50_imagenet"),
 }
 
 # Output stride -> keras-hub pyramid_outputs key, for tasks that need a
@@ -56,16 +61,17 @@ def _apply_freeze(backbone: keras.Model, fine_tune_from_layer: int) -> None:
 
 
 def _load_backbone(cfg: CVBenchConfig, name: str | None = None) -> keras.Model:
-    preset = _BACKBONE_PRESETS.get(cfg.model.backbone)
-    if preset is None:
+    entry = _BACKBONE_PRESETS.get(cfg.model.backbone)
+    if entry is None:
         raise ValueError(
             f"Unknown backbone '{cfg.model.backbone}'. "
             f"Valid options: {', '.join(_BACKBONE_PRESETS)}"
         )
+    backbone_cls, preset = entry
     kwargs = {"load_weights": cfg.model.weights != "none"}
     if name is not None:
         kwargs["name"] = name
-    backbone = keras_hub.models.EfficientNetBackbone.from_preset(preset, **kwargs)
+    backbone = backbone_cls.from_preset(preset, **kwargs)
     _apply_freeze(backbone, cfg.model.fine_tune_from_layer)
     return backbone
 
@@ -94,28 +100,37 @@ def build_backbone_stem(cfg: CVBenchConfig):
     return inputs, backbone, x
 
 
-def build_pyramid_stem(cfg: CVBenchConfig, stride: int = 4):
-    """Build Input -> Rescaling -> EfficientNet backbone, tapped at a pyramid
-    level with the given output STRIDE, instead of the deepest feature.
+def build_pyramid_stem(cfg: CVBenchConfig, stride: int | list[int] = 4):
+    """Build Input -> Rescaling -> backbone, tapped at one or more pyramid
+    levels instead of the deepest feature.
 
-    For tasks that need spatial resolution (e.g. detection).
+    For tasks that need spatial resolution (e.g. detection). Pass a single
+    stride for one feature map, or a list of strides (e.g. ``[16, 32]`` for a
+    2-scale detection head) to tap several levels of the same backbone in one
+    pass — the backbone runs once regardless of how many levels are tapped.
 
     Args:
         cfg: Resolved experiment config.
-        stride: output stride of the returned feature map (2/4/8/16/32).
+        stride: output stride (2/4/8/16/32), or a list of them.
 
     Returns:
         (inputs, feature_extractor, feat): the Input tensor, the pyramid
         feature-extraction sub-model (named "backbone" — this, not the raw
         keras-hub backbone object, is what actually appears in the built
         model's layer graph, so it is what ``model.get_layer("backbone")``
-        finds), and the pyramid feature tensor a task-specific neck attaches to.
+        finds), and the pyramid feature tensor(s) a task-specific neck
+        attaches to — a single tensor for a scalar STRIDE, or a list of
+        tensors (same order as STRIDE) when STRIDE is a list.
     """
-    level = _PYRAMID_LEVEL_BY_STRIDE.get(stride)
-    if level is None:
-        raise ValueError(
-            f"Unsupported stride {stride}. Valid options: {sorted(_PYRAMID_LEVEL_BY_STRIDE)}"
-        )
+    strides = [stride] if isinstance(stride, int) else list(stride)
+    levels = []
+    for s in strides:
+        level = _PYRAMID_LEVEL_BY_STRIDE.get(s)
+        if level is None:
+            raise ValueError(
+                f"Unsupported stride {s}. Valid options: {sorted(_PYRAMID_LEVEL_BY_STRIDE)}"
+            )
+        levels.append(level)
 
     size = cfg.model.input_size
     inputs = keras.Input(shape=(size, size, 3), name="image")
@@ -126,14 +141,16 @@ def build_pyramid_stem(cfg: CVBenchConfig, stride: int = 4):
     # mutable per-layer attribute, and feature_extractor shares those same
     # layer objects by reference, so the freeze is visible either way.
     raw_backbone = _load_backbone(cfg)
-    if level not in raw_backbone.pyramid_outputs:
+    missing = [lvl for lvl in levels if lvl not in raw_backbone.pyramid_outputs]
+    if missing:
         raise ValueError(
-            f"Backbone '{cfg.model.backbone}' has no pyramid level {level} "
-            f"(stride {stride}). Available: {sorted(raw_backbone.pyramid_outputs)}"
+            f"Backbone '{cfg.model.backbone}' has no pyramid level(s) {missing}. "
+            f"Available: {sorted(raw_backbone.pyramid_outputs)}"
         )
+    outputs = [raw_backbone.pyramid_outputs[lvl] for lvl in levels]
     feature_extractor = keras.Model(
         inputs=raw_backbone.input,
-        outputs=raw_backbone.pyramid_outputs[level],
+        outputs=outputs if len(outputs) > 1 else outputs[0],
         name="backbone",
     )
     # feature_extractor's own container-level `.trainable` defaults to True

@@ -1,4 +1,4 @@
-"""Detection task: YOLO-layout datasets, CenterNet-style head, mAP eval.
+"""Detection task: YOLO-layout datasets, 2-scale anchor-based YOLO head, mAP eval.
 
 ``DetectionTask`` wires this package's modules to the ``Task`` interface.
 """
@@ -9,8 +9,14 @@ from pathlib import Path
 from cvbench.core.config import TransformConfig
 from cvbench.core.task import DatasetSpec, Task
 from cvbench.datasets.layout import list_images, yolo_class_names
+from cvbench.detection.anchors import resolve_anchors
 from cvbench.detection.data import build_detection_dataset
-from cvbench.detection.losses import CenterNetLoss
+from cvbench.detection.losses import YoloLoss
+
+# EfficientNet's Swish/SiLU activations are known to quantize poorly to
+# INT8 — detection defaults to a pure-ReLU backbone instead, unless the user
+# passed --backbone explicitly (classification keeps its own default).
+_DEFAULT_DETECTION_BACKBONE = "resnet_18"
 
 # The 5 geometric transforms move pixels, so they'd desynchronize an image
 # from its (untouched) boxes. The 18 custom aug_* transforms and the 3
@@ -29,6 +35,9 @@ class DetectionTask(Task):
         cfg.data.classes = class_names
         cfg.model.num_classes = len(class_names)
 
+        if not cfg.model.backbone_explicit:
+            cfg.model.backbone = _DEFAULT_DETECTION_BACKBONE
+
         train_dir = root / "images" / "train"
         val_dir = root / "images" / "val"
         test_dir = root / "images" / "test"
@@ -36,6 +45,8 @@ class DetectionTask(Task):
         cfg.data.train_dir = str(train_dir)
         cfg.data.val_dir = str(val_dir) if val_dir.is_dir() else ""
         cfg.data.test_dir = str(test_dir) if test_dir.is_dir() else ""
+
+        resolve_anchors(cfg)
 
         return DatasetSpec(
             class_names=class_names,
@@ -97,7 +108,7 @@ class DetectionTask(Task):
 
     def load_model(self, path: str):
         # Force-imports cvbench.detection.losses (above) so
-        # register_keras_serializable can resolve "CenterNetLoss" by name —
+        # register_keras_serializable can resolve "YoloLoss" by name —
         # belt-and-braces, also pass it explicitly as custom_objects.
         import warnings
 
@@ -105,7 +116,7 @@ class DetectionTask(Task):
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
-            return keras.saving.load_model(path, custom_objects={"CenterNetLoss": CenterNetLoss})
+            return keras.saving.load_model(path, custom_objects={"YoloLoss": YoloLoss})
 
     def headline_metrics(self, final_metrics: dict) -> dict:
         # Detection has no classification accuracy; the training headline
@@ -121,6 +132,8 @@ class DetectionTask(Task):
             run_dir=run_dir,
             test_dir=spec.test_dir,
             ds_root=cfg.data.data_dir,
+            anchors=cfg.detection.anchors,
+            strides=cfg.detection.strides,
             conf_threshold=cfg.detection.conf_threshold,
             iou_threshold=cfg.detection.iou_threshold,
             max_detections=cfg.detection.max_detections,

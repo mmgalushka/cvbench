@@ -24,6 +24,8 @@ def evaluate(
     run_dir: str,
     test_dir: str,
     ds_root: str,
+    anchors: list,
+    strides: list[int],
     conf_threshold: float = 0.25,
     iou_threshold: float = 0.5,
     max_detections: int = 100,
@@ -46,17 +48,21 @@ def evaluate(
     label_dir = yolo_label_dir(test_path, Path(ds_root))
     image_paths = list_images(test_path)
 
-    all_preds = []
+    # model.predict on a multi-output model returns a list of per-scale
+    # arrays — accumulate each scale separately across batches.
+    all_preds: list[list] = [[] for _ in strides]
     n_batches = test_ds.cardinality().numpy()
     total = int(n_batches) if n_batches > 0 else None
     for images, _targets in tqdm.tqdm(test_ds, total=total, desc=" Evaluating", unit="batch"):
-        all_preds.append(model.predict(images, verbose=0))
-    all_preds_np = np.concatenate(all_preds, axis=0)
+        batch_preds = model.predict(images, verbose=0)
+        for scale_preds, acc in zip(batch_preds, all_preds):
+            acc.append(scale_preds)
+    all_preds_np = [np.concatenate(scale_preds, axis=0) for scale_preds in all_preds]
 
     n = len(image_paths)
-    if len(all_preds_np) != n:
+    if len(all_preds_np[0]) != n:
         raise RuntimeError(
-            f"Decoded {len(all_preds_np)} predictions but found {n} images in {test_dir} — "
+            f"Decoded {len(all_preds_np[0])} predictions but found {n} images in {test_dir} — "
             "the eval dataset and the ground-truth file listing have gone out of sync."
         )
 
@@ -66,7 +72,9 @@ def evaluate(
     # metrics.py works with a (class_id, confidence?, (x, y, w, h)) shape
     # internally, so translate at this boundary.
     raw_predictions = decode_batch(
-        all_preds_np, num_classes, conf_threshold=_AP_DECODE_THRESHOLD, max_detections=max_detections
+        all_preds_np, num_classes, anchors, strides,
+        conf_threshold=_AP_DECODE_THRESHOLD, max_detections=max_detections,
+        nms_iou_threshold=iou_threshold,
     )
     predictions = [
         [{"class_id": d["class_id"], "confidence": d["confidence"], "box": (d["x"], d["y"], d["w"], d["h"])}
