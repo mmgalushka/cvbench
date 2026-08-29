@@ -16,9 +16,9 @@ The frontend renders the confusion matrix as a clickable grid.  When the user
 clicks a cell (true_class × predicted_class) it shows a thumbnail gallery of
 misclassified (or correctly classified) example images for that cell.
 
-The data is already in eval_report.json — cvbench.core.evaluator stores up to
-20 samples per cell in report["samples"] with: path, true_class,
-predicted_class, confidence.  See core/evaluator.py _collect_samples().
+The data is already in eval_report.json — cvbench.classification.evaluator
+stores up to 20 samples per cell in report["samples"] with: path, true_class,
+predicted_class, confidence.  See classification/evaluator.py _collect_samples().
 
 The frontend filters report["samples"] client-side by (true_class,
 predicted_class) on click, then loads thumbnails via:

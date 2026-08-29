@@ -259,16 +259,73 @@ body { margin: 0; }
   background: var(--pico-card-background-color, var(--card-background-color));
   border-radius: 10px;
   padding: 1rem;
-  max-width: 90vw;
-  max-height: 90vh;
+  max-width: 95vw;
+  max-height: 92vh;
   overflow: auto;
 }
 
 .modal-box img {
   max-width: 100%;
-  max-height: 75vh;
+  max-height: 82vh;
   border-radius: 6px;
   display: block;
+}
+
+/* Zoom modal with a box overlay: image on the left, a narrow side panel
+   (layer toggles + vertical legend + filename) on the right. */
+.ds-modal {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+.ds-modal-img-wrap--zoom {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ds-modal-img-wrap--zoom img {
+  width: min(78vw, 1100px);
+  max-width: 100%;
+  height: auto;
+  max-height: 82vh;
+  object-fit: contain;
+}
+.ds-modal-side {
+  flex: 0 0 auto;
+  width: 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.ds-modal-side-title {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pico-muted-color, var(--muted-color));
+  margin-bottom: 0.4rem;
+}
+.ds-modal-layers { display: flex; flex-direction: column; gap: 0.35rem; }
+.ds-modal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.ds-modal-toggle input { margin: 0; width: 1em; height: 1em; }
+
+.ds-modal-metrics { display: flex; flex-direction: column; gap: 0.25rem; }
+.ds-modal-metric {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+}
+.ds-modal-metric span { color: var(--pico-muted-color, var(--muted-color)); }
+
+@media (max-width: 720px) {
+  .ds-modal { flex-direction: column; }
+  .ds-modal-side { flex-direction: row; flex-wrap: wrap; width: auto; }
+  .ds-modal-img-wrap--zoom img { width: 100%; }
 }
 
 .modal-filename {
@@ -280,3 +337,135 @@ body { margin: 0; }
   color: var(--pico-muted-color, #888);
   word-break: break-all;
 }
+
+/* ── Bounding-box overlay ──────────────────────────────────────────────────────
+   Shared by the dataset gallery (datasets.js) and the detection Evaluation
+   tab's sample gallery (experiments.js) — one overlay, drawn over an
+   `object-fit: contain` image via fitBoxOverlay()/refitBoxOverlays(). */
+
+.ds-boxes {
+  position: absolute;
+  pointer-events: none;
+}
+.ds-boxes--fill { inset: 0; }
+
+.ds-box {
+  position: absolute;
+  border: 1.5px solid var(--ds-box-color, #e6194b);
+  box-sizing: border-box;
+  border-radius: 1px;
+}
+
+/* Prediction boxes (vs. ground truth) render dashed, so the two are
+   distinguishable when overlaid on the same image. */
+.ds-box--pred {
+  border-style: dashed;
+}
+
+/* Match outcome (detection Evaluation gallery) — box colour still encodes the
+   class; the outcome shows as a border style. A `background` box (missed GT or
+   spurious prediction) is drawn dotted. */
+.ds-box--m-background { border-style: dotted; }
+.ds-box--dim         { opacity: 0.25; }
+
+.ds-box-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  font-size: 0.72rem;
+  margin: 0.5rem 0 0.75rem;
+}
+.ds-box-legend--vertical {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0;
+}
+.ds-box-legend-note {
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 400;
+}
+.ds-box-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 400;
+}
+.ds-legend-swatch {
+  display: inline-block;
+  width: 1.4rem;
+  height: 0;
+  border-top: 2px solid var(--pico-muted-color, var(--muted-color));
+}
+.ds-legend-swatch--solid  { border-top-style: solid; }
+.ds-legend-swatch--dashed { border-top-style: dashed; }
+.ds-legend-swatch--dotted { border-top-style: dotted; }
+
+.det-layer-toggles {
+  display: flex;
+  gap: 1rem;
+  margin: 0.4rem 0 0.6rem;
+  font-size: 0.85rem;
+}
+.det-layer-toggles label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+.det-layer-toggles input {
+  margin: 0;
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.gallery-grid--detection {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.ds-box-label {
+  position: absolute;
+  left: -1.5px;
+  bottom: 100%;
+  padding: 0 0.25em;
+  font-size: 0.6rem;
+  line-height: 1.35;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--ds-box-color, #e6194b);
+  border-radius: 2px 2px 0 0;
+}
+
+.ds-metric-label {
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 400;
+}
+
+/* ── Detection Evaluation tab ────────────────────────────────────────────────── */
+
+/* Recall-vs-IoU strip (localization view). */
+.det-recall-sweep {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.85rem;
+}
+.det-recall-sweep strong { margin-left: 0.35em; }
+
+.metric-card-sub {
+  color: var(--pico-muted-color, var(--muted-color));
+  font-size: 0.7rem;
+}
+
+/* The trailing `background` row/column of the detection confusion matrix. */
+.cm-col-header.cm-bg-header,
+.cm-row-header.cm-bg-header {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.cm-cell--active { outline: 2px solid var(--pico-primary, #1976d2); outline-offset: -2px; }

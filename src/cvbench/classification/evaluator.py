@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import keras
@@ -8,7 +7,8 @@ import numpy as np
 import tqdm
 
 from cvbench.core import _fmt
-
+from cvbench.core._confusion import print_confusion_matrix
+from cvbench.core.report import report_envelope, write_report
 
 _MAX_SAMPLES_PER_CELL = 20
 
@@ -75,7 +75,6 @@ def evaluate(
     Returns the report dict.
     """
     out_dir = Path(output_dir or run_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
 
     # Single pass: collect predictions, ground truth, and raw scores
     n_batches = test_ds.cardinality().numpy()
@@ -128,98 +127,33 @@ def evaluate(
     paths = _collect_test_paths(test_dir, class_names)
     samples = _collect_samples(y_true, y_pred, all_preds_np, paths, class_names)
 
-    report = {
-        "split": "test",
-        "n_images": n,
-        "overall_accuracy": round(overall_acc, 4),
-        "top3_accuracy": round(top3_acc, 4) if top3_acc is not None else None,
-        "per_class": per_class,
-        "confusion_matrix": {
-            "classes": class_names,
-            "matrix": cm.tolist(),
-        },
-        "samples": samples,
-    }
+    rounded_top3 = round(top3_acc, 4) if top3_acc is not None else None
+    confusion_matrix = {"classes": class_names, "matrix": cm.tolist()}
 
-    report_path = out_dir / "eval_report.json"
-    with open(report_path, "w") as f:
-        json.dump(report, f, indent=2)
+    report = report_envelope(
+        task="classification",
+        split="test",
+        n_images=n,
+        overall_metric="accuracy",
+        overall_value=round(overall_acc, 4),
+        overall_label="Overall Accuracy",
+        per_class=per_class,
+        samples=samples,
+        classification={
+            "top3_accuracy": rounded_top3,
+            "confusion_matrix": confusion_matrix,
+        },
+        # Legacy top-level mirrors for readers written before the envelope
+        # existed (core/runs.py, web/api/runs.py fall back to these).
+        overall_accuracy=round(overall_acc, 4),
+        top3_accuracy=rounded_top3,
+        confusion_matrix=confusion_matrix,
+    )
+
+    write_report(report, out_dir)
 
     _print_report(report, class_names, run_dir, out_dir, cm)
     return report
-
-
-def _print_confusion_matrix(cm: np.ndarray, class_names: list[str]):
-    """Print a colour-coded confusion matrix to the terminal using ANSI 256 colours.
-
-    Uses the normal layout (horizontal column headers) when the matrix fits the
-    terminal width, otherwise falls back to the staircase layout where column
-    labels are right-aligned and connected by L-shaped pseudo-graphic lines.
-    """
-    import shutil
-
-    n = len(class_names)
-    label_w = max(len(cls) for cls in class_names)
-    max_val = int(cm.max()) if cm.max() > 0 else 1
-    term_w = shutil.get_terminal_size((80, 24)).columns
-
-    # ANSI 256-colour blue ramp: white → pure blue (no cyan tint)
-    # 231=#ffffff  189=#d7d7ff  147=#afafff  105=#8787ff  63=#5f5fff  21=#0000ff
-    _BLUE_RAMP = [231, 189, 147, 105, 63, 21]
-    _RESET = "\033[0m"
-
-    def _fmt_cell(val: int, is_diag: bool, cell_w: int) -> str:
-        idx = min(int(val / max_val * (len(_BLUE_RAMP) - 1)), len(_BLUE_RAMP) - 1)
-        bg = f"\033[48;5;{_BLUE_RAMP[idx]}m"
-        fg = "\033[30m" if idx < 3 else "\033[97m"
-        bold = "\033[1m" if is_diag else ""
-        return f"{bg}{fg}{bold}{val:^{cell_w}}{_RESET}"
-
-    # --- measure whether normal layout fits ---
-    num_w = len(str(max_val)) + 2
-    normal_cell_w = max(num_w, label_w)
-    row_prefix_w = 3 + label_w + 3
-    grid_w = n * normal_cell_w + (n - 1)
-    normal_fits = (row_prefix_w + grid_w) <= term_w
-
-    print(" Confusion matrix (rows = true, cols = predicted):")
-
-    if normal_fits:
-        # ── normal layout ──────────────────────────────────────────────
-        pad = " " * (label_w + 3)
-        col_header = " ".join(f"{cls:^{normal_cell_w}}" for cls in class_names)
-        print(f"   {pad}{col_header}")
-        for i, true_cls in enumerate(class_names):
-            cells = " ".join(_fmt_cell(int(cm[i, j]), i == j, normal_cell_w) for j in range(n))
-            print(f"   {true_cls:<{label_w}} | {cells}")
-    else:
-        # ── staircase layout ───────────────────────────────────────────
-        cell_w = num_w
-
-        col_offsets = [row_prefix_w + j * (cell_w + 1) + cell_w // 2
-                       for j in range(n)]
-
-        align_col = col_offsets[-1] + 3
-
-        for i, cls in enumerate(class_names):
-            line = " " * col_offsets[0]
-            for j in range(i):
-                gap = col_offsets[j + 1] - col_offsets[j] - 1
-                line += "│" + " " * gap
-            n_dashes = align_col - col_offsets[i] - 2
-            line += "┌" + "─" * n_dashes + " " + cls
-            print(line)
-
-        vert_row = ""
-        for j in range(n):
-            vert_row = vert_row.ljust(col_offsets[j]) + "│"
-        print(vert_row)
-
-        for i, true_cls in enumerate(class_names):
-            cells = " ".join(_fmt_cell(int(cm[i, j]), i == j, cell_w) for j in range(n))
-            print(f"   {true_cls:<{label_w}} | {cells}")
-
-    print()
 
 
 def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: Path,
@@ -247,7 +181,7 @@ def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: P
         print(f"   {cls:<{max_cls}}  P: {_fmt.bold(p)}  R: {_fmt.bold(r)}  F1: {_fmt.bold(f1)}  {_fmt.dim(support)}")
     print()
     if cm is not None:
-        _print_confusion_matrix(cm, class_names)
+        print_confusion_matrix(cm, class_names)
     print(f" {_fmt.bold('Saved:')}")
     print(f"   {_fmt.dim(str(out_dir / 'eval_report.json'))}")
     print(_fmt.rule())

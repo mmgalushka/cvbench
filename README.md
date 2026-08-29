@@ -205,7 +205,7 @@ docker exec cvbench tensorboard --logdir /home/cvbench/experiments --host 0.0.0.
 ## CLI reference
 
 ```
-train         <data_dir> [--epochs N] [--backbone NAME] [--lr FLOAT] [--batch-size N]
+train         <data_dir> [--epochs N] [--backbone efficientnet_b0..b5|resnet_18|resnet_50] [--lr FLOAT] [--batch-size N]
                          [--optimizer adam|sgd[:weight_decay=F][,momentum=F]]
                          [--lr-scheduler patience=N[,factor=F][,min=F]]
                          [--loss crossentropy|focal[:gamma=F][,label_smoothing=F]]

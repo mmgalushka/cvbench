@@ -89,7 +89,9 @@ def _parse_loss(value: str | None) -> LossConfig | None:
               help="Experiment output directory (default: experiments/<auto-name>/).")
 @click.option("--from", "from_dir", default=None, type=click.Path(exists=True),
               help="Load config from an existing experiment as baseline.")
-@click.option("--backbone", default=None, help="Backbone name (e.g. efficientnet_b0).")
+@click.option("--backbone", default=None,
+              help="Backbone name (efficientnet_b0..b5, resnet_18, resnet_50). "
+                   "Detection defaults to resnet_18 unless this is passed explicitly.")
 @click.option("--weights", default=None, type=click.Choice(["imagenet", "none"]),
               help="Backbone weight init: imagenet (pretrained, default) or none (random/scratch).")
 @click.option("--epochs", default=None, type=int, help="Number of training epochs.")

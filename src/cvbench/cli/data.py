@@ -10,7 +10,7 @@ import click
 import numpy as np
 
 from cvbench.cli.generate import generate
-from cvbench.core.data import get_class_distribution, print_class_distribution
+from cvbench.datasets.stats import get_class_distribution, print_class_distribution
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
 _TOKEN_LEN = 16

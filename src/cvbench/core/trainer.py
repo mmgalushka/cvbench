@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import signal
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import keras
 
 from cvbench.core.checkpoint import build_checkpoint_callback, load_best_history, prune_checkpoints
 from cvbench.core.config import CVBenchConfig, update_run_status
 from cvbench.core import _fmt
+
+if TYPE_CHECKING:
+    from cvbench.core.task import Task
 
 
 def _print_header(exp_dir: str, cfg: CVBenchConfig):
@@ -42,11 +46,20 @@ def _apply_fine_tune_flags(model: keras.Model, fine_tune_from_layer: int) -> Non
     Needed when resuming with a different fine_tune_from_layer than Phase 1
     (e.g. Phase 2 unfreezes the backbone while the checkpoint still has it frozen).
     """
-    backbone = next(
-        (l for l in model.layers if isinstance(l, keras.Model) and l is not model),
-        None,
-    )
+    try:
+        backbone = model.get_layer("backbone")
+    except ValueError:
+        # Checkpoint saved before backbone layers were named "backbone" —
+        # fall back to the old isinstance scan.
+        backbone = next(
+            (l for l in model.layers if isinstance(l, keras.Model) and l is not model),
+            None,
+        )
     if backbone is None:
+        print(_fmt.yellow(
+            "⚠️  Could not locate the backbone layer to apply fine_tune_from_layer;"
+            " leaving the reloaded checkpoint's trainable flags unchanged."
+        ))
         return
     if fine_tune_from_layer == 0:
         backbone.trainable = False
@@ -65,6 +78,7 @@ def train(
     val_ds,
     class_names: list[str],
     model: keras.Model,
+    task: "Task",
     resume_checkpoint: str | None = None,
     num_train_samples: int | None = None,
     class_weight: dict | None = None,
@@ -141,11 +155,6 @@ def train(
 
     # Steps per epoch (needed because train_ds uses repeat())
     import math
-    if num_train_samples is None:
-        import tensorflow as tf
-        num_train_samples = sum(1 for _ in tf.data.Dataset.list_files(
-            str(Path(cfg.data.train_dir) / "*" / "*"), shuffle=False
-        ))
     steps_per_epoch = math.ceil(num_train_samples / cfg.data.batch_size)
 
     history = model.fit(
@@ -192,10 +201,9 @@ def train(
         exp_dir,
         status="interrupted" if interrupted else "done",
         epochs_run=last_epoch,
-        val_accuracy=final_metrics.get("val_accuracy"),
-        val_loss=final_metrics.get("val_loss"),
         resumable=interrupted,
         resume_checkpoint=interrupt_ckpt,
+        **task.headline_metrics(final_metrics),
     )
 
     status_label = "interrupted" if interrupted else "complete"
