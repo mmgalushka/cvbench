@@ -40,11 +40,27 @@ def test_train_then_evaluate_produces_a_valid_envelope(yolo_project):
     assert report["overall"]["metric"] == "map50"
     assert isinstance(report["per_class"], dict)
     assert isinstance(report["samples"], list)
+    for s in report["samples"]:
+        assert set(s) >= {"path", "cells", "counts", "gt", "pred"}
+        assert isinstance(s["cells"], list)
+        assert all(b["match"] in {"matched", "background"} for b in s["gt"])
+        assert all("match" in b and "confidence" in b for b in s["pred"])
 
     # Detection-specific block.
     det = report["detection"]
     assert det["map50"] == report["overall"]["value"]
     assert set(det["counts"]) == {"tp", "fp", "fn"}
+
+    # Localization view.
+    assert set(det["localization"]) >= {"mean_iou", "ap50", "ap75", "recall_sweep"}
+    assert set(det["localization"]["recall_sweep"]) == {"0.5", "0.75", "0.9"}
+
+    # Classification view — (N+1)x(N+1) confusion matrix with a background class.
+    cm = det["confusion_matrix"]
+    assert cm["classes"][-1] == "background"
+    assert len(cm["classes"]) == len(report["per_class"]) + 1
+    assert len(cm["matrix"]) == len(cm["classes"])
+    assert report["confusion_matrix"] == cm  # top-level mirror for the generic UI
 
     # Persisted to disk and to config.yaml.
     from pathlib import Path

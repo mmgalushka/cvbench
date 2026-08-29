@@ -129,6 +129,10 @@
   color: var(--pico-muted-color, var(--muted-color));
 }
 
+.cm-hint--sub {
+  margin: 0.15rem 0 0.5rem;
+}
+
 /* ── Confusion matrix ──────────────────────────────────────────────────────── */
 
 .cm-wrap { overflow-x: auto; }

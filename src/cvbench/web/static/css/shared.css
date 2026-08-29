@@ -259,16 +259,73 @@ body { margin: 0; }
   background: var(--pico-card-background-color, var(--card-background-color));
   border-radius: 10px;
   padding: 1rem;
-  max-width: 90vw;
-  max-height: 90vh;
+  max-width: 95vw;
+  max-height: 92vh;
   overflow: auto;
 }
 
 .modal-box img {
   max-width: 100%;
-  max-height: 75vh;
+  max-height: 82vh;
   border-radius: 6px;
   display: block;
+}
+
+/* Zoom modal with a box overlay: image on the left, a narrow side panel
+   (layer toggles + vertical legend + filename) on the right. */
+.ds-modal {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+.ds-modal-img-wrap--zoom {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ds-modal-img-wrap--zoom img {
+  width: min(78vw, 1100px);
+  max-width: 100%;
+  height: auto;
+  max-height: 82vh;
+  object-fit: contain;
+}
+.ds-modal-side {
+  flex: 0 0 auto;
+  width: 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.ds-modal-side-title {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pico-muted-color, var(--muted-color));
+  margin-bottom: 0.4rem;
+}
+.ds-modal-layers { display: flex; flex-direction: column; gap: 0.35rem; }
+.ds-modal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.ds-modal-toggle input { margin: 0; width: 1em; height: 1em; }
+
+.ds-modal-metrics { display: flex; flex-direction: column; gap: 0.25rem; }
+.ds-modal-metric {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+}
+.ds-modal-metric span { color: var(--pico-muted-color, var(--muted-color)); }
+
+@media (max-width: 720px) {
+  .ds-modal { flex-direction: column; }
+  .ds-modal-side { flex-direction: row; flex-wrap: wrap; width: auto; }
+  .ds-modal-img-wrap--zoom img { width: 100%; }
 }
 
 .modal-filename {
@@ -305,6 +362,69 @@ body { margin: 0; }
   border-style: dashed;
 }
 
+/* Match outcome (detection Evaluation gallery) — box colour still encodes the
+   class; the outcome shows as a border style. A `background` box (missed GT or
+   spurious prediction) is drawn dotted. */
+.ds-box--m-background { border-style: dotted; }
+.ds-box--dim         { opacity: 0.25; }
+
+.ds-box-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  font-size: 0.72rem;
+  margin: 0.5rem 0 0.75rem;
+}
+.ds-box-legend--vertical {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0;
+}
+.ds-box-legend-note {
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 400;
+}
+.ds-box-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--pico-muted-color, var(--muted-color));
+  font-weight: 400;
+}
+.ds-legend-swatch {
+  display: inline-block;
+  width: 1.4rem;
+  height: 0;
+  border-top: 2px solid var(--pico-muted-color, var(--muted-color));
+}
+.ds-legend-swatch--solid  { border-top-style: solid; }
+.ds-legend-swatch--dashed { border-top-style: dashed; }
+.ds-legend-swatch--dotted { border-top-style: dotted; }
+
+.det-layer-toggles {
+  display: flex;
+  gap: 1rem;
+  margin: 0.4rem 0 0.6rem;
+  font-size: 0.85rem;
+}
+.det-layer-toggles label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+.det-layer-toggles input {
+  margin: 0;
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.gallery-grid--detection {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
 .ds-box-label {
   position: absolute;
   left: -1.5px;
@@ -324,50 +444,28 @@ body { margin: 0; }
   font-weight: 400;
 }
 
-/* ── Error-bucket chips (detection Evaluation tab) ────────────────────────────── */
+/* ── Detection Evaluation tab ────────────────────────────────────────────────── */
 
-.bucket-chips {
+/* Recall-vs-IoU strip (localization view). */
+.det-recall-sweep {
   display: flex;
-  gap: 0.5rem;
   flex-wrap: wrap;
-  margin: 0.75rem 0 1rem;
+  gap: 1.25rem;
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.85rem;
+}
+.det-recall-sweep strong { margin-left: 0.35em; }
+
+.metric-card-sub {
+  color: var(--pico-muted-color, var(--muted-color));
+  font-size: 0.7rem;
 }
 
-.bucket-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-  padding: 0.35em 0.9em;
-  border-radius: 9999px;
-  border: 1px solid var(--pico-card-border-color, var(--card-border-color));
-  background: var(--pico-card-background-color, transparent);
-  /* Pico's default <button> styling is white-on-color; override explicitly
-     or the chip's own (unset) text falls back to that white and disappears
-     against this light/transparent background. */
-  color: var(--pico-color, inherit);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
+/* The trailing `background` row/column of the detection confusion matrix. */
+.cm-col-header.cm-bg-header,
+.cm-row-header.cm-bg-header {
+  font-style: italic;
+  opacity: 0.7;
 }
 
-.bucket-chip .bucket-chip-count {
-  font-weight: 700;
-}
-
-.bucket-chip--tp        { border-color: #22c55e; color: #15803d; }
-.bucket-chip--fp        { border-color: #ef4444; color: #b91c1c; }
-.bucket-chip--fn        { border-color: #f59e0b; color: #b45309; }
-.bucket-chip--confusion { border-color: #a855f7; color: #7e22ce; }
-
-[data-theme="dark"] .bucket-chip--tp        { color: #81c995; }
-[data-theme="dark"] .bucket-chip--fp        { color: #f48a8a; }
-[data-theme="dark"] .bucket-chip--fn        { color: #f5a623; }
-[data-theme="dark"] .bucket-chip--confusion { color: #d8a8f5; }
-
-.bucket-chip.active {
-  color: #fff;
-}
-.bucket-chip--tp.active        { background: #22c55e; }
-.bucket-chip--fp.active        { background: #ef4444; }
-.bucket-chip--fn.active        { background: #f59e0b; }
-.bucket-chip--confusion.active { background: #a855f7; }
+.cm-cell--active { outline: 2px solid var(--pico-primary, #1976d2); outline-offset: -2px; }
