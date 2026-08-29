@@ -356,6 +356,35 @@ function _updateAugPanel() {
 }
 
 function buildResultPanel(panelId, result, augImageB64) {
+  const imgSrcBase = augImageB64
+    ? `data:image/png;base64,${augImageB64}`
+    : (_inferFile ? URL.createObjectURL(_inferFile) : '');
+
+  if (result.task === 'detection') {
+    const dets = result.detections || [];
+    const boxes = dets.map(d => ({
+      class_id: d.class_index, class: d.class_name,
+      x: d.x, y: d.y, w: d.w, h: d.h,
+      variant: 'pred', confidence: d.confidence,
+    }));
+    const rows = dets.length
+      ? dets.map(d => `
+        <div class="topk-row">
+          <span class="topk-label" style="border-left:3px solid ${boxColor(d.class_index)};padding-left:6px">${escHtml(d.class_name)}</span>
+          <span class="topk-pct">${(d.confidence * 100).toFixed(1)}%</span>
+        </div>`).join('')
+      : '<p class="aug-empty">No objects detected.</p>';
+    return `
+      <div class="result-image-wrap">
+        <img src="${imgSrcBase}" class="result-image ds-tile-img--contain" alt="input image"
+             onload="fitBoxOverlay(this)"
+             onclick="openModal('${imgSrcBase}', null, ${escHtml(JSON.stringify(boxes))})" id="result-img-${panelId}">
+        ${buildBoxLayer(boxes, false)}
+      </div>
+      <div class="result-topk">${rows}</div>
+    `;
+  }
+
   const topK = (result.top_k || []).slice(0, 5);
   const maxConf = topK.length ? topK[0].confidence : 1;
 

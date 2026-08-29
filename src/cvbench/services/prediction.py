@@ -231,8 +231,9 @@ def run_prediction(checkpoint: str, input_path: str) -> list[dict]:
 # Web inference — single image supplied as raw bytes
 # ---------------------------------------------------------------------------
 
-def predict_image(run_name: str, image_bytes: bytes) -> dict:
-    import keras
+def _load_run_model(run_name: str):
+    """Return (cfg, model, input_size) for a run's keras checkpoint."""
+    from cvbench.tasks import resolve_task
 
     run_dir = Path(resolve_run_dir(run_name))
     cfg = load_config(str(run_dir))
@@ -242,28 +243,29 @@ def predict_image(run_name: str, image_bytes: bytes) -> dict:
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
-        model = keras.saving.load_model(str(checkpoint))
-    size = model.input_shape[1]
+        model = resolve_task(cfg).load_model(str(checkpoint))
+    return cfg, model, model.input_shape[1]
 
+
+def _predict_from_input(cfg, model, arr: np.ndarray) -> dict:
+    """Run the model on a batched ``(1, H, W, 3)`` float array and shape the
+    result according to the run's task."""
+    preds = model.predict(arr, verbose=0)
+    if getattr(cfg, "task", "classification") == "detection":
+        return _build_detection_result(preds, cfg)
+    return _build_result(preds[0], cfg.data.classes)
+
+
+def predict_image(run_name: str, image_bytes: bytes) -> dict:
+    cfg, model, size = _load_run_model(run_name)
     arr = _bytes_to_input(image_bytes, size)
-    probs = model.predict(arr, verbose=0)[0]
-    return _build_result(probs, cfg.data.classes)
+    return _predict_from_input(cfg, model, arr)
 
 
 def predict_augmented(run_name: str, image_bytes: bytes, augmentations: list[dict]) -> dict:
     import cvbench.augmentations as aug_mod
-    import keras
 
-    run_dir = Path(resolve_run_dir(run_name))
-    cfg = load_config(str(run_dir))
-    checkpoint = _model_path(run_dir, "keras")
-    if checkpoint is None:
-        raise ValueError(f"No keras checkpoint found for run '{run_name}'")
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
-        model = keras.saving.load_model(str(checkpoint))
-    size = model.input_shape[1]
+    cfg, model, size = _load_run_model(run_name)
 
     img_arr = _bytes_to_numpy(image_bytes, size)
 
@@ -275,15 +277,66 @@ def predict_augmented(run_name: str, image_bytes: bytes, augmentations: list[dic
 
     augmented_b64 = _numpy_to_base64_png(img_arr)
 
-    arr = img_arr.astype(np.float32)
-    probs = model.predict(arr[None], verbose=0)[0]
-
-    result = _build_result(probs, cfg.data.classes)
+    arr = img_arr.astype(np.float32)[None]
+    result = _predict_from_input(cfg, model, arr)
     result["augmented_image_b64"] = augmented_b64
     return result
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _build_detection_result(preds, cfg) -> dict:
+    """Decode raw YOLO head output into a list of detections for the WebUI.
+
+    Boxes are normalized top-left xywh in [0, 1] — the shape
+    ``shared.js::buildBoxLayer()`` consumes.
+    """
+    from cvbench.detection.decode import decode_batch
+
+    det = cfg.detection
+    if not det.anchors or not det.strides:
+        raise ValueError(
+            "This detection run predates anchor-based decoding and cannot be "
+            "used for inference — retrain with the current detection head."
+        )
+
+    class_names = cfg.data.classes
+    scales = preds if isinstance(preds, (list, tuple)) else [preds]
+    dets = decode_batch(
+        [np.asarray(s) for s in scales],
+        num_classes=len(class_names),
+        anchors=det.anchors,
+        strides=det.strides,
+        conf_threshold=det.conf_threshold,
+        max_detections=det.max_detections,
+        nms_iou_threshold=det.iou_threshold,
+    )[0]
+
+    detections = [
+        {
+            "class_index": d["class_id"],
+            "class_name": (
+                class_names[d["class_id"]]
+                if d["class_id"] < len(class_names)
+                else str(d["class_id"])
+            ),
+            "confidence": d["confidence"],
+            "x": d["x"],
+            "y": d["y"],
+            "w": d["w"],
+            "h": d["h"],
+        }
+        for d in dets
+    ]
+    top = max(detections, key=lambda d: d["confidence"], default=None)
+    return {
+        "task": "detection",
+        "detections": detections,
+        "class_name": top["class_name"] if top else None,
+        "class_index": top["class_index"] if top else None,
+        "confidence": top["confidence"] if top else None,
+    }
+
 
 def _build_result(probs: np.ndarray, class_names: list[str]) -> dict:
     top_k = sorted(

@@ -257,6 +257,7 @@
 
 .result-image-wrap {
   display: inline-block;
+  position: relative;
   border-radius: 5px;
   overflow: hidden;
   background: var(--pico-card-sectioning-background-color, var(--card-sectionning-background-color));
