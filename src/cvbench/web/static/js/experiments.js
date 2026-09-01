@@ -44,9 +44,11 @@ function buildRunsList(runs) {
     const testCell = r.test_accuracy != null
       ? (r.test_accuracy * 100).toFixed(1) + '%' + (testLabel ? ` <small class="ds-metric-label">${testLabel}</small>` : '')
       : '—';
+    const taskShort = r.task === 'detection' ? 'det' : 'cls';
     return `
     <tr onclick="navigate('#/runs/${encodeURIComponent(r.name)}')">
       <td><strong>${r.name}</strong></td>
+      <td><span class="badge badge-task-${r.task || 'classification'}">${taskShort}</span></td>
       <td>${r.backbone}</td>
       <td>${r.date || '—'}</td>
       <td><span class="badge badge-${r.status}">${r.status}</span></td>
@@ -63,7 +65,7 @@ function buildRunsList(runs) {
       <table class="runs-table">
         <thead>
           <tr>
-            <th>Name</th><th>Backbone</th><th>Date</th><th>Status</th>
+            <th>Name</th><th>Task</th><th>Backbone</th><th>Date</th><th>Status</th>
             <th>Val Acc</th><th>Test</th><th>Epochs</th>
           </tr>
         </thead>

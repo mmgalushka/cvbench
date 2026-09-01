@@ -156,11 +156,19 @@ body { margin: 0; }
 [data-theme="dark"] .badge-interrupted { background: #3d2200; color: #f5a623; }
 [data-theme="dark"] .badge-failed      { background: #4a1010; color: #f48a8a; }
 
+.badge-task-classification { background: #e1d5f7; color: #4a148c; }
+.badge-task-detection      { background: #d1f0e8; color: #00594d; }
+
+[data-theme="dark"] .badge-task-classification { background: #3a2359; color: #d4b3ff; }
+[data-theme="dark"] .badge-task-detection      { background: #0d3d33; color: #7fe6cd; }
+
 /* ── Metric cards ──────────────────────────────────────────────────────────── */
 
 .metric-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  /* 140px comfortably fits the widest realistic value on one line, e.g.
+     "93.6% / 33.7%" or "efficientnet_b3" — see .metric-card strong below. */
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
@@ -184,7 +192,12 @@ body { margin: 0; }
 .metric-card strong {
   font-size: 1.231rem;    /* ~16 px — prominent but not giant */
   font-weight: 600;
-  word-break: break-all;
+  /* Every value here is short (a percentage pair, a threshold pair, a
+     backbone name, a date) — it should always fit on one line at the
+     140px card width above. break-all used to force a break anyway,
+     splitting values like "93.6% / 33.7%" mid-number; nowrap keeps them
+     intact instead. */
+  white-space: nowrap;
 }
 
 /* ── Section label (reusable) ──────────────────────────────────────────────── */

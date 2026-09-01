@@ -101,14 +101,17 @@ def run_training(
     if errors:
         raise ValueError("Invalid config for task " + repr(cfg.task) + ": " + "; ".join(errors))
 
+    # resolve_layout must run before naming: it's what finalizes
+    # cfg.model.backbone (e.g. detection's resnet_18 default when --backbone
+    # wasn't passed explicitly), and make_run_name reads that field.
+    spec = task.resolve_layout(cfg)
+    resolved_weights = task.fit_class_weight(cfg, spec)
+
     if output_dir is not None:
         exp_dir = output_dir
     else:
         run_name = make_run_name(cfg)
         exp_dir = str(make_unique_dir(EXPERIMENTS_DIR, run_name))
-
-    spec = task.resolve_layout(cfg)
-    resolved_weights = task.fit_class_weight(cfg, spec)
 
     cfg.run.name = exp_dir.rstrip("/").split("/")[-1]
     cfg.run.date = date.today().strftime("%Y-%m-%d")
