@@ -71,13 +71,18 @@ def _lr_slug(lr: float) -> str:
 def make_run_name(cfg: CVBenchConfig) -> str:
     """Generate a run directory name from config fields + today's date.
 
-    Pattern: {backbone_short}_{lr_slug}_{YYYY_MM_DD}
-    Example: effnet_b0_lr1e4_2026_03_28
+    Pattern: {task_prefix}_{backbone_short}_{lr_slug}_{YYYY_MM_DD}
+    Example: cls_effnet_b0_lr1e4_2026_03_28, det_resnet_18_lr1e4_2026_09_01
+
+    Same shape for every task — only the "cls"/"det" prefix changes — so a
+    classification and a detection run trained the same day with the same
+    backbone/LR no longer produce identical names.
     """
+    task_prefix = "det" if cfg.task == "detection" else "cls"
     backbone = cfg.model.backbone.replace("efficientnet_", "effnet_")
     lr = _lr_slug(cfg.training.learning_rate)
     today = date.today().strftime("%Y_%m_%d")
-    return f"{backbone}_{lr}_{today}"
+    return f"{task_prefix}_{backbone}_{lr}_{today}"
 
 
 def make_unique_dir(parent: str, name: str) -> Path:

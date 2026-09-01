@@ -49,16 +49,17 @@ def list_runs(experiments_dir, sort):
         print(f" No experiments found in '{experiments_dir}'.")
         return
 
-    tr = _fmt.rule(76, "white")
+    tr = _fmt.rule(81, "white")
     print(tr)
-    print(f" {'Run':<45} {'Status':<12} {'Val Loss':>9}  {'Epochs':>6}")
+    print(f" {'Run':<40} {'Task':<5} {'Status':<12} {'Val Loss':>9}  {'Epochs':>6}")
     print(tr)
     for r in entries:
         loss = r.get("val_loss")
         loss_str = f"{loss:.4f}" if loss is not None else "   —   "
-        name = _fit(r["name"], 45)
+        name = _fit(r["name"], 40)
+        task_short = "det" if r.get("task") == "detection" else "cls"
         print(
-            f" {name:<45} {r.get('status', '?'):<12} {loss_str:>9}  {r.get('epochs_run', '?'):>6}"
+            f" {name:<40} {task_short:<5} {r.get('status', '?'):<12} {loss_str:>9}  {r.get('epochs_run', '?'):>6}"
         )
     print(tr)
 
@@ -69,7 +70,7 @@ def list_runs(experiments_dir, sort):
 def compare(experiment_a, experiment_b):
     """Compare two experiments side by side.
 
-    EXPERIMENT_A and EXPERIMENT_B are run names (e.g. effnet_b3_lr5e5_trial_2024_01_21)
+    EXPERIMENT_A and EXPERIMENT_B are run names (e.g. cls_effnet_b3_lr5e5_2026_01_21)
     or full paths to run directories. Bare names are resolved under experiments/.
     """
     run_a = resolve_run_dir(experiment_a)

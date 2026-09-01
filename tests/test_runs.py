@@ -17,8 +17,10 @@ from cvbench.core.runs import (
 # Run name generation
 # ---------------------------------------------------------------------------
 
-def _make_cfg(backbone="efficientnet_b3", lr=5e-5):
-    return build_config("data", backbone=backbone, lr=lr)
+def _make_cfg(backbone="efficientnet_b3", lr=5e-5, task="classification"):
+    cfg = build_config("data", backbone=backbone, lr=lr)
+    cfg.task = task
+    return cfg
 
 
 def test_run_name_contains_backbone_slug():
@@ -44,8 +46,28 @@ def test_run_name_format():
     cfg = _make_cfg(backbone="efficientnet_b0", lr=1e-4)
     name = make_run_name(cfg)
     parts = name.split("_")
-    assert parts[0] == "effnet"
-    assert parts[1] == "b0"
+    assert parts[0] == "cls"
+    assert parts[1] == "effnet"
+    assert parts[2] == "b0"
+
+
+def test_run_name_classification_prefix():
+    cfg = _make_cfg(task="classification")
+    name = make_run_name(cfg)
+    assert name.startswith("cls_")
+
+
+def test_run_name_detection_prefix():
+    cfg = _make_cfg(backbone="resnet_18", task="detection")
+    name = make_run_name(cfg)
+    assert name.startswith("det_")
+    assert "resnet_18" in name
+
+
+def test_run_name_same_backbone_lr_differs_by_task():
+    cls_name = make_run_name(_make_cfg(backbone="resnet_18", lr=1e-4, task="classification"))
+    det_name = make_run_name(_make_cfg(backbone="resnet_18", lr=1e-4, task="detection"))
+    assert cls_name != det_name
 
 
 # ---------------------------------------------------------------------------
