@@ -499,7 +499,7 @@ function showDetectionCellGallery(runName, trueClass, predClass, count) {
   if (samples.length === 0) {
     body = `<p class="gallery-empty">No sample images stored for this cell.</p>`;
   } else {
-    const thumbs = samples.map(s => {
+    const thumbs = samples.map((s, i) => {
       const imgSrc = `/api/runs/${encodeURIComponent(runName)}/images/${imgPath(s.path)}`;
       const overlayBoxes = [
         ...(_DET_LAYERS.gt ? (s.gt || []).map(b => ({ ...b, dim: !_detBoxInCell(b, false, trueClass, predClass) })) : []),
@@ -511,24 +511,14 @@ function showDetectionCellGallery(runName, trueClass, predClass, count) {
         ...(s.gt || []).map(b => ({ ...b })),
         ...(s.pred || []).map(b => ({ ...b, variant: 'pred' })),
       ];
-      return `
-        <figure class="gallery-thumb">
-          <div class="thumb-img-wrap ds-modal-img-wrap" style="height:140px"
-               data-boxes="${escHtml(JSON.stringify(modalBoxes))}"
-               data-src="${imgSrc}" data-path="${escHtml(s.path)}"
-               onclick="detOpenModal(this)">
-            <img class="thumb-original ds-tile-img--contain" src="${imgSrc}" alt="${escHtml(s.path)}" loading="lazy"
-                 style="width:100%;height:100%"
-                 onload="fitBoxOverlay(this)" />
-            ${buildBoxLayer(overlayBoxes, false)}
-          </div>
-          <figcaption>
-            <span title="${escHtml(s.path.split('/').pop())}">${escHtml(detSampleMetric(s, trueClass, predClass))}</span>
-          </figcaption>
-        </figure>
-      `;
+      return buildGalleryThumb({
+        id: `thumb-${Date.now()}-${i}`,
+        imgSrc, path: s.path,
+        boxes: overlayBoxes, modalBoxes,
+        caption: escHtml(detSampleMetric(s, trueClass, predClass)),
+      });
     }).join('');
-    body = `<div class="gallery-grid gallery-grid--detection">${thumbs}</div>`;
+    body = `<div class="gallery-grid">${thumbs}</div>`;
   }
 
   panel.innerHTML = `
@@ -550,10 +540,42 @@ function showDetectionCellGallery(runName, trueClass, predClass, count) {
   requestAnimationFrame(refitBoxOverlays);
 }
 
-function detOpenModal(el) {
+// Shared by every task's gallery thumb: reads the box/src/path data attributes
+// a thumb was built with (see buildGalleryThumb) and opens the zoom modal.
+// Classification thumbs carry no boxes, so openModal() falls back to its plain
+// (no box-overlay, no metrics panel) rendering automatically.
+function openGalleryModal(el) {
   let boxes = [];
   try { boxes = JSON.parse(el.dataset.boxes || '[]'); } catch (e) { /* noop */ }
   openModal(el.dataset.src, el.dataset.path, boxes);
+}
+
+// One thumb markup shared by every task's confusion-matrix gallery (currently
+// classification and detection; extend here, not per-task, for future tasks).
+// `boxes` (optional) draws an overlay on the thumb itself, dimmed/filtered per
+// the caller's current layer selection; `modalBoxes` (optional, defaults to
+// `boxes`) is what the zoom modal receives — detection passes every box
+// undimmed so the modal's own GT/Prediction toggles work independent of the
+// gallery's filter. `actions` is task-specific figcaption markup (e.g.
+// classification's Explain button) — everything else renders identically.
+function buildGalleryThumb({ id, imgSrc, path, boxes = [], modalBoxes, caption, actions = '' }) {
+  const modalBoxesJson = escHtml(JSON.stringify(modalBoxes !== undefined ? modalBoxes : boxes));
+  return `
+    <figure class="gallery-thumb" id="${id}">
+      <div class="thumb-img-wrap ds-modal-img-wrap"
+           data-boxes="${modalBoxesJson}"
+           data-src="${imgSrc}" data-path="${escHtml(path)}"
+           onclick="openGalleryModal(this)">
+        <img class="thumb-original ds-tile-img--contain" src="${imgSrc}" alt="${escHtml(path)}" loading="lazy"
+             onload="fitBoxOverlay(this)" />
+        ${boxes.length ? buildBoxLayer(boxes, false) : ''}
+      </div>
+      <figcaption>
+        <span title="${escHtml(path.split('/').pop())}">${caption}</span>
+        ${actions}
+      </figcaption>
+    </figure>
+  `;
 }
 
 /* ── Confusion matrix ──────────────────────────────────────────────────────── */
@@ -624,21 +646,17 @@ function showGallery(runName, trueClass, predClass, count) {
     const thumbs = samples.map((s, i) => {
       const imgSrc = `/api/runs/${encodeURIComponent(runName)}/images/${imgPath(s.path)}`;
       const thumbId = `thumb-${Date.now()}-${i}`;
-      return `
-        <figure class="gallery-thumb" id="${thumbId}">
-          <div class="thumb-img-wrap">
-            <img class="thumb-original" src="${imgSrc}" alt="${escHtml(s.path)}" loading="lazy"
-                 onclick="openModal('${imgSrc}', '${escHtml(s.path)}')" />
-          </div>
-          <figcaption>
-            <span>${(s.confidence * 100).toFixed(1)}%</span>
-            <button class="explain-btn outline" title="Show Grad-CAM explanation"
-                    onclick="explainImage(event, '${escHtml(runName)}', '${escHtml(s.path)}', '${escHtml(s.predicted_class)}', '${thumbId}')">
-              Explain
-            </button>
-          </figcaption>
-        </figure>
-      `;
+      const explainBtn = `
+        <button class="explain-btn outline" title="Show Grad-CAM explanation"
+                onclick="explainImage(event, '${escHtml(runName)}', '${escHtml(s.path)}', '${escHtml(s.predicted_class)}', '${thumbId}')">
+          Explain
+        </button>`;
+      return buildGalleryThumb({
+        id: thumbId,
+        imgSrc, path: s.path,
+        caption: `${(s.confidence * 100).toFixed(1)}%`,
+        actions: explainBtn,
+      });
     }).join('');
     body = `<div class="gallery-grid">${thumbs}</div>`;
   }
@@ -668,7 +686,7 @@ async function explainImage(event, runName, imagePath, predictedClass, thumbId) 
 
   if (figure.dataset.explained === '1') {
     img.src = origSrc;
-    img.onclick = () => openModal(origSrc);
+    wrap.dataset.src = origSrc;
     btn.textContent = 'Explain';
     figure.dataset.explained = '0';
     return;
@@ -676,7 +694,7 @@ async function explainImage(event, runName, imagePath, predictedClass, thumbId) 
 
   if (figure.dataset.heatmap) {
     img.src = figure.dataset.heatmap;
-    img.onclick = () => openModal(figure.dataset.heatmap);
+    wrap.dataset.src = figure.dataset.heatmap;
     btn.textContent = 'Original';
     figure.dataset.explained = '1';
     return;
@@ -711,7 +729,7 @@ async function explainImage(event, runName, imagePath, predictedClass, thumbId) 
 
     figure.dataset.heatmap = heatSrc;
     img.src = heatSrc;
-    img.onclick = () => openModal(heatSrc);
+    wrap.dataset.src = heatSrc;
     btn.textContent = 'Original';
     btn.disabled = false;
     figure.dataset.explained = '1';
