@@ -205,7 +205,7 @@ function _modalVisibleBoxes() {
 }
 
 function _renderModalBoxLayer() {
-  const wrap = document.querySelector('#modal-content .ds-modal-img-wrap');
+  const wrap = document.querySelector('#modal-content .modal-img-frame');
   if (!wrap) return;
   const old = wrap.querySelector('.ds-boxes');
   if (old) old.remove();
@@ -261,9 +261,21 @@ function openModal(src, filename, boxes) {
        </div>`
     : '';
 
+  // The image itself always renders in the same fixed-size, object-fit:contain
+  // frame (see .modal-img-frame) regardless of task — only the box overlay and
+  // the side panel around it are conditional on there being boxes to show.
+  const frame = `
+    <div class="modal-img-frame">
+      <img class="ds-tile-img--contain" src="${src}" onload="fitBoxOverlay(this)" />
+      ${hasBoxes ? buildBoxLayer(_modalVisibleBoxes(), false) : ''}
+    </div>`;
+
+  // Filename + Copy always sits directly under the frame, in the same place
+  // and style, whether or not a side panel is present next to the image.
   if (!hasBoxes) {
-    document.getElementById('modal-content').innerHTML = `<img src="${src}" />${caption}`;
+    document.getElementById('modal-content').innerHTML = `${frame}${caption}`;
     document.getElementById('modal-overlay').style.display = 'flex';
+    requestAnimationFrame(refitBoxOverlays);
     return;
   }
 
@@ -274,10 +286,7 @@ function openModal(src, filename, boxes) {
 
   document.getElementById('modal-content').innerHTML = `
     <div class="ds-modal">
-      <div class="ds-modal-img-wrap ds-modal-img-wrap--zoom">
-        <img class="ds-tile-img--contain" src="${src}" onload="fitBoxOverlay(this)" />
-        ${buildBoxLayer(_modalVisibleBoxes(), false)}
-      </div>
+      ${frame}
       <aside class="ds-modal-side">
         <div class="ds-modal-layers">
           <span class="ds-modal-side-title">Show</span>
@@ -286,9 +295,9 @@ function openModal(src, filename, boxes) {
         </div>
         ${_modalMetricsPanel()}
         ${buildBoxLegend(true)}
-        ${caption}
       </aside>
-    </div>`;
+    </div>
+    ${caption}`;
   document.getElementById('modal-overlay').style.display = 'flex';
   requestAnimationFrame(refitBoxOverlays);
 }
