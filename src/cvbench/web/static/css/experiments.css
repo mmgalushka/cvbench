@@ -230,11 +230,14 @@
 
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, 140px);
+  justify-content: start;
   gap: 0.6rem;
 }
 
-.gallery-thumb { margin: 0; text-align: center; }
+/* Thumbs keep a fixed footprint so a cell with a single sample renders the same
+   size as one with many — the grid reflows by column count, never by thumb size. */
+.gallery-thumb { margin: 0; text-align: center; width: 140px; }
 
 .gallery-thumb .thumb-img-wrap { width: 100%; }
 
