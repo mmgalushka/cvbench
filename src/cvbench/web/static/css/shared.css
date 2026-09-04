@@ -435,8 +435,10 @@ body { margin: 0; }
 }
 
 .gallery-grid--detection {
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, 150px);
 }
+
+.gallery-grid--detection .gallery-thumb { width: 150px; }
 
 .ds-box-label {
   position: absolute;
