@@ -14,6 +14,9 @@
 !src/**/*.html
 !src/**/*.css
 !src/**/*.js
+!src/**/*.svg
+!src/**/*.ico
+!src/**/*.png
 
 # Except tests
 !tests/
