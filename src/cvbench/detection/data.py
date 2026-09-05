@@ -113,6 +113,34 @@ def encode_targets(
     return targets
 
 
+def _encode_all_targets(
+    label_paths: list[str],
+    num_classes: int,
+    anchors: list,
+    strides: list[int],
+    input_size: int,
+    ignore_iou_threshold: float,
+) -> list[np.ndarray]:
+    """Encode every label file's targets once, ahead of the tf.data pipeline.
+
+    Runs as plain Python/NumPy at dataset-construction time — not inside a
+    ``tf.numpy_function`` traced into the graph and re-invoked per sample —
+    so the per-epoch loop never pays this cost and the tf.data worker
+    threads stay free of GIL-bound Python calls. Returns one
+    ``(N, Gs, Gs, A * (6 + C))`` array per scale, matching ``label_paths``
+    order, ready for ``Dataset.from_tensor_slices``.
+    """
+    per_scale: list[list[np.ndarray]] = [[] for _ in strides]
+    for label_path in label_paths:
+        boxes = read_yolo_boxes(Path(label_path))
+        targets = encode_targets(
+            boxes, num_classes, anchors, strides, input_size, ignore_iou_threshold
+        )
+        for si, t in enumerate(targets):
+            per_scale[si].append(t.reshape(t.shape[0], t.shape[1], -1))
+    return [np.stack(arrs, axis=0) for arrs in per_scale]
+
+
 def build_detection_dataset(
     split_dir: str,
     ds_root: str,
@@ -151,29 +179,26 @@ def build_detection_dataset(
     channels = [len(anchors[i]) * (6 + num_classes) for i in range(len(strides))]
     batch = cfg.data.batch_size
 
-    ds = tf.data.Dataset.from_tensor_slices((image_paths, label_paths))
+    # Encode every label file once, up front — see _encode_all_targets — so
+    # the tf.data pipeline below only ever loads/resizes images and never
+    # falls back to tf.numpy_function per sample, per epoch (issue #67).
+    all_targets = _encode_all_targets(label_paths, num_classes, anchors, strides, size, ignore_iou)
+
+    ds = tf.data.Dataset.from_tensor_slices((image_paths, *all_targets))
     if training:
         ds = ds.shuffle(
             max(len(image_paths), 1), seed=cfg.training.seed, reshuffle_each_iteration=True
         )
 
-    def _encode(label_path_bytes):
-        boxes = read_yolo_boxes(Path(label_path_bytes.decode("utf-8")))
-        targets = encode_targets(boxes, num_classes, anchors, strides, size, ignore_iou)
-        return [t.reshape(t.shape[0], t.shape[1], -1) for t in targets]
-
-    def _load(img_path, label_path):
+    def _load(img_path, *targets):
         img_bytes = tf.io.read_file(img_path)
         img = tf.image.decode_image(img_bytes, channels=3, expand_animations=False)
         img = tf.image.resize(img, (size, size))  # stretch resize; no letterboxing
         img = tf.cast(img, tf.float32)
         img.set_shape((size, size, 3))
 
-        raw_targets = tf.numpy_function(_encode, [label_path], [tf.float32] * len(strides))
-        targets = []
-        for t, g, ch in zip(raw_targets, grids, channels):
+        for t, g, ch in zip(targets, grids, channels):
             t.set_shape((g, g, ch))
-            targets.append(t)
         return img, tuple(targets)
 
     ds = ds.map(_load, num_parallel_calls=tf.data.AUTOTUNE)
