@@ -48,7 +48,8 @@ def print_confusion_matrix(
     grid_w = n * normal_cell_w + (n - 1)
     normal_fits = (row_prefix_w + grid_w) <= term_w
 
-    print(f" {title}")
+    if title:
+        print(f" {title}")
 
     if normal_fits:
         # ── normal layout ──────────────────────────────────────────────

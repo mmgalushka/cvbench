@@ -4,6 +4,7 @@ import pytest
 from cvbench.detection.metrics import (
     build_detection_samples,
     compute_detection_metrics,
+    detection_class_breakdown,
     detection_confusion,
     iou,
     localization_metrics,
@@ -295,3 +296,133 @@ def test_build_detection_samples_confidence_filtering():
     samples = build_detection_samples(_matches(paths, gts, preds, class_names), class_names)
     assert len(samples[0]["pred"]) == 1
     assert samples[0]["counts"] == {"matched": 1, "fp": 0, "fn": 0}
+
+
+# ---------------------------------------------------------------------------
+# detection_class_breakdown + per-box outcome / sample tags
+# ---------------------------------------------------------------------------
+
+# One image exercising all four GT outcomes plus a truly spurious box.
+_BD_CLASS_NAMES = ["circle", "square", "triangle"]
+_BD_GT = [[
+    {"class_id": 0, "box": (0.00, 0.00, 0.20, 0.20)},   # -> matched
+    {"class_id": 1, "box": (0.50, 0.50, 0.20, 0.20)},   # -> confused (pred says triangle)
+    {"class_id": 0, "box": (0.05, 0.60, 0.20, 0.20)},   # -> mislocated (loose same-class pred)
+    {"class_id": 2, "box": (0.80, 0.05, 0.10, 0.10)},   # -> missed
+]]
+_BD_PRED = [[
+    {"class_id": 0, "confidence": 0.9, "box": (0.00, 0.00, 0.20, 0.21)},   # matched circle
+    {"class_id": 2, "confidence": 0.8, "box": (0.50, 0.50, 0.20, 0.20)},   # confused: on the square GT
+    {"class_id": 0, "confidence": 0.7, "box": (0.02, 0.55, 0.32, 0.32)},   # IoU ~0.3 with GT[2]
+    {"class_id": 1, "confidence": 0.6, "box": (0.30, 0.90, 0.05, 0.05)},   # spurious square
+]]
+
+
+def test_class_breakdown_buckets_every_gt_and_spurious_prediction():
+    matches = _matches(["i.jpg"], _BD_GT, _BD_PRED, _BD_CLASS_NAMES)
+    bd = detection_class_breakdown(matches, _BD_CLASS_NAMES)
+
+    assert bd["classes"] == _BD_CLASS_NAMES
+    circle = bd["rows"]["circle"]
+    assert circle["instances"] == 2
+    assert circle["matched"] == 1 and circle["mislocated"] == 1
+    assert circle["confused"] == 0 and circle["missed"] == 0
+
+    square = bd["rows"]["square"]
+    assert square["confused"] == 1 and square["confused_as"] == {"triangle": 1}
+
+    assert bd["rows"]["triangle"] == {
+        "instances": 1, "matched": 0, "confused": 0,
+        "mislocated": 0, "missed": 1, "confused_as": {},
+    }
+    # the confused prediction covers a GT, so it is not spurious; only box #4 is.
+    assert bd["spurious"] == {"circle": 0, "square": 1, "triangle": 0}
+
+    # instances == sum of the four outcome buckets, per class
+    for row in bd["rows"].values():
+        assert row["instances"] == (
+            row["matched"] + row["confused"] + row["mislocated"] + row["missed"]
+        )
+
+
+def test_samples_carry_outcome_per_box_and_class_outcome_tags():
+    samples = build_detection_samples(
+        _matches(["i.jpg"], _BD_GT, _BD_PRED, _BD_CLASS_NAMES), _BD_CLASS_NAMES
+    )
+    s = samples[0]
+    assert [b["outcome"] for b in s["gt"]] == ["matched", "confused", "mislocated", "missed"]
+    assert [b["outcome"] for b in s["pred"]] == ["matched", "confused", "mislocated", "spurious"]
+    assert set(s["tags"]) == {
+        "circle:matched", "square:confused", "circle:mislocated",
+        "triangle:missed", "square:spurious",
+    }
+    # legacy confusion-matrix fields still populated
+    assert [b["match"] for b in s["gt"]] == ["matched", "matched", "background", "background"]
+
+
+def test_duplicate_prediction_on_a_detected_object_is_not_spurious():
+    # one GT circle, two circle predictions: the first matches, the second sits
+    # right on top of it -> the class-agnostic pass calls #2 a background FP with
+    # IoU 0 (no *unclaimed* GT left); the breakdown must call it a duplicate.
+    class_names = ["circle"]
+    gts = [[{"class_id": 0, "box": (0.10, 0.10, 0.30, 0.30)}]]
+    preds = [[
+        {"class_id": 0, "confidence": 0.9, "box": (0.10, 0.10, 0.30, 0.30)},   # matches
+        {"class_id": 0, "confidence": 0.6, "box": (0.12, 0.12, 0.30, 0.30)},   # duplicate
+    ]]
+    matches = _matches(["i.jpg"], gts, preds, class_names)
+    assert matches[0]["pred"][1]["matched_gt"] is None
+    assert matches[0]["pred"][1]["iou"] == 0.0  # class-agnostic pass sees nothing
+
+    bd = detection_class_breakdown(matches, class_names)
+    assert bd["rows"]["circle"]["matched"] == 1
+    assert bd["duplicate"]["circle"] == 1
+    assert bd["spurious"]["circle"] == 0
+    # the two boxes overlap heavily -> NMS would drop this one
+    assert bd["duplicate_suppressible"]["circle"] == 1
+
+    s = build_detection_samples(matches, class_names)[0]
+    assert [b["outcome"] for b in s["pred"]] == ["matched", "duplicate"]
+    assert "circle:duplicate" in s["tags"]
+    assert s["pred"][1]["iou"] > 0.5        # real IoU with the object
+    assert s["pred"][1]["rival_iou"] > 0.5  # ... and with the kept box
+
+
+def test_duplicate_far_from_kept_box_is_not_nms_suppressible():
+    # box #1 matches the GT tightly; box #2 clips the GT enough to be a
+    # duplicate but barely overlaps box #1 -> NMS at 0.5 would not remove it
+    class_names = ["circle"]
+    gts = [[{"class_id": 0, "box": (0.10, 0.40, 0.40, 0.20)}]]
+    preds = [[
+        {"class_id": 0, "confidence": 0.9, "box": (0.10, 0.40, 0.32, 0.20)},  # IoU 0.8 -> matches
+        {"class_id": 0, "confidence": 0.6, "box": (0.30, 0.40, 0.28, 0.20)},  # IoU ~0.42 -> duplicate
+    ]]
+    matches = _matches(["i.jpg"], gts, preds, class_names)
+    bd = detection_class_breakdown(matches, class_names)
+    assert bd["rows"]["circle"]["matched"] == 1
+    assert bd["duplicate"]["circle"] == 1
+    assert bd["duplicate_suppressible"]["circle"] == 0  # NMS can't help here
+    s = build_detection_samples(matches, class_names)[0]
+    assert s["pred"][1]["rival_iou"] < 0.5
+
+
+def test_mislocated_requires_same_class_overlap():
+    # a loose box of the WRONG class over a missed GT stays missed + spurious
+    class_names = ["a", "b"]
+    gts = [[{"class_id": 0, "box": (0.1, 0.1, 0.3, 0.3)}]]
+    # IoU ~0.14 with the GT: over the localization floor, well under the match floor
+    preds = [[{"class_id": 1, "confidence": 0.9, "box": (0.25, 0.25, 0.3, 0.3)}]]
+    matches = _matches(["i.jpg"], gts, preds, class_names)
+    assert matches[0]["pred"][0]["matched_gt"] is None  # sub-threshold, unmatched
+    bd = detection_class_breakdown(matches, class_names)
+    assert bd["rows"]["a"]["missed"] == 1
+    assert bd["rows"]["a"]["mislocated"] == 0
+    assert bd["spurious"]["b"] == 1
+
+
+def test_compute_detection_metrics_exposes_class_breakdown():
+    result = compute_detection_metrics(
+        _BD_GT, _BD_PRED, _BD_CLASS_NAMES, iou_threshold=0.5, conf_threshold=0.5
+    )
+    assert "class_breakdown" in result
+    assert result["class_breakdown"]["rows"]["circle"]["mislocated"] == 1

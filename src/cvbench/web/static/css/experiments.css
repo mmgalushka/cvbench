@@ -133,6 +133,106 @@
   margin: 0.15rem 0 0.5rem;
 }
 
+/* ── Per-class outcome breakdown ───────────────────────────────────────────── */
+
+.det-breakdown {
+  border-collapse: collapse;
+  font-size: 0.846rem;
+  min-width: 30rem;
+}
+.det-breakdown th,
+.det-breakdown td { padding: 0.35rem 0.7rem; text-align: right; }
+.det-breakdown thead th {
+  font-size: 0.731rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--pico-muted-color, var(--muted-color));
+  border-bottom: 1px solid var(--pico-muted-border-color, #d0d0d0);
+}
+.det-breakdown tbody th { text-align: left; font-weight: 600; }
+.det-breakdown tbody tr + tr td,
+.det-breakdown tbody tr + tr th {
+  border-top: 1px solid var(--pico-muted-border-color, #e4e4e4);
+}
+.det-bd-inst { color: var(--pico-muted-color, var(--muted-color)); }
+.det-bd-n { font-variant-numeric: tabular-nums; font-weight: 600; }
+.det-bd-zero { color: var(--pico-muted-color, var(--muted-color)); opacity: 0.5; }
+
+.det-bd-cell:not(.det-bd-zero) { cursor: pointer; border-radius: 4px; }
+.det-bd-cell:not(.det-bd-zero):hover { outline: 2px solid var(--brand-color); outline-offset: -2px; }
+.det-bd-matched    { background: rgba(46, 160, 67, 0.13); }
+.det-bd-mislocated { background: rgba(219, 154, 4, 0.16); }
+.det-bd-confused   { background: rgba(191, 135, 0, 0.16); }
+.det-bd-missed     { background: rgba(207, 34, 46, 0.13); }
+
+.det-bd-sub {
+  display: block;
+  font-size: 0.692rem;
+  font-weight: 400;
+  color: var(--pico-muted-color, var(--muted-color));
+}
+
+.det-reconcile {
+  margin: 0.6rem 0 0;
+  font-size: 0.769rem;
+  color: var(--pico-muted-color, var(--muted-color));
+}
+.det-reconcile strong { color: var(--pico-color, inherit); font-weight: 600; }
+
+.det-extra-preds { margin-top: 0.8rem; }
+.det-extra-preds .cm-hint--sub { margin: 0 0 0.3rem; }
+
+.det-extra-list {
+  list-style: disc;
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.808rem;
+}
+.det-spur-strip { margin: 0.4rem 0; }
+.det-spur-strip::marker { color: var(--pico-muted-color, var(--muted-color)); }
+.det-spur-label { display: block; margin-bottom: 0.3rem; }
+.det-spur-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+}
+.det-spur-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.08rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--pico-code-background-color, rgba(0, 0, 0, 0.05));
+  white-space: nowrap;
+}
+.det-spur-item:not(.det-bd-zero) { cursor: pointer; }
+.det-spur-item:not(.det-bd-zero):hover { outline: 2px solid var(--brand-color); }
+.det-spur-item.det-bd-zero { opacity: 0.45; }
+
+/* Class colour swatch — matches the bounding-box palette (boxColor / _BOX_COLORS). */
+.det-cls-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  vertical-align: baseline;
+  flex: none;
+}
+.det-breakdown tbody th .det-cls-dot { margin-right: 0.4rem; }
+
+.det-cm-block {
+  margin-top: 1.1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--pico-muted-border-color, #e4e4e4);
+}
+.det-cm-heading {
+  margin: 0 0 0.5rem;
+  font-size: 0.846rem;
+}
+.det-cm-heading .cm-hint { font-weight: 400; }
+
 /* ── Confusion matrix ──────────────────────────────────────────────────────── */
 
 .cm-wrap { overflow-x: auto; }
@@ -280,6 +380,18 @@
 }
 
 .gallery-empty { color: var(--pico-muted-color, var(--muted-color)); font-size: 0.846rem; }
+
+/* Sub-group heading inside a `class → background` / `background → class` gallery,
+   separating misses the model mis-located from the ones it never fired on. */
+.gallery-subhead {
+  margin: 0.9rem 0 0.5rem;
+  font-size: 0.769rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pico-muted-color, var(--muted-color));
+}
+.gallery-subhead:first-child { margin-top: 0.2rem; }
 
 /* ── Compare tab ───────────────────────────────────────────────────────────── */
 
