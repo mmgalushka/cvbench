@@ -421,11 +421,7 @@ body { margin: 0; }
   border-style: dashed;
 }
 
-/* Match outcome (detection Evaluation gallery) — box colour still encodes the
-   class; the outcome shows as a border style. A `background` box (missed GT or
-   spurious prediction) is drawn dotted. */
-.ds-box--m-background { border-style: dotted; }
-.ds-box--dim         { opacity: 0.25; }
+.ds-box--dim { opacity: 0.25; }
 
 .ds-box-legend {
   display: flex;
@@ -460,7 +456,6 @@ body { margin: 0; }
 }
 .ds-legend-swatch--solid  { border-top-style: solid; }
 .ds-legend-swatch--dashed { border-top-style: dashed; }
-.ds-legend-swatch--dotted { border-top-style: dotted; }
 
 .det-layer-toggles {
   display: flex;

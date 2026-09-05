@@ -134,37 +134,54 @@ function boxColor(classId) {
 // Renders BOXES as absolutely-positioned divs over a fitBoxOverlay()'d image.
 // Each box is {class_id, class, x, y, w, h}, normalized 0..1, top-left origin.
 // A box with variant: 'pred' renders dashed (vs. the default solid ground-truth
-// style) and, if it carries a `confidence`, appends it to the label — this is
-// how the detection Evaluation tab overlays predictions on top of ground truth.
-// A box may also carry `match` ('matched' | 'background') — the detection
-// Evaluation gallery uses it to add an outcome border style — and `dim: true`
-// to fade it when a confusion-matrix cell filter is active.
-function buildBoxLayer(boxes, fill) {
+// style) and appends its `confidence` and, when present, its best `iou` to the
+// label (e.g. `circle 87% · IoU 0.46`) — this is how the detection Evaluation
+// tab overlays predictions on top of ground truth. The IoU is shown for both
+// matched and sub-threshold predictions, so a box that looks "roughly right"
+// but landed in `class → background` is legible without opening the JSON.
+// Ground truth is always solid and a prediction is always dashed, matched or
+// not — whether a box was matched is left for the viewer to read from overlap
+// (a solid box with no dashed box on it was missed; vice versa, spurious) so
+// the line-style channel encodes only "which layer", never also "outcome".
+// A box may also carry `match` ('matched' | 'background'), which the detection
+// Evaluation gallery uses only for the confusion-matrix cell filter, and
+// `dim: true` to fade it when that filter is active.
+// `opts.labels` (default true) draws the `class 87% · IoU 0.46` caption; pass
+// `false` on small thumbnails where 3-4 stacked captions bury the image — the
+// zoom modal still shows them.
+function buildBoxLayer(boxes, fill, opts = {}) {
+  const showLabels = opts.labels !== false;
   const rects = boxes.map(b => {
     const isPred = b.variant === 'pred';
-    const confSuffix = isPred && b.confidence != null ? ` ${(b.confidence * 100).toFixed(0)}%` : '';
-    const matchCls = b.match ? ` ds-box--m-${b.match}` : '';
+    let confSuffix = '';
+    if (isPred) {
+      if (b.confidence != null) confSuffix += ` ${(b.confidence * 100).toFixed(0)}%`;
+      if (b.iou != null) confSuffix += ` · IoU ${b.iou.toFixed(2)}`;
+    }
     const dimCls = b.dim ? ' ds-box--dim' : '';
+    const label = showLabels
+      ? `<span class="ds-box-label">${escHtml(b.class)}${confSuffix}</span>`
+      : '';
     return `
-    <div class="ds-box${isPred ? ' ds-box--pred' : ''}${matchCls}${dimCls}" style="left:${b.x * 100}%;top:${b.y * 100}%;
+    <div class="ds-box${isPred ? ' ds-box--pred' : ''}${dimCls}" style="left:${b.x * 100}%;top:${b.y * 100}%;
          width:${b.w * 100}%;height:${b.h * 100}%;--ds-box-color:${boxColor(b.class_id)}">
-      <span class="ds-box-label">${escHtml(b.class)}${confSuffix}</span>
+      ${label}
     </div>
   `;
   }).join('');
   return `<div class="ds-boxes${fill ? ' ds-boxes--fill' : ''}">${rects}</div>`;
 }
 
-// Legend for the detection Evaluation gallery's box encoding. The match outcome
-// is conveyed by the confusion-matrix cell you clicked (and by dimming), so the
-// legend only needs to explain the visual encoding of the boxes themselves.
+// Legend for the detection Evaluation gallery's box encoding: solid vs. dashed
+// is the whole story (GT vs. prediction, always, regardless of match outcome)
+// — a missed GT or spurious prediction is just a box with no counterpart
+// overlapping it, visible by eye rather than by a third line style.
 // `vertical` stacks the items into a column — used in the zoom modal's side
 // panel, where a horizontal legend would eat the width the image wants.
 function buildBoxLegend(vertical) {
   return `<div class="ds-box-legend${vertical ? ' ds-box-legend--vertical' : ''}">
     <span class="ds-box-legend-item"><span class="ds-legend-swatch ds-legend-swatch--solid"></span> ground truth</span>
     <span class="ds-box-legend-item"><span class="ds-legend-swatch ds-legend-swatch--dashed"></span> prediction</span>
-    <span class="ds-box-legend-item"><span class="ds-legend-swatch ds-legend-swatch--dotted"></span> unmatched (background)</span>
     <span class="ds-box-legend-item">box colour = class</span>
   </div>`;
 }
