@@ -156,11 +156,13 @@ body { margin: 0; }
 [data-theme="dark"] .badge-interrupted { background: #3d2200; color: #f5a623; }
 [data-theme="dark"] .badge-failed      { background: #4a1010; color: #f48a8a; }
 
-.badge-task-classification { background: #e1d5f7; color: #4a148c; }
-.badge-task-detection      { background: #d1f0e8; color: #00594d; }
-
-[data-theme="dark"] .badge-task-classification { background: #3a2359; color: #d4b3ff; }
-[data-theme="dark"] .badge-task-detection      { background: #0d3d33; color: #7fe6cd; }
+.badge-task-classification,
+.badge-task-detection {
+  background: transparent;
+  color: var(--pico-muted-color, var(--muted-color));
+  border: 1px solid var(--pico-card-border-color, var(--card-border-color));
+  font-weight: 600;
+}
 
 /* ── Metric cards ──────────────────────────────────────────────────────────── */
 
