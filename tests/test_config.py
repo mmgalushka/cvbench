@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -112,6 +113,71 @@ def test_update_run_status_interrupted(tmp_path):
     assert reloaded.run.status == "interrupted"
     assert reloaded.run.resumable is True
     assert reloaded.run.resume_checkpoint == "/path/to/ckpt.keras"
+
+
+def _dead_pid() -> int:
+    """Spawn and wait on a short-lived subprocess, returning its now-dead PID."""
+    import subprocess
+    p = subprocess.Popen(["true"])
+    p.wait()
+    return p.pid
+
+
+def test_load_config_marks_stale_running_as_failed(tmp_path):
+    # Simulates a run whose process was killed (kill -9, OOM, crash) without
+    # ever getting the chance to update its own status.
+    cfg = build_config("data")
+    cfg.run.status = "running"
+    cfg.run.pid = _dead_pid()
+    save_config(cfg, str(tmp_path))
+
+    reloaded = load_config(str(tmp_path))
+    assert reloaded.run.status == "failed"
+
+    # The correction is persisted, not just returned in-memory.
+    on_disk = yaml.safe_load((tmp_path / "config.yaml").read_text())
+    assert on_disk["run"]["status"] == "failed"
+
+
+def test_load_config_leaves_running_alone_when_pid_alive(tmp_path):
+    cfg = build_config("data")
+    cfg.run.status = "running"
+    cfg.run.pid = os.getpid()
+    save_config(cfg, str(tmp_path))
+
+    reloaded = load_config(str(tmp_path))
+    assert reloaded.run.status == "running"
+
+
+def test_load_config_leaves_recent_legacy_running_alone(tmp_path):
+    # Runs created before the pid field existed default to pid=0, so liveness
+    # falls back to file-activity — a just-saved config counts as "recent".
+    cfg = build_config("data")
+    cfg.run.status = "running"
+    cfg.run.pid = 0
+    save_config(cfg, str(tmp_path))
+
+    reloaded = load_config(str(tmp_path))
+    assert reloaded.run.status == "running"
+
+
+def test_load_config_marks_inactive_legacy_running_as_failed(tmp_path):
+    import os
+    import time
+
+    from cvbench.core.config import _LEGACY_STALE_SECONDS
+
+    cfg = build_config("data")
+    cfg.run.status = "running"
+    cfg.run.pid = 0
+    save_config(cfg, str(tmp_path))
+
+    stale_time = time.time() - _LEGACY_STALE_SECONDS - 60
+    config_path = tmp_path / "config.yaml"
+    os.utime(config_path, (stale_time, stale_time))
+
+    reloaded = load_config(str(tmp_path))
+    assert reloaded.run.status == "failed"
 
 
 # ---------------------------------------------------------------------------
