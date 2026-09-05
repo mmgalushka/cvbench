@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import dataclasses
+import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -116,6 +118,8 @@ class RunConfig:
     name: str = ""
     date: str = ""
     status: str = "running"
+    pid: int = 0  # PID of the process that set status="running"; used to detect a
+    # crashed/killed run whose status was never updated (see load_config).
     epochs_run: int = 0
     val_accuracy: Any = None
     val_loss: Any = None
@@ -274,6 +278,7 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
         name=r.get("name", cfg.run.name),
         date=r.get("date", cfg.run.date),
         status=r.get("status", cfg.run.status),
+        pid=r.get("pid", cfg.run.pid),
         epochs_run=r.get("epochs_run", cfg.run.epochs_run),
         val_accuracy=r.get("val_accuracy", cfg.run.val_accuracy),
         val_loss=r.get("val_loss", cfg.run.val_loss),
@@ -393,14 +398,68 @@ def save_config(cfg: CVBenchConfig, exp_dir: str):
         yaml.dump(_to_dict(cfg), f, default_flow_style=False, sort_keys=False)
 
 
+def _is_pid_alive(pid: int) -> bool:
+    """Best-effort check for whether a process is still alive."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # Exists but owned by someone else — still alive.
+        return True
+    except OSError:
+        return False
+    return True
+
+
+# Legacy runs (created before RunConfig.pid existed) have no PID to check, so a
+# stuck status="running" is instead inferred from file inactivity: no training run
+# should go this long without touching a single file in its directory (CSVLogger
+# and TensorBoard both write at least once per epoch).
+_LEGACY_STALE_SECONDS = 6 * 3600  # 6 hours
+
+
+def _dir_last_activity(exp_dir: str) -> float | None:
+    """Latest mtime among all files under exp_dir, or None if it has none."""
+    latest = None
+    for root, _dirs, files in os.walk(exp_dir):
+        for name in files:
+            try:
+                mtime = os.path.getmtime(os.path.join(root, name))
+            except OSError:
+                continue
+            if latest is None or mtime > latest:
+                latest = mtime
+    return latest
+
+
 def load_config(exp_dir: str) -> CVBenchConfig:
-    """Load config.yaml from an experiment directory."""
+    """Load config.yaml from an experiment directory.
+
+    Corrects a stale status="running" left behind by a run that crashed or was
+    killed externally (kill -9, OOM, closed terminal) and so never got the chance
+    to update its own status:
+    - Runs with a recorded PID (started after this check was added): stale if
+      that PID is no longer alive.
+    - Legacy runs with no recorded PID (pid=0): stale if nothing in the run
+      directory has been touched in over _LEGACY_STALE_SECONDS.
+    """
     path = Path(exp_dir) / "config.yaml"
     if not path.exists():
         raise FileNotFoundError(f"No config.yaml found in {exp_dir}")
     with open(path) as f:
         raw = yaml.safe_load(f) or {}
-    return _dict_to_config(raw)
+    cfg = _dict_to_config(raw)
+    if cfg.run.status == "running":
+        if cfg.run.pid:
+            stale = not _is_pid_alive(cfg.run.pid)
+        else:
+            latest = _dir_last_activity(exp_dir)
+            stale = latest is not None and (time.time() - latest) > _LEGACY_STALE_SECONDS
+        if stale:
+            cfg.run.status = "failed"
+            save_config(cfg, exp_dir)
+    return cfg
 
 
 def load_aug_file(path: str) -> AugmentationConfig:

@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import os
 import sys
 from datetime import date
 
 from cvbench.core.augment import apply_augmentation
-from cvbench.core.config import build_config, save_config, LossConfig, OptimizerConfig, LRSchedulerConfig
+from cvbench.core.config import (
+    build_config,
+    save_config,
+    update_run_status,
+    LossConfig,
+    OptimizerConfig,
+    LRSchedulerConfig,
+)
 from cvbench.core.runs import make_run_name, make_unique_dir, EXPERIMENTS_DIR
 from cvbench.core import trainer as _trainer
 from cvbench.datasets.layout import detect_task_name
@@ -116,26 +124,33 @@ def run_training(
     cfg.run.name = exp_dir.rstrip("/").split("/")[-1]
     cfg.run.date = date.today().strftime("%Y-%m-%d")
     cfg.run.status = "running"
+    cfg.run.pid = os.getpid()
     cfg.run.cli_command = " ".join([sys.argv[0].split("/")[-1]] + sys.argv[1:])
 
     save_config(cfg, exp_dir)
 
-    train_ds, val_ds, num_train = task.build_datasets(cfg, spec)
-    train_ds = apply_augmentation(train_ds, task.filter_transforms(cfg.augmentation.transforms))
+    # If anything below raises (dataset/model build, or the training loop itself),
+    # record it as "failed" instead of leaving status stuck at "running" forever.
+    try:
+        train_ds, val_ds, num_train = task.build_datasets(cfg, spec)
+        train_ds = apply_augmentation(train_ds, task.filter_transforms(cfg.augmentation.transforms))
 
-    model = task.build_model(cfg)
+        model = task.build_model(cfg)
 
-    _trainer.train(
-        cfg=cfg,
-        exp_dir=exp_dir,
-        train_ds=train_ds,
-        val_ds=val_ds,
-        class_names=spec.class_names,
-        model=model,
-        task=task,
-        resume_checkpoint=resume,
-        num_train_samples=num_train,
-        class_weight=resolved_weights,
-    )
+        _trainer.train(
+            cfg=cfg,
+            exp_dir=exp_dir,
+            train_ds=train_ds,
+            val_ds=val_ds,
+            class_names=spec.class_names,
+            model=model,
+            task=task,
+            resume_checkpoint=resume,
+            num_train_samples=num_train,
+            class_weight=resolved_weights,
+        )
+    except BaseException:
+        update_run_status(exp_dir, status="failed")
+        raise
 
     return exp_dir
