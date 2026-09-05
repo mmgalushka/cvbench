@@ -71,7 +71,7 @@ def stratified_image_dataset_from_directory(
         img = tf.cast(img, tf.float32)
         return img, label
 
-    return ds.map(load, num_parallel_calls=tf.data.AUTOTUNE).batch(batch_size)
+    return ds.map(load, num_parallel_calls=tf.data.AUTOTUNE).cache().batch(batch_size)
 
 
 def build_dataset(
@@ -105,6 +105,8 @@ def build_dataset(
         shuffle=training,
         seed=cfg.training.seed if training else None,
     )
+
+    ds = ds.cache()
 
     if training:
         ds = ds.repeat()

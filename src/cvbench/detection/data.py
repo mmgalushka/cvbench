@@ -177,6 +177,7 @@ def build_detection_dataset(
         return img, tuple(targets)
 
     ds = ds.map(_load, num_parallel_calls=tf.data.AUTOTUNE)
+    ds = ds.cache()
     ds = ds.batch(batch)
     if training:
         ds = ds.repeat()
