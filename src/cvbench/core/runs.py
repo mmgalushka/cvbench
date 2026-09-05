@@ -119,6 +119,27 @@ def _resolve_test_accuracy(exp_dir: Path, config_value):
     return None
 
 
+def epochs_done_live(exp_dir: Path | str, cfg: CVBenchConfig) -> int:
+    """Live epoch-progress count for a run.
+
+    `cfg.run.epochs_run` is only written once, at the very end of training (see
+    core/trainer.py), so while a run is still "running" it stays stuck at whatever
+    it was when the run started/resumed. Keras's CSVLogger, on the other hand,
+    appends one row to training_log.csv after every completed epoch — live, while
+    model.fit() is still running — so for a running run that row count is the
+    accurate live progress; for anything else cfg.run.epochs_run is already correct
+    and cheaper (no file read).
+    """
+    if cfg.run.status != "running":
+        return cfg.run.epochs_run
+    log_path = Path(exp_dir) / "training_log.csv"
+    try:
+        with open(log_path) as f:
+            return max(sum(1 for _ in f) - 1, 0)  # -1 for the header row
+    except OSError:
+        return cfg.run.epochs_run
+
+
 def _read_entry(exp_dir: Path) -> dict | None:
     """Read config.yaml from an experiment dir and return a flat summary dict.
     Returns None if config.yaml is missing or unreadable.
@@ -138,7 +159,7 @@ def _read_entry(exp_dir: Path) -> dict | None:
         "val_loss": cfg.run.val_loss,
         "test_accuracy": _resolve_test_accuracy(exp_dir, cfg.run.test_accuracy),
         "test_metric": cfg.run.test_metric,
-        "epochs_run": cfg.run.epochs_run,
+        "epochs_run": epochs_done_live(exp_dir, cfg),
         "status": cfg.run.status,
         "date": cfg.run.date,
         "resumable": cfg.run.resumable,

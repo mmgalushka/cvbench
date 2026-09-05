@@ -76,6 +76,11 @@ def get_run(name: str):
         with open(eval_path) as f:
             eval_report = json.load(f)
 
+    # While a run is still "running", cfg.run.epochs_run is stale (only written
+    # once, at the very end) — the training_log rows just read above already give
+    # an accurate live count, so use that instead of re-reading the file.
+    epochs_run = len(training_log) if cfg.run.status == "running" else cfg.run.epochs_run
+
     if cfg.run.test_accuracy is not None:
         test_accuracy = cfg.run.test_accuracy
     else:
@@ -95,7 +100,7 @@ def get_run(name: str):
         "backbone": cfg.model.backbone,
         "lr": cfg.training.learning_rate,
         "epochs": cfg.training.epochs,
-        "epochs_run": cfg.run.epochs_run,
+        "epochs_run": epochs_run,
         "val_accuracy": cfg.run.val_accuracy,
         "val_loss": cfg.run.val_loss,
         "test_accuracy": test_accuracy,
