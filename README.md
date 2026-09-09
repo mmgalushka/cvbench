@@ -223,6 +223,7 @@ data          generate   [out_dir]  [--format classification|yolo] [--train N] [
 data          explore    <data_dir> [--split train|val|test] [--threshold N]
 data          upsample   <src_dir> <dst_dir> --augmentation <file> --target <N>
 data          clean      <src> <dst> [--dry-run]
+data          hashify    <src> <dst> [--dry-run]
 augmentations list
 augmentations example    [light|standard|heavy|reference] [--output FILE]
 ```
@@ -386,6 +387,18 @@ data clean data/my_data data/my_data_clean             # write the cleaned copy
 | Option | Required | Description |
 |---|---|---|
 | `--dry-run` |  | Print what would be removed without writing `DST` |
+
+### Hashifying a dataset
+
+Use `data hashify` to copy a dataset (classification or YOLO layout) while renaming every image to a content-hash filename (e.g. `0ca9c69d9741cb49.png`), instead of its original basename. This is deterministic and idempotent — the same image always gets the same name, in any dataset — which makes it easy to spot the same source image reappearing across collections. `hashify` never deletes anything: two images that land on the same destination name (byte-identical images sharing a directory) both survive, the second with a numeric suffix. Use `data dedup` to remove genuine duplicates.
+
+```bash
+data hashify data/my_data data/my_data_hashed
+```
+
+| Option | Required | Description |
+|---|---|---|
+| `--dry-run` |  | Print what would be renamed without writing `DST` |
 
 ---
 

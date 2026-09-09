@@ -1,6 +1,5 @@
 """Data management commands: generate synthetic datasets and explore data quality."""
 
-import hashlib
 import random
 import secrets
 import shutil
@@ -11,6 +10,7 @@ import numpy as np
 
 from cvbench.cli.generate import generate
 from cvbench.datasets import clean as clean_mod
+from cvbench.datasets import hashify as hashify_mod
 from cvbench.datasets.stats import get_class_distribution, print_class_distribution
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
@@ -24,10 +24,6 @@ def _fresh_token(used: set) -> str:
         if token not in used:
             return token
     raise RuntimeError("Could not generate a unique token after 10,000 attempts.")
-
-
-def _md5(arr: np.ndarray) -> str:
-    return hashlib.md5(arr.tobytes()).hexdigest()
 
 
 @click.group()
@@ -201,7 +197,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
         dst_path = dst / f"{token}{img_path.suffix.lower()}"
         shutil.copy2(img_path, dst_path)
         arr = np.array(Image.open(img_path).convert("RGB"))
-        used_hashes.add(_md5(arr))
+        used_hashes.add(hashify_mod.hash_array(arr))
     print(f"  {_fmt.green('✓')} Copied {n_src} original(s)")
     print()
 
@@ -221,7 +217,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
             aug_uint8 = None
             for _ in range(_MAX_RETRIES):
                 candidate = np.clip(pipeline(arr), 0, 255).astype(np.uint8)
-                if _md5(candidate) not in used_hashes:
+                if hashify_mod.hash_array(candidate) not in used_hashes:
                     aug_uint8 = candidate
                     break
 
@@ -229,7 +225,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
                 total_skipped += 1
                 continue
 
-            h = _md5(aug_uint8)
+            h = hashify_mod.hash_array(aug_uint8)
             used_hashes.add(h)
             token = _fresh_token(used_tokens)
             used_tokens.add(token)
@@ -299,4 +295,54 @@ def clean(src, dst, dry_run):
     verb = "Would keep" if dry_run else "Kept"
     suffix = f"  {_fmt.dim(f'({n_junk} junk item(s) skipped)')}" if n_junk else ""
     print(f"  {_fmt.green('✓')} {verb} {len(plan.keep)} file(s){suffix}")
+    print(_fmt.rule())
+
+
+@data.command("hashify")
+@click.argument("src")
+@click.argument("dst")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Show what would be renamed without writing DST.")
+def hashify(src, dst, dry_run):
+    """Copy SRC to DST, renaming every image to a content-hash filename.
+
+    SRC  dataset directory to hashify (classification or YOLO layout)\n
+    DST  destination for the renamed copy; must be empty or non-existent.
+
+    Names are derived from pixel content, so the same image gets the same
+    16-hex-char filename every time (deterministic, idempotent) regardless
+    of its original basename. Never deletes: two images that land on the
+    same destination name both survive, the second with a numeric suffix.
+    Use 'data dedup' to remove genuine duplicates. YOLO label files are
+    renamed to match their image's new name. SRC is never modified.
+    """
+    from cvbench.core import _fmt
+
+    src_dir = Path(src)
+    dst_dir = Path(dst)
+
+    if not src_dir.is_dir():
+        raise click.ClickException(f"Source directory not found: '{src_dir}'")
+
+    if dst_dir.exists() and any(dst_dir.iterdir()):
+        raise click.ClickException(
+            f"Destination '{dst_dir}' already contains files. "
+            "Provide an empty or non-existent directory."
+        )
+
+    plan = hashify_mod.hashify_dataset(src_dir, dst_dir, dry_run)
+
+    collisions = sum(1 for a in plan.actions if "-" in Path(a.dst_image).stem)
+
+    print(_fmt.rule())
+    print(f" {_fmt.bold('CVBench — data hashify')}")
+    print(_fmt.rule())
+    print(f"  Source  : {_fmt.dim(str(src_dir))}")
+    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print()
+
+    verb = "Would rename" if dry_run else "Renamed"
+    print(f"  {_fmt.green('✓')} {verb} {len(plan.actions)} image(s)")
+    if collisions:
+        print(f"  {_fmt.yellow('⚠')}  {collisions} filename collision(s) resolved with a numeric suffix")
     print(_fmt.rule())

@@ -35,6 +35,8 @@ action_usage(){
     echo -e "    ${OPT}--target <N>${NC}                     target number of images in output folder (required);"
     echo -e "  ${CMD}data clean${OPT} <src> <dst>${NC}  copy a dataset, dropping OS/editor junk;"
     echo -e "    ${OPT}--dry-run${NC}                        preview without writing dst;"
+    echo -e "  ${CMD}data hashify${OPT} <src> <dst>${NC}  copy a dataset, renaming images to content hashes;"
+    echo -e "    ${OPT}--dry-run${NC}                        preview without writing dst;"
     echo -e ""
     echo -e "${BOLD}Training Commands:${NC}"
     echo -e "  ${CMD}train${OPT} <data_dir> [opts]${NC}      run training;"
