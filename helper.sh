@@ -33,6 +33,8 @@ action_usage(){
     echo -e "  ${CMD}data upsample${OPT} <src_dir> <dst_dir>${NC}  upsample a class folder to a target count;"
     echo -e "    ${OPT}--augmentation <file>${NC}            augmentation YAML spec file (required);"
     echo -e "    ${OPT}--target <N>${NC}                     target number of images in output folder (required);"
+    echo -e "  ${CMD}data clean${OPT} <src> <dst>${NC}  copy a dataset, dropping OS/editor junk;"
+    echo -e "    ${OPT}--dry-run${NC}                        preview without writing dst;"
     echo -e ""
     echo -e "${BOLD}Training Commands:${NC}"
     echo -e "  ${CMD}train${OPT} <data_dir> [opts]${NC}      run training;"

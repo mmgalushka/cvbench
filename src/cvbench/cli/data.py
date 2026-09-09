@@ -10,6 +10,7 @@ import click
 import numpy as np
 
 from cvbench.cli.generate import generate
+from cvbench.datasets import clean as clean_mod
 from cvbench.datasets.stats import get_class_distribution, print_class_distribution
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
@@ -242,4 +243,60 @@ def upsample(src_dir, dst_dir, aug_file, target):
         print(f"  {_fmt.yellow('⚠')}  Skipped {total_skipped} duplicate(s) after {_MAX_RETRIES} retries each")
     print()
     print(f"  Output  : {_fmt.bold(str(dst))}  ({_fmt.green(str(len(list(dst.iterdir()))))} images total)")
+    print(_fmt.rule())
+
+
+@data.command("clean")
+@click.argument("src")
+@click.argument("dst")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Show what would be removed without writing DST.")
+def clean(src, dst, dry_run):
+    """Copy SRC to DST, dropping OS/editor junk.
+
+    SRC  dataset directory to clean (classification or YOLO layout)\n
+    DST  destination for the cleaned copy; must be empty or non-existent.
+
+    Drops Finder/Explorer metadata (.DS_Store, Thumbs.db, __MACOSX/, ...),
+    AppleDouble shadow files (._*), and editor swap/temp files. Directories
+    left empty by junk removal are simply not created at DST. SRC is never
+    modified.
+    """
+    from cvbench.core import _fmt
+
+    src_dir = Path(src)
+    dst_dir = Path(dst)
+
+    if not src_dir.is_dir():
+        raise click.ClickException(f"Source directory not found: '{src_dir}'")
+
+    if dst_dir.exists() and any(dst_dir.iterdir()):
+        raise click.ClickException(
+            f"Destination '{dst_dir}' already contains files. "
+            "Provide an empty or non-existent directory."
+        )
+
+    plan = clean_mod.clean_dataset(src_dir, dst_dir, dry_run)
+
+    print(_fmt.rule())
+    print(f" {_fmt.bold('CVBench — data clean')}")
+    print(_fmt.rule())
+    print(f"  Source  : {_fmt.dim(str(src_dir))}")
+    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print()
+
+    n_junk = len(plan.junk_files) + len(plan.junk_dirs)
+    if n_junk:
+        print(f" {_fmt.bold('Junk found:')}")
+        for rel in plan.junk_dirs:
+            print(f"   {_fmt.yellow('⚠')}  {rel}/  {_fmt.dim('(directory)')}")
+        for rel in plan.junk_files:
+            print(f"   {_fmt.yellow('⚠')}  {rel}")
+    else:
+        print(f" {_fmt.green('✓')} No junk found.")
+
+    print()
+    verb = "Would keep" if dry_run else "Kept"
+    suffix = f"  {_fmt.dim(f'({n_junk} junk item(s) skipped)')}" if n_junk else ""
+    print(f"  {_fmt.green('✓')} {verb} {len(plan.keep)} file(s){suffix}")
     print(_fmt.rule())

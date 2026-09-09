@@ -222,6 +222,7 @@ data          generate   [out_dir]  [--format classification|yolo] [--train N] [
                                     [--image-size N] [--max-objects N] [--seed N] [--overwrite]
 data          explore    <data_dir> [--split train|val|test] [--threshold N]
 data          upsample   <src_dir> <dst_dir> --augmentation <file> --target <N>
+data          clean      <src> <dst> [--dry-run]
 augmentations list
 augmentations example    [light|standard|heavy|reference] [--output FILE]
 ```
@@ -372,6 +373,19 @@ data upsample data/my_data/train/dog data/my_data_aug/train/dog \
 |---|---|---|
 | `--augmentation FILE` | ✓ | Augmentation YAML spec (same format as `--augmentation` in `train`) |
 | `--target N` | ✓ | Total number of images the destination folder should contain |
+
+### Cleaning a dataset
+
+Use `data clean` to copy a dataset (classification or YOLO layout) while dropping OS/editor junk: `.DS_Store`, `Thumbs.db`, `__MACOSX/`, `.Spotlight-V100`, AppleDouble shadow files (`._*`), and editor swap/temp files. Directories left empty by junk removal are simply not created at the destination. The source is never modified.
+
+```bash
+data clean data/my_data data/my_data_clean --dry-run   # preview
+data clean data/my_data data/my_data_clean             # write the cleaned copy
+```
+
+| Option | Required | Description |
+|---|---|---|
+| `--dry-run` |  | Print what would be removed without writing `DST` |
 
 ---
 
