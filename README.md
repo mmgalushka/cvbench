@@ -224,6 +224,7 @@ data          explore    <data_dir> [--split train|val|test] [--threshold N]
 data          upsample   <src_dir> <dst_dir> --augmentation <file> --target <N>
 data          clean      <src> <dst> [--dry-run]
 data          hashify    <src> <dst> [--dry-run]
+data          dedup      <src> <dst> [--across-splits] [--dry-run]
 augmentations list
 augmentations example    [light|standard|heavy|reference] [--output FILE]
 ```
@@ -399,6 +400,19 @@ data hashify data/my_data data/my_data_hashed
 | Option | Required | Description |
 |---|---|---|
 | `--dry-run` |  | Print what would be renamed without writing `DST` |
+
+### Deduplicating a dataset
+
+Use `data dedup` to copy a dataset (classification or YOLO layout) while dropping exact-duplicate images. Duplicates are grouped by full image-content hash; within each group only the lexicographically-first path is kept. For YOLO, dropping an image also drops its paired label file. `--across-splits` additionally flags duplicate groups whose members span more than one split (train/val/test) — the highest-value check, since that's data leakage between splits.
+
+```bash
+data dedup data/my_data data/my_data_deduped --across-splits
+```
+
+| Option | Required | Description |
+|---|---|---|
+| `--across-splits` |  | Warn when a duplicate group spans more than one split |
+| `--dry-run` |  | Print what would be removed without writing `DST` |
 
 ---
 

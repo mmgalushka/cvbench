@@ -10,6 +10,7 @@ import numpy as np
 
 from cvbench.cli.generate import generate
 from cvbench.datasets import clean as clean_mod
+from cvbench.datasets import dedup as dedup_mod
 from cvbench.datasets import hashify as hashify_mod
 from cvbench.datasets.stats import get_class_distribution, print_class_distribution
 
@@ -345,4 +346,73 @@ def hashify(src, dst, dry_run):
     print(f"  {_fmt.green('✓')} {verb} {len(plan.actions)} image(s)")
     if collisions:
         print(f"  {_fmt.yellow('⚠')}  {collisions} filename collision(s) resolved with a numeric suffix")
+    print(_fmt.rule())
+
+
+@data.command("dedup")
+@click.argument("src")
+@click.argument("dst")
+@click.option("--across-splits", is_flag=True, default=False,
+              help="Warn when a duplicate group spans more than one split (train/val/test).")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Show what would be removed without writing DST.")
+def dedup(src, dst, across_splits, dry_run):
+    """Copy SRC to DST, dropping exact-duplicate images.
+
+    SRC  dataset directory to dedup (classification or YOLO layout)\n
+    DST  destination for the deduplicated copy; must be empty or non-existent.
+
+    Duplicates are found by full image-content hash. Within each duplicate
+    group only the lexicographically-first path is kept. For YOLO, dropping
+    an image also drops its paired label file. SRC is never modified. Use
+    'data hashify' first if you also want canonical filenames.
+    """
+    from cvbench.core import _fmt
+
+    src_dir = Path(src)
+    dst_dir = Path(dst)
+
+    if not src_dir.is_dir():
+        raise click.ClickException(f"Source directory not found: '{src_dir}'")
+
+    if dst_dir.exists() and any(dst_dir.iterdir()):
+        raise click.ClickException(
+            f"Destination '{dst_dir}' already contains files. "
+            "Provide an empty or non-existent directory."
+        )
+
+    plan = dedup_mod.dedup_dataset(src_dir, dst_dir, dry_run)
+
+    n_dupe_files = sum(len(v) - 1 for v in plan.duplicate_groups.values())
+
+    print(_fmt.rule())
+    print(f" {_fmt.bold('CVBench — data dedup')}")
+    print(_fmt.rule())
+    print(f"  Source  : {_fmt.dim(str(src_dir))}")
+    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print()
+
+    if plan.duplicate_groups:
+        print(f" {_fmt.bold(f'{len(plan.duplicate_groups)} duplicate group(s) found:')}")
+        for h, paths in plan.duplicate_groups.items():
+            kept, dupes = paths[0], paths[1:]
+            print(f"   {_fmt.dim(h[:8])}  {_fmt.green(str(kept))} (kept)")
+            for p in dupes:
+                print(f"   {' ' * 8}  {_fmt.yellow(str(p))} (dropped)")
+    else:
+        print(f" {_fmt.green('✓')} No duplicates found.")
+
+    if across_splits:
+        print()
+        if plan.cross_split_leaks:
+            print(f" {_fmt.yellow(f'⚠️  {len(plan.cross_split_leaks)} duplicate group(s) leak across splits:')}")
+            for h, paths in plan.cross_split_leaks.items():
+                print(f"   {_fmt.dim(h[:8])}  {', '.join(str(p) for p in paths)}")
+        else:
+            print(f" {_fmt.green('✓')} No cross-split leakage detected.")
+
+    print()
+    verb = "Would keep" if dry_run else "Kept"
+    suffix = f"  {_fmt.dim(f'({n_dupe_files} duplicate(s) dropped)')}" if n_dupe_files else ""
+    print(f"  {_fmt.green('✓')} {verb} {len(plan.keep)} image(s){suffix}")
     print(_fmt.rule())
