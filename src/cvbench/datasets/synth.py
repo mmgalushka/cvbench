@@ -15,6 +15,7 @@ from pathlib import Path
 
 from PIL import ImageDraw
 
+from cvbench.datasets import layout
 from cvbench.datasets.shapes import (
     CLASSES,
     PLACEMENT_ATTEMPTS,
@@ -96,11 +97,5 @@ def generate_yolo_split(split: str, output_root: Path, n: int, size: int,
 
 
 def write_data_yaml(output_root: Path, splits: list[str]):
-    """Write the Ultralytics-style ``data.yaml`` describing the dataset."""
-    lines = [f"path: {output_root}"]
-    for split in splits:
-        key = "val" if split == "val" else split
-        lines.append(f"{key}: images/{split}")
-    lines.append("names:")
-    lines.extend(f"  {i}: {cls}" for i, cls in enumerate(CLASSES))
-    (output_root / "data.yaml").write_text("\n".join(lines) + "\n")
+    """Write the Ultralytics-style ``data.yaml`` for the synthetic shapes classes."""
+    layout.write_data_yaml(output_root, splits, CLASSES)

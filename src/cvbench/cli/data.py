@@ -12,6 +12,7 @@ from cvbench.cli.generate import generate
 from cvbench.datasets import clean as clean_mod
 from cvbench.datasets import dedup as dedup_mod
 from cvbench.datasets import hashify as hashify_mod
+from cvbench.datasets import split as split_mod
 from cvbench.datasets.stats import get_class_distribution, print_class_distribution
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
@@ -415,4 +416,75 @@ def dedup(src, dst, across_splits, dry_run):
     verb = "Would keep" if dry_run else "Kept"
     suffix = f"  {_fmt.dim(f'({n_dupe_files} duplicate(s) dropped)')}" if n_dupe_files else ""
     print(f"  {_fmt.green('✓')} {verb} {len(plan.keep)} image(s){suffix}")
+    print(_fmt.rule())
+
+
+@data.command("split")
+@click.argument("src")
+@click.argument("dst")
+@click.option("--train", "train_ratio", default=0.8, show_default=True, type=float,
+              help="Fraction of images assigned to the train split.")
+@click.option("--val", "val_ratio", default=0.1, show_default=True, type=float,
+              help="Fraction of images assigned to the val split.")
+@click.option("--test", "test_ratio", default=0.1, show_default=True, type=float,
+              help="Fraction of images assigned to the test split.")
+@click.option("--seed", default=42, show_default=True, type=int,
+              help="Random seed for the stratified shuffle.")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Show the planned split without writing DST.")
+def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
+    """Copy SRC to DST, split into train/val/test, stratified by class.
+
+    SRC  dataset directory to split — a flat pool (classification:
+    <class>/*; YOLO: images/* + labels/*) or an already-split dataset,
+    which is pooled back together before re-partitioning.\n
+    DST  destination for the split dataset; must be empty or non-existent.
+
+    Classification stratifies by class folder. YOLO images can carry boxes
+    of more than one class, so the stratification key is each image's
+    primary (most frequent, ties broken by lowest id) box class; images
+    with no boxes are split the same proportional, seeded way as every
+    other group. SRC is never modified.
+    """
+    from cvbench.core import _fmt
+
+    src_dir = Path(src)
+    dst_dir = Path(dst)
+
+    if not src_dir.is_dir():
+        raise click.ClickException(f"Source directory not found: '{src_dir}'")
+
+    ratios = (train_ratio, val_ratio, test_ratio)
+    if abs(sum(ratios) - 1.0) > 1e-6:
+        raise click.ClickException(
+            f"--train/--val/--test must sum to 1.0 (got {sum(ratios):.4f})."
+        )
+
+    if dst_dir.exists() and any(dst_dir.iterdir()):
+        raise click.ClickException(
+            f"Destination '{dst_dir}' already contains files. "
+            "Provide an empty or non-existent directory."
+        )
+
+    plan = split_mod.split_dataset(src_dir, dst_dir, ratios, seed, dry_run)
+
+    print(_fmt.rule())
+    print(f" {_fmt.bold('CVBench — data split')}")
+    print(_fmt.rule())
+    print(f"  Source  : {_fmt.dim(str(src_dir))}  ({_fmt.dim('yolo' if plan.is_yolo else 'classification')})")
+    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print(f"  Ratios  : train={train_ratio}  val={val_ratio}  test={test_ratio}  seed={seed}")
+    print()
+
+    classes = sorted({c for counts in plan.counts.values() for c in counts})
+    max_cls = max((len(c) for c in classes), default=5)
+    print(_fmt.dim(f"   {'Class':<{max_cls}}  {'Train':>7}  {'Val':>7}  {'Test':>7}"))
+    for cls in classes:
+        row = [plan.counts.get(s, {}).get(cls, 0) for s in ("train", "val", "test")]
+        print(f"   {cls:<{max_cls}}  {row[0]:>7}  {row[1]:>7}  {row[2]:>7}")
+
+    print()
+    verb = "Would write" if dry_run else "Wrote"
+    total = len(plan.actions)
+    print(f"  {_fmt.green('✓')} {verb} {total} image(s) across {len(plan.splits_written)} split(s)")
     print(_fmt.rule())

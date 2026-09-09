@@ -225,6 +225,7 @@ data          upsample   <src_dir> <dst_dir> --augmentation <file> --target <N>
 data          clean      <src> <dst> [--dry-run]
 data          hashify    <src> <dst> [--dry-run]
 data          dedup      <src> <dst> [--across-splits] [--dry-run]
+data          split      <src> <dst> [--train F] [--val F] [--test F] [--seed N] [--dry-run]
 augmentations list
 augmentations example    [light|standard|heavy|reference] [--output FILE]
 ```
@@ -413,6 +414,22 @@ data dedup data/my_data data/my_data_deduped --across-splits
 |---|---|---|
 | `--across-splits` |  | Warn when a duplicate group spans more than one split |
 | `--dry-run` |  | Print what would be removed without writing `DST` |
+
+### Splitting a dataset
+
+Use `data split` to copy a dataset (classification or YOLO layout) into train/val/test, stratified by class. `SRC` can be a flat pool (classification: `<class>/*`; YOLO: `images/*` + `labels/*`) or an already-split dataset, which is pooled back together before re-partitioning. YOLO images can carry boxes of more than one class, so the stratification key is each image's *primary* (most frequent, ties broken by lowest id) box class; images with no boxes are split the same proportional, seeded way as every other group.
+
+```bash
+data split data/my_data data/my_data_split --train 0.8 --val 0.1 --test 0.1 --seed 42
+```
+
+| Option | Required | Description |
+|---|---|---|
+| `--train FLOAT` |  | Fraction assigned to train (default: 0.8) |
+| `--val FLOAT` |  | Fraction assigned to val (default: 0.1) |
+| `--test FLOAT` |  | Fraction assigned to test (default: 0.1) |
+| `--seed N` |  | Random seed for the stratified shuffle (default: 42) |
+| `--dry-run` |  | Print the planned split without writing `DST` |
 
 ---
 

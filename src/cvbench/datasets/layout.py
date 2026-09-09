@@ -96,6 +96,17 @@ def read_yolo_boxes(label_path: Path) -> list[tuple[int, tuple[float, float, flo
     return boxes
 
 
+def write_data_yaml(output_root: Path, splits: list[str], class_names: list[str]) -> None:
+    """Write an Ultralytics-style ``data.yaml`` describing a YOLO dataset."""
+    lines = [f"path: {output_root}"]
+    for split in splits:
+        key = "val" if split == "val" else split
+        lines.append(f"{key}: images/{split}")
+    lines.append("names:")
+    lines.extend(f"  {i}: {cls}" for i, cls in enumerate(class_names))
+    (output_root / "data.yaml").write_text("\n".join(lines) + "\n")
+
+
 def detect_task_name(data_dir: str | Path) -> str:
     """'detection' for a YOLO-layout data dir, else 'classification'."""
     return "detection" if is_yolo_dataset(Path(data_dir)) else "classification"
