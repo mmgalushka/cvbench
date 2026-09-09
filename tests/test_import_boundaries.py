@@ -27,6 +27,7 @@ def test_datasets_package_does_not_import_tensorflow():
         "import cvbench.datasets.hashify\n"
         "import cvbench.datasets.dedup\n"
         "import cvbench.datasets.split\n"
+        "import cvbench.datasets.merge\n"
         "assert 'tensorflow' not in sys.modules, sorted(sys.modules)\n"
     )
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)

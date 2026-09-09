@@ -226,6 +226,7 @@ data          clean      <src> <dst> [--dry-run]
 data          hashify    <src> <dst> [--dry-run]
 data          dedup      <src> <dst> [--across-splits] [--dry-run]
 data          split      <src> <dst> [--train F] [--val F] [--test F] [--seed N] [--dry-run]
+data          merge      <src> <dst> [--dry-run]
 augmentations list
 augmentations example    [light|standard|heavy|reference] [--output FILE]
 ```
@@ -430,6 +431,19 @@ data split data/my_data data/my_data_split --train 0.8 --val 0.1 --test 0.1 --se
 | `--test FLOAT` |  | Fraction assigned to test (default: 0.1) |
 | `--seed N` |  | Random seed for the stratified shuffle (default: 42) |
 | `--dry-run` |  | Print the planned split without writing `DST` |
+
+### Merging datasets
+
+Use `data merge` to combine several datasets into one. `SRC`'s immediate subdirectories are the datasets to combine (each already in classification or YOLO layout, already split) — e.g. `src/dataset_a/`, `src/dataset_b/`, ... `DST` is the single merged output. Splits are matched by name across sources (`train`+`train`, `val`+`val`, ...); a split missing from one source is simply skipped for that source. Class name↔index maps are reconciled into one union (YOLO label files are rewritten with remapped ids). Images are renamed to a content hash so files from different sources never collide by name.
+
+```bash
+mkdir -p data/to_merge && cp -r data/set_a data/to_merge/a && cp -r data/set_b data/to_merge/b
+data merge data/to_merge data/merged
+```
+
+| Option | Required | Description |
+|---|---|---|
+| `--dry-run` |  | Print the merge plan without writing `DST` |
 
 ---
 

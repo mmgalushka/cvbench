@@ -39,7 +39,7 @@ def content_hash(path: Path) -> str:
     return hash_image_file(path)[:HASH_NAME_LEN]
 
 
-def _unique_name(base: str, suffix: str, used: set[str]) -> str:
+def unique_name(base: str, suffix: str, used: set[str]) -> str:
     name = f"{base}{suffix}"
     i = 0
     while name in used:
@@ -74,7 +74,7 @@ def build_plan(src: Path) -> HashifyPlan:
         for img in layout.list_images(images_root):
             rel = img.relative_to(images_root)
             used = used_by_dir.setdefault(rel.parent, set())
-            new_name = _unique_name(content_hash(img), img.suffix.lower(), used)
+            new_name = unique_name(content_hash(img), img.suffix.lower(), used)
             dst_image = Path(layout.IMAGES_DIRNAME) / rel.parent / new_name
 
             label_src = labels_root / rel.with_suffix(".txt")
@@ -91,7 +91,7 @@ def build_plan(src: Path) -> HashifyPlan:
         for img in layout.list_images(src):
             rel = img.relative_to(src)
             used = used_by_dir.setdefault(rel.parent, set())
-            new_name = _unique_name(content_hash(img), img.suffix.lower(), used)
+            new_name = unique_name(content_hash(img), img.suffix.lower(), used)
             plan.actions.append(HashifyAction(img, rel.parent / new_name))
 
     return plan

@@ -44,6 +44,8 @@ action_usage(){
     echo -e "    ${OPT}--train/--val/--test <F>${NC}         split ratios (default: 0.8/0.1/0.1);"
     echo -e "    ${OPT}--seed <N>${NC}                       random seed (default: 42);"
     echo -e "    ${OPT}--dry-run${NC}                        preview without writing dst;"
+    echo -e "  ${CMD}data merge${OPT} <src> <dst>${NC}  combine src's dataset subfolders into dst;"
+    echo -e "    ${OPT}--dry-run${NC}                        preview without writing dst;"
     echo -e ""
     echo -e "${BOLD}Training Commands:${NC}"
     echo -e "  ${CMD}train${OPT} <data_dir> [opts]${NC}      run training;"
