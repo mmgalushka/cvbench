@@ -48,19 +48,15 @@ def test_split_deterministic_given_seed(tmp_path):
     assert run("dst1") == run("dst2")
 
 
-def test_split_resplits_already_split_dataset(tmp_path):
+def test_split_rejects_already_split_dataset(tmp_path):
     src = tmp_path / "src"
     for split_name in ["train", "val"]:
         _make_flat_classification(src / split_name, per_class=10)
     dst = tmp_path / "dst"
     result = CliRunner().invoke(split, [str(src), str(dst), "--train", "0.5", "--val", "0.25", "--test", "0.25"])
-    assert result.exit_code == 0, result.output
-
-    total_per_class = {
-        cls: sum(len(list((dst / s / cls).glob("*.jpg"))) for s in ("train", "val", "test"))
-        for cls in ["cat", "dog"]
-    }
-    assert total_per_class == {"cat": 20, "dog": 20}
+    assert result.exit_code != 0
+    assert "flatten" in result.output
+    assert not dst.exists()
 
 
 def test_split_rejects_bad_ratios(tmp_path):

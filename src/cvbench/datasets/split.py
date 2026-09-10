@@ -1,12 +1,13 @@
-"""``data split`` — partition a dataset into train/val/test, stratified.
+"""``data split`` — partition a flat dataset into train/val/test, stratified.
 
-Works on a flat pool (classification: ``<class>/*``; YOLO: ``images/*`` +
-``labels/*``) or an already-split dataset, which is pooled back together
-before re-partitioning. Classification stratifies by class folder. YOLO
-images can carry boxes of more than one class, so the stratification key is
-each image's *primary* class — its most frequent box class, ties broken by
-the lowest class id; images with no boxes fall into their own group and are
-split the same (proportional, seeded) way as every other group.
+Works on a flat pool only (classification: ``<class>/*``; YOLO:
+``images/*`` + ``labels/*``) — an already-split SRC is rejected; run
+``data flatten`` first to pool it back together, then re-split the result.
+Classification stratifies by class folder. YOLO images can carry boxes of
+more than one class, so the stratification key is each image's *primary*
+class — its most frequent box class, ties broken by the lowest class id;
+images with no boxes fall into their own group and are split the same
+(proportional, seeded) way as every other group.
 """
 from __future__ import annotations
 
@@ -45,21 +46,6 @@ def stratified_split(
     return result
 
 
-def _dedupe_filename(name: str, used: set[str]) -> str:
-    """NAME, or NAME with a numeric suffix if already present in USED."""
-    if name not in used:
-        used.add(name)
-        return name
-    stem, suffix = Path(name).stem, Path(name).suffix
-    i = 0
-    while True:
-        i += 1
-        candidate = f"{stem}-{i}{suffix}"
-        if candidate not in used:
-            used.add(candidate)
-            return candidate
-
-
 @dataclass
 class SplitAction:
     src_image: Path             # absolute
@@ -78,18 +64,10 @@ class SplitPlan:
 
 
 def _classification_pool(src: Path) -> dict[str, list[Path]]:
-    """class name -> image paths, pooled across existing splits or a flat pool."""
+    """class name -> image paths, read from a flat pool (SRC/<class>/*)."""
     pool: dict[str, list[Path]] = defaultdict(list)
-    if any((src / s).is_dir() for s in layout.SPLIT_NAMES):
-        for split_name in layout.SPLIT_NAMES:
-            split_dir = src / split_name
-            if not split_dir.is_dir():
-                continue
-            for cls_dir in sorted(p for p in split_dir.iterdir() if p.is_dir()):
-                pool[cls_dir.name].extend(layout.list_images(cls_dir))
-    else:
-        for cls_dir in sorted(p for p in src.iterdir() if p.is_dir()):
-            pool[cls_dir.name].extend(layout.list_images(cls_dir))
+    for cls_dir in sorted(p for p in src.iterdir() if p.is_dir()):
+        pool[cls_dir.name].extend(layout.list_images(cls_dir))
     return pool
 
 
@@ -104,7 +82,7 @@ def build_plan_classification(src: Path, ratios: tuple[float, float, float], see
             continue
         used_by_class: dict[str, set[str]] = defaultdict(set)
         for img, cls in entries:
-            dst_name = _dedupe_filename(img.name, used_by_class[cls])
+            dst_name = layout.dedupe_filename(img.name, used_by_class[cls])
             dst_rel = Path(split_name) / cls / dst_name
             plan.actions.append(SplitAction(img, dst_rel))
             plan.counts.setdefault(split_name, {})
@@ -114,15 +92,14 @@ def build_plan_classification(src: Path, ratios: tuple[float, float, float], see
 
 
 def _yolo_pool(src: Path) -> list[tuple[Path, Path | None, Path]]:
-    """(image, label-or-None, image-path-relative-to-any-split) pooled across splits."""
+    """(image, label-or-None, image-path-relative-to-images-root) from a flat pool."""
     images_root = src / layout.IMAGES_DIRNAME
     labels_root = src / layout.LABELS_DIRNAME
     pairs: list[tuple[Path, Path | None, Path]] = []
     for img in layout.list_images(images_root):
         rel = img.relative_to(images_root)
-        rel_no_split = Path(*rel.parts[1:]) if rel.parts[0] in layout.SPLIT_NAMES else rel
         label_path = labels_root / rel.with_suffix(".txt")
-        pairs.append((img, label_path if label_path.is_file() else None, rel_no_split))
+        pairs.append((img, label_path if label_path.is_file() else None, rel))
     return pairs
 
 
@@ -150,7 +127,7 @@ def build_plan_yolo(src: Path, ratios: tuple[float, float, float], seed: int) ->
             continue
         used_by_dir: dict[Path, set[str]] = defaultdict(set)
         for img, label, rel, key in entries:
-            dst_name = _dedupe_filename(rel.name, used_by_dir[rel.parent])
+            dst_name = layout.dedupe_filename(rel.name, used_by_dir[rel.parent])
             dst_image = Path(layout.IMAGES_DIRNAME) / split_name / rel.parent / dst_name
             src_label = dst_label = None
             if label is not None:
@@ -184,6 +161,11 @@ def apply_plan(plan: SplitPlan, dst: Path) -> None:
 
 def split_dataset(src: Path, dst: Path, ratios: tuple[float, float, float], seed: int, dry_run: bool) -> SplitPlan:
     """Build the split plan for SRC and, unless DRY_RUN, write it to DST."""
+    if layout.is_already_split(src):
+        raise ValueError(
+            f"'{src}' is already split into train/val/test — "
+            "run 'data flatten' first, then 'data split' the flattened result."
+        )
     plan = build_plan_yolo(src, ratios, seed) if layout.is_yolo_dataset(src) else \
         build_plan_classification(src, ratios, seed)
     if not dry_run:

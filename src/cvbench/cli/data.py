@@ -11,8 +11,8 @@ import numpy as np
 from cvbench.cli.generate import generate
 from cvbench.datasets import clean as clean_mod
 from cvbench.datasets import dedup as dedup_mod
+from cvbench.datasets import flatten as flatten_mod
 from cvbench.datasets import hashify as hashify_mod
-from cvbench.datasets import merge as merge_mod
 from cvbench.datasets import split as split_mod
 from cvbench.datasets.stats import get_class_distribution, print_class_distribution
 
@@ -467,7 +467,10 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
             "Provide an empty or non-existent directory."
         )
 
-    plan = split_mod.split_dataset(src_dir, dst_dir, ratios, seed, dry_run)
+    try:
+        plan = split_mod.split_dataset(src_dir, dst_dir, ratios, seed, dry_run)
+    except ValueError as e:
+        raise click.ClickException(str(e))
 
     print(_fmt.rule())
     print(f" {_fmt.bold('CVBench — data split')}")
@@ -491,25 +494,21 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
     print(_fmt.rule())
 
 
-@data.command("merge")
+@data.command("flatten")
 @click.argument("src")
 @click.argument("dst")
 @click.option("--dry-run", is_flag=True, default=False,
-              help="Show the merge plan without writing DST.")
-def merge(src, dst, dry_run):
-    """Combine the datasets under SRC into one at DST.
+              help="Show the flatten plan without writing DST.")
+def flatten(src, dst, dry_run):
+    """Copy SRC to DST, pooling train/val/test back into one flat dataset.
 
-    SRC  parent directory whose immediate subdirectories are the datasets
-    to combine (each already in classification or YOLO layout, already
-    split) — e.g. src/dataset_a/, src/dataset_b/, ...\n
-    DST  destination for the merged dataset; must be empty or non-existent.
+    SRC  an already-split dataset (classification or YOLO layout)\n
+    DST  destination for the flattened copy; must be empty or non-existent.
 
-    Splits are matched by name across sources (train+train, val+val, ...);
-    a split missing from one source is simply skipped for that source.
-    Class name<->index maps are reconciled into one union (YOLO label
-    files are rewritten with remapped ids). Images are renamed to a
-    content hash so files from different sources never collide by name.
-    SRC is never modified.
+    The exact inverse of 'data split': every image from every split is
+    copied into one flat pool (classification: <class>/*; YOLO: images/*
+    + labels/*), with no train/val/test structure. Use 'data split'
+    afterward to re-partition. SRC is never modified.
     """
     from cvbench.core import _fmt
 
@@ -526,30 +525,26 @@ def merge(src, dst, dry_run):
         )
 
     try:
-        plan = merge_mod.merge_datasets(src_dir, dst_dir, dry_run)
+        plan = flatten_mod.flatten_dataset(src_dir, dst_dir, dry_run)
     except ValueError as e:
         raise click.ClickException(str(e))
 
     print(_fmt.rule())
-    print(f" {_fmt.bold('CVBench — data merge')}")
+    print(f" {_fmt.bold('CVBench — data flatten')}")
     print(_fmt.rule())
     print(f"  Source  : {_fmt.dim(str(src_dir))}  ({_fmt.dim('yolo' if plan.is_yolo else 'classification')})")
     print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
     print()
 
-    if plan.warnings:
-        for w in plan.warnings:
-            print(f" {_fmt.yellow('⚠')}  {w}")
-        print()
-
-    classes = sorted({c for counts in plan.counts.values() for c in counts})
+    classes = sorted(plan.counts)
     max_cls = max((len(c) for c in classes), default=5)
-    print(_fmt.dim(f"   {'Class':<{max_cls}}  {'Train':>7}  {'Val':>7}  {'Test':>7}"))
+    print(_fmt.dim(f"   {'Class':<{max_cls}}  {'Count':>7}"))
     for cls in classes:
-        row = [plan.counts.get(s, {}).get(cls, 0) for s in ("train", "val", "test")]
-        print(f"   {cls:<{max_cls}}  {row[0]:>7}  {row[1]:>7}  {row[2]:>7}")
+        print(f"   {cls:<{max_cls}}  {plan.counts[cls]:>7}")
 
     print()
     verb = "Would write" if dry_run else "Wrote"
-    print(f"  {_fmt.green('✓')} {verb} {len(plan.actions)} image(s) across {len(plan.splits_written)} split(s)")
+    print(f"  {_fmt.green('✓')} {verb} {len(plan.actions)} image(s)")
     print(_fmt.rule())
+
+

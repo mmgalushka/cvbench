@@ -35,6 +35,28 @@ def is_yolo_dataset(data_dir: Path) -> bool:
     return (data_dir / IMAGES_DIRNAME).is_dir() and (data_dir / LABELS_DIRNAME).is_dir()
 
 
+def is_already_split(data_dir: Path) -> bool:
+    """True if DATA_DIR has a train/val/test subdir (classification or YOLO)."""
+    if is_yolo_dataset(data_dir):
+        return any((data_dir / IMAGES_DIRNAME / s).is_dir() for s in SPLIT_NAMES)
+    return any((data_dir / s).is_dir() for s in SPLIT_NAMES)
+
+
+def dedupe_filename(name: str, used: set[str]) -> str:
+    """NAME, or NAME with a numeric suffix if already present in USED."""
+    if name not in used:
+        used.add(name)
+        return name
+    stem, suffix = Path(name).stem, Path(name).suffix
+    i = 0
+    while True:
+        i += 1
+        candidate = f"{stem}-{i}{suffix}"
+        if candidate not in used:
+            used.add(candidate)
+            return candidate
+
+
 def yolo_root(split_dir: Path) -> Optional[Path]:
     """Return the dataset root if SPLIT_DIR is a YOLO split image directory."""
     parent = split_dir.parent
@@ -97,11 +119,18 @@ def read_yolo_boxes(label_path: Path) -> list[tuple[int, tuple[float, float, flo
 
 
 def write_data_yaml(output_root: Path, splits: list[str], class_names: list[str]) -> None:
-    """Write an Ultralytics-style ``data.yaml`` describing a YOLO dataset."""
+    """Write an Ultralytics-style ``data.yaml`` describing a YOLO dataset.
+
+    An empty SPLITS means a flat (unsplit) dataset: a single ``images:``
+    key pointing at ``images/`` directly, no split subdirectories.
+    """
     lines = [f"path: {output_root}"]
-    for split in splits:
-        key = "val" if split == "val" else split
-        lines.append(f"{key}: images/{split}")
+    if splits:
+        for split in splits:
+            key = "val" if split == "val" else split
+            lines.append(f"{key}: images/{split}")
+    else:
+        lines.append("images: images")
     lines.append("names:")
     lines.extend(f"  {i}: {cls}" for i, cls in enumerate(class_names))
     (output_root / "data.yaml").write_text("\n".join(lines) + "\n")
