@@ -222,6 +222,11 @@ data          generate   [out_dir]  [--format classification|yolo] [--train N] [
                                     [--image-size N] [--max-objects N] [--seed N] [--overwrite]
 data          explore    <data_dir> [--split train|val|test] [--threshold N]
 data          upsample   <src_dir> <dst_dir> --augmentation <file> --target <N>
+data          clean      <src> <dst> [--dry-run]
+data          hashify    <src> <dst> [--dry-run]
+data          dedup      <src> <dst> [--across-splits] [--dry-run]
+data          split      <src> <dst> [--train F] [--val F] [--test F] [--seed N] [--dry-run]
+data          flatten    <src> <dst> [--dry-run]
 augmentations list
 augmentations example    [light|standard|heavy|reference] [--output FILE]
 ```
@@ -372,6 +377,73 @@ data upsample data/my_data/train/dog data/my_data_aug/train/dog \
 |---|---|---|
 | `--augmentation FILE` | ✓ | Augmentation YAML spec (same format as `--augmentation` in `train`) |
 | `--target N` | ✓ | Total number of images the destination folder should contain |
+
+### Cleaning a dataset
+
+Use `data clean` to copy a dataset (classification or YOLO layout) while dropping OS/editor junk: `.DS_Store`, `Thumbs.db`, `__MACOSX/`, `.Spotlight-V100`, AppleDouble shadow files (`._*`), and editor swap/temp files. Directories left empty by junk removal are simply not created at the destination. The source is never modified.
+
+```bash
+data clean data/my_data data/my_data_clean --dry-run   # preview
+data clean data/my_data data/my_data_clean             # write the cleaned copy
+```
+
+| Option | Required | Description |
+|---|---|---|
+| `--dry-run` |  | Print what would be removed without writing `DST` |
+
+### Hashifying a dataset
+
+Use `data hashify` to copy a dataset (classification or YOLO layout) while renaming every image to a content-hash filename (e.g. `0ca9c69d9741cb49.png`), instead of its original basename. This is deterministic and idempotent — the same image always gets the same name, in any dataset — which makes it easy to spot the same source image reappearing across collections. `hashify` never deletes anything: two images that land on the same destination name (byte-identical images sharing a directory) both survive, the second with a numeric suffix. Use `data dedup` to remove genuine duplicates.
+
+```bash
+data hashify data/my_data data/my_data_hashed
+```
+
+| Option | Required | Description |
+|---|---|---|
+| `--dry-run` |  | Print what would be renamed without writing `DST` |
+
+### Deduplicating a dataset
+
+Use `data dedup` to copy a dataset (classification or YOLO layout) while dropping exact-duplicate images. Duplicates are grouped by full image-content hash; within each group only the lexicographically-first path is kept. For YOLO, dropping an image also drops its paired label file. `--across-splits` additionally flags duplicate groups whose members span more than one split (train/val/test) — the highest-value check, since that's data leakage between splits.
+
+```bash
+data dedup data/my_data data/my_data_deduped --across-splits
+```
+
+| Option | Required | Description |
+|---|---|---|
+| `--across-splits` |  | Warn when a duplicate group spans more than one split |
+| `--dry-run` |  | Print what would be removed without writing `DST` |
+
+### Splitting a dataset
+
+Use `data split` to copy a dataset (classification or YOLO layout) into train/val/test, stratified by class. `SRC` must be a flat pool (classification: `<class>/*`; YOLO: `images/*` + `labels/*`) — an already-split `SRC` is rejected; run `data flatten` first, then re-split the result. YOLO images can carry boxes of more than one class, so the stratification key is each image's *primary* (most frequent, ties broken by lowest id) box class; images with no boxes are split the same proportional, seeded way as every other group.
+
+```bash
+data split data/my_data data/my_data_split --train 0.8 --val 0.1 --test 0.1 --seed 42
+```
+
+| Option | Required | Description |
+|---|---|---|
+| `--train FLOAT` |  | Fraction assigned to train (default: 0.8) |
+| `--val FLOAT` |  | Fraction assigned to val (default: 0.1) |
+| `--test FLOAT` |  | Fraction assigned to test (default: 0.1) |
+| `--seed N` |  | Random seed for the stratified shuffle (default: 42) |
+| `--dry-run` |  | Print the planned split without writing `DST` |
+
+### Flattening a dataset
+
+Use `data flatten` to copy an already-split dataset (classification or YOLO layout) back into one flat pool — the exact inverse of `data split`. Every image from every split (`train`/`val`/`test`) is copied into a single flat destination (classification: `<class>/*`; YOLO: `images/*` + `labels/*`), with no split structure left. A `SRC` that isn't already split is rejected — there's nothing to flatten. This is the way to re-split a dataset with different ratios or a different seed: flatten it, then split the flattened result.
+
+```bash
+data flatten data/my_data_split data/my_data_flat
+data split data/my_data_flat data/my_data_resplit --train 0.7 --val 0.15 --test 0.15
+```
+
+| Option | Required | Description |
+|---|---|---|
+| `--dry-run` |  | Print the flatten plan without writing `DST` |
 
 ---
 

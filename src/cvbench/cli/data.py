@@ -1,6 +1,5 @@
 """Data management commands: generate synthetic datasets and explore data quality."""
 
-import hashlib
 import random
 import secrets
 import shutil
@@ -10,6 +9,11 @@ import click
 import numpy as np
 
 from cvbench.cli.generate import generate
+from cvbench.datasets import clean as clean_mod
+from cvbench.datasets import dedup as dedup_mod
+from cvbench.datasets import flatten as flatten_mod
+from cvbench.datasets import hashify as hashify_mod
+from cvbench.datasets import split as split_mod
 from cvbench.datasets.stats import get_class_distribution, print_class_distribution
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
@@ -23,10 +27,6 @@ def _fresh_token(used: set) -> str:
         if token not in used:
             return token
     raise RuntimeError("Could not generate a unique token after 10,000 attempts.")
-
-
-def _md5(arr: np.ndarray) -> str:
-    return hashlib.md5(arr.tobytes()).hexdigest()
 
 
 @click.group()
@@ -200,7 +200,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
         dst_path = dst / f"{token}{img_path.suffix.lower()}"
         shutil.copy2(img_path, dst_path)
         arr = np.array(Image.open(img_path).convert("RGB"))
-        used_hashes.add(_md5(arr))
+        used_hashes.add(hashify_mod.hash_array(arr))
     print(f"  {_fmt.green('✓')} Copied {n_src} original(s)")
     print()
 
@@ -220,7 +220,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
             aug_uint8 = None
             for _ in range(_MAX_RETRIES):
                 candidate = np.clip(pipeline(arr), 0, 255).astype(np.uint8)
-                if _md5(candidate) not in used_hashes:
+                if hashify_mod.hash_array(candidate) not in used_hashes:
                     aug_uint8 = candidate
                     break
 
@@ -228,7 +228,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
                 total_skipped += 1
                 continue
 
-            h = _md5(aug_uint8)
+            h = hashify_mod.hash_array(aug_uint8)
             used_hashes.add(h)
             token = _fresh_token(used_tokens)
             used_tokens.add(token)
@@ -243,3 +243,308 @@ def upsample(src_dir, dst_dir, aug_file, target):
     print()
     print(f"  Output  : {_fmt.bold(str(dst))}  ({_fmt.green(str(len(list(dst.iterdir()))))} images total)")
     print(_fmt.rule())
+
+
+@data.command("clean")
+@click.argument("src")
+@click.argument("dst")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Show what would be removed without writing DST.")
+def clean(src, dst, dry_run):
+    """Copy SRC to DST, dropping OS/editor junk.
+
+    SRC  dataset directory to clean (classification or YOLO layout)\n
+    DST  destination for the cleaned copy; must be empty or non-existent.
+
+    Drops Finder/Explorer metadata (.DS_Store, Thumbs.db, __MACOSX/, ...),
+    AppleDouble shadow files (._*), and editor swap/temp files. Directories
+    left empty by junk removal are simply not created at DST. SRC is never
+    modified.
+    """
+    from cvbench.core import _fmt
+
+    src_dir = Path(src)
+    dst_dir = Path(dst)
+
+    if not src_dir.is_dir():
+        raise click.ClickException(f"Source directory not found: '{src_dir}'")
+
+    if dst_dir.exists() and any(dst_dir.iterdir()):
+        raise click.ClickException(
+            f"Destination '{dst_dir}' already contains files. "
+            "Provide an empty or non-existent directory."
+        )
+
+    plan = clean_mod.clean_dataset(src_dir, dst_dir, dry_run)
+
+    print(_fmt.rule())
+    print(f" {_fmt.bold('CVBench — data clean')}")
+    print(_fmt.rule())
+    print(f"  Source  : {_fmt.dim(str(src_dir))}")
+    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print()
+
+    n_junk = len(plan.junk_files) + len(plan.junk_dirs)
+    if n_junk:
+        print(f" {_fmt.bold('Junk found:')}")
+        for rel in plan.junk_dirs:
+            print(f"   {_fmt.yellow('⚠')}  {rel}/  {_fmt.dim('(directory)')}")
+        for rel in plan.junk_files:
+            print(f"   {_fmt.yellow('⚠')}  {rel}")
+    else:
+        print(f" {_fmt.green('✓')} No junk found.")
+
+    print()
+    verb = "Would keep" if dry_run else "Kept"
+    suffix = f"  {_fmt.dim(f'({n_junk} junk item(s) skipped)')}" if n_junk else ""
+    print(f"  {_fmt.green('✓')} {verb} {len(plan.keep)} file(s){suffix}")
+    print(_fmt.rule())
+
+
+@data.command("hashify")
+@click.argument("src")
+@click.argument("dst")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Show what would be renamed without writing DST.")
+def hashify(src, dst, dry_run):
+    """Copy SRC to DST, renaming every image to a content-hash filename.
+
+    SRC  dataset directory to hashify (classification or YOLO layout)\n
+    DST  destination for the renamed copy; must be empty or non-existent.
+
+    Names are derived from pixel content, so the same image gets the same
+    16-hex-char filename every time (deterministic, idempotent) regardless
+    of its original basename. Never deletes: two images that land on the
+    same destination name both survive, the second with a numeric suffix.
+    Use 'data dedup' to remove genuine duplicates. YOLO label files are
+    renamed to match their image's new name. SRC is never modified.
+    """
+    from cvbench.core import _fmt
+
+    src_dir = Path(src)
+    dst_dir = Path(dst)
+
+    if not src_dir.is_dir():
+        raise click.ClickException(f"Source directory not found: '{src_dir}'")
+
+    if dst_dir.exists() and any(dst_dir.iterdir()):
+        raise click.ClickException(
+            f"Destination '{dst_dir}' already contains files. "
+            "Provide an empty or non-existent directory."
+        )
+
+    plan = hashify_mod.hashify_dataset(src_dir, dst_dir, dry_run)
+
+    collisions = sum(1 for a in plan.actions if "-" in Path(a.dst_image).stem)
+
+    print(_fmt.rule())
+    print(f" {_fmt.bold('CVBench — data hashify')}")
+    print(_fmt.rule())
+    print(f"  Source  : {_fmt.dim(str(src_dir))}")
+    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print()
+
+    verb = "Would rename" if dry_run else "Renamed"
+    print(f"  {_fmt.green('✓')} {verb} {len(plan.actions)} image(s)")
+    if collisions:
+        print(f"  {_fmt.yellow('⚠')}  {collisions} filename collision(s) resolved with a numeric suffix")
+    print(_fmt.rule())
+
+
+@data.command("dedup")
+@click.argument("src")
+@click.argument("dst")
+@click.option("--across-splits", is_flag=True, default=False,
+              help="Warn when a duplicate group spans more than one split (train/val/test).")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Show what would be removed without writing DST.")
+def dedup(src, dst, across_splits, dry_run):
+    """Copy SRC to DST, dropping exact-duplicate images.
+
+    SRC  dataset directory to dedup (classification or YOLO layout)\n
+    DST  destination for the deduplicated copy; must be empty or non-existent.
+
+    Duplicates are found by full image-content hash. Within each duplicate
+    group only the lexicographically-first path is kept. For YOLO, dropping
+    an image also drops its paired label file. SRC is never modified. Use
+    'data hashify' first if you also want canonical filenames.
+    """
+    from cvbench.core import _fmt
+
+    src_dir = Path(src)
+    dst_dir = Path(dst)
+
+    if not src_dir.is_dir():
+        raise click.ClickException(f"Source directory not found: '{src_dir}'")
+
+    if dst_dir.exists() and any(dst_dir.iterdir()):
+        raise click.ClickException(
+            f"Destination '{dst_dir}' already contains files. "
+            "Provide an empty or non-existent directory."
+        )
+
+    plan = dedup_mod.dedup_dataset(src_dir, dst_dir, dry_run)
+
+    n_dupe_files = sum(len(v) - 1 for v in plan.duplicate_groups.values())
+
+    print(_fmt.rule())
+    print(f" {_fmt.bold('CVBench — data dedup')}")
+    print(_fmt.rule())
+    print(f"  Source  : {_fmt.dim(str(src_dir))}")
+    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print()
+
+    if plan.duplicate_groups:
+        print(f" {_fmt.bold(f'{len(plan.duplicate_groups)} duplicate group(s) found:')}")
+        for h, paths in plan.duplicate_groups.items():
+            kept, dupes = paths[0], paths[1:]
+            print(f"   {_fmt.dim(h[:8])}  {_fmt.green(str(kept))} (kept)")
+            for p in dupes:
+                print(f"   {' ' * 8}  {_fmt.yellow(str(p))} (dropped)")
+    else:
+        print(f" {_fmt.green('✓')} No duplicates found.")
+
+    if across_splits:
+        print()
+        if plan.cross_split_leaks:
+            print(f" {_fmt.yellow(f'⚠️  {len(plan.cross_split_leaks)} duplicate group(s) leak across splits:')}")
+            for h, paths in plan.cross_split_leaks.items():
+                print(f"   {_fmt.dim(h[:8])}  {', '.join(str(p) for p in paths)}")
+        else:
+            print(f" {_fmt.green('✓')} No cross-split leakage detected.")
+
+    print()
+    verb = "Would keep" if dry_run else "Kept"
+    suffix = f"  {_fmt.dim(f'({n_dupe_files} duplicate(s) dropped)')}" if n_dupe_files else ""
+    print(f"  {_fmt.green('✓')} {verb} {len(plan.keep)} image(s){suffix}")
+    print(_fmt.rule())
+
+
+@data.command("split")
+@click.argument("src")
+@click.argument("dst")
+@click.option("--train", "train_ratio", default=0.8, show_default=True, type=float,
+              help="Fraction of images assigned to the train split.")
+@click.option("--val", "val_ratio", default=0.1, show_default=True, type=float,
+              help="Fraction of images assigned to the val split.")
+@click.option("--test", "test_ratio", default=0.1, show_default=True, type=float,
+              help="Fraction of images assigned to the test split.")
+@click.option("--seed", default=42, show_default=True, type=int,
+              help="Random seed for the stratified shuffle.")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Show the planned split without writing DST.")
+def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
+    """Copy SRC to DST, split into train/val/test, stratified by class.
+
+    SRC  dataset directory to split — a flat pool (classification:
+    <class>/*; YOLO: images/* + labels/*) or an already-split dataset,
+    which is pooled back together before re-partitioning.\n
+    DST  destination for the split dataset; must be empty or non-existent.
+
+    Classification stratifies by class folder. YOLO images can carry boxes
+    of more than one class, so the stratification key is each image's
+    primary (most frequent, ties broken by lowest id) box class; images
+    with no boxes are split the same proportional, seeded way as every
+    other group. SRC is never modified.
+    """
+    from cvbench.core import _fmt
+
+    src_dir = Path(src)
+    dst_dir = Path(dst)
+
+    if not src_dir.is_dir():
+        raise click.ClickException(f"Source directory not found: '{src_dir}'")
+
+    ratios = (train_ratio, val_ratio, test_ratio)
+    if abs(sum(ratios) - 1.0) > 1e-6:
+        raise click.ClickException(
+            f"--train/--val/--test must sum to 1.0 (got {sum(ratios):.4f})."
+        )
+
+    if dst_dir.exists() and any(dst_dir.iterdir()):
+        raise click.ClickException(
+            f"Destination '{dst_dir}' already contains files. "
+            "Provide an empty or non-existent directory."
+        )
+
+    try:
+        plan = split_mod.split_dataset(src_dir, dst_dir, ratios, seed, dry_run)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+    print(_fmt.rule())
+    print(f" {_fmt.bold('CVBench — data split')}")
+    print(_fmt.rule())
+    print(f"  Source  : {_fmt.dim(str(src_dir))}  ({_fmt.dim('yolo' if plan.is_yolo else 'classification')})")
+    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print(f"  Ratios  : train={train_ratio}  val={val_ratio}  test={test_ratio}  seed={seed}")
+    print()
+
+    classes = sorted({c for counts in plan.counts.values() for c in counts})
+    max_cls = max((len(c) for c in classes), default=5)
+    print(_fmt.dim(f"   {'Class':<{max_cls}}  {'Train':>7}  {'Val':>7}  {'Test':>7}"))
+    for cls in classes:
+        row = [plan.counts.get(s, {}).get(cls, 0) for s in ("train", "val", "test")]
+        print(f"   {cls:<{max_cls}}  {row[0]:>7}  {row[1]:>7}  {row[2]:>7}")
+
+    print()
+    verb = "Would write" if dry_run else "Wrote"
+    total = len(plan.actions)
+    print(f"  {_fmt.green('✓')} {verb} {total} image(s) across {len(plan.splits_written)} split(s)")
+    print(_fmt.rule())
+
+
+@data.command("flatten")
+@click.argument("src")
+@click.argument("dst")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Show the flatten plan without writing DST.")
+def flatten(src, dst, dry_run):
+    """Copy SRC to DST, pooling train/val/test back into one flat dataset.
+
+    SRC  an already-split dataset (classification or YOLO layout)\n
+    DST  destination for the flattened copy; must be empty or non-existent.
+
+    The exact inverse of 'data split': every image from every split is
+    copied into one flat pool (classification: <class>/*; YOLO: images/*
+    + labels/*), with no train/val/test structure. Use 'data split'
+    afterward to re-partition. SRC is never modified.
+    """
+    from cvbench.core import _fmt
+
+    src_dir = Path(src)
+    dst_dir = Path(dst)
+
+    if not src_dir.is_dir():
+        raise click.ClickException(f"Source directory not found: '{src_dir}'")
+
+    if dst_dir.exists() and any(dst_dir.iterdir()):
+        raise click.ClickException(
+            f"Destination '{dst_dir}' already contains files. "
+            "Provide an empty or non-existent directory."
+        )
+
+    try:
+        plan = flatten_mod.flatten_dataset(src_dir, dst_dir, dry_run)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+    print(_fmt.rule())
+    print(f" {_fmt.bold('CVBench — data flatten')}")
+    print(_fmt.rule())
+    print(f"  Source  : {_fmt.dim(str(src_dir))}  ({_fmt.dim('yolo' if plan.is_yolo else 'classification')})")
+    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print()
+
+    classes = sorted(plan.counts)
+    max_cls = max((len(c) for c in classes), default=5)
+    print(_fmt.dim(f"   {'Class':<{max_cls}}  {'Count':>7}"))
+    for cls in classes:
+        print(f"   {cls:<{max_cls}}  {plan.counts[cls]:>7}")
+
+    print()
+    verb = "Would write" if dry_run else "Wrote"
+    print(f"  {_fmt.green('✓')} {verb} {len(plan.actions)} image(s)")
+    print(_fmt.rule())
+
+
