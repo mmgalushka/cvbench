@@ -121,7 +121,26 @@ def test_generate_reference_preset_bypasses_wizard():
 
     show = _run(["show", "ref"])
     assert "Augmentation reference" in show.output
-    assert "preset: reference" in show.output
+
+
+def test_generate_preset_from_saved_config():
+    """--preset also accepts the name of any config saved earlier, not just built-ins."""
+    with _checked(["keras_flip", "aug_blur"]):
+        _run(["generate", "--preset", "standard", "--name", "base"])
+
+    with _checked(["aug_blur"]):
+        result = _run(["generate", "--preset", "base", "--name", "derived"])
+    assert result.exit_code == 0, result.output
+
+    cfg = load_aug_file("workspace/augmentations/derived.yaml")
+    assert cfg.transforms[0].name == "aug_blur"
+    assert cfg.transforms[0].prob == 0.3          # carried over from 'base', not a fresh default
+
+
+def test_generate_unknown_preset_reports_friendly_error():
+    result = _run(["generate", "--preset", "does-not-exist", "--name", "x"])
+    assert result.exit_code != 0
+    assert "Unknown preset" in result.output
 
 
 def test_list_show_delete_round_trip():

@@ -47,7 +47,7 @@ def test_save_and_load_round_trip(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "AUGMENTATIONS_DIR", str(tmp_path / "augs"))
 
     transforms = [{"name": "keras_flip", "prob": 1.0, "mode": "horizontal"}]
-    path = store.save_augmentation_config("standard", transforms, "standard")
+    path = store.save_augmentation_config("standard", transforms)
     assert path.exists()
 
     cfg = load_aug_file(str(path))
@@ -67,15 +67,14 @@ def test_list_saved_augmentations_newest_first_and_tolerates_missing_meta(tmp_pa
     aug_dir.mkdir()
     monkeypatch.setattr(store, "AUGMENTATIONS_DIR", str(aug_dir))
 
-    # No `meta:` block at all — must not crash, falls back to "custom" + mtime.
+    # No `meta:` block at all — must not crash, falls back to mtime.
     (aug_dir / "handwritten.yaml").write_text("transforms:\n- name: keras_flip\n  prob: 1.0\n")
 
-    store.save_augmentation_config("newer", [{"name": "keras_flip", "prob": 1.0}], "light")
+    store.save_augmentation_config("newer", [{"name": "keras_flip", "prob": 1.0}])
 
     entries = list_saved_augmentations()
     names = [e["name"] for e in entries]
     assert "handwritten" in names and "newer" in names
 
     handwritten = next(e for e in entries if e["name"] == "handwritten")
-    assert handwritten["preset"] == "custom"
     assert handwritten["n_transforms"] == 1

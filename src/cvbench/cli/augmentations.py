@@ -155,13 +155,43 @@ def _catalogue() -> list[tuple[str, dict]]:
 
 
 def _preset_transforms(name: str) -> list[dict]:
-    """Deep-copy of a preset's transform list, key order name/prob/...params preserved."""
+    """Deep-copy of a built-in preset's transform list, key order name/prob/...params preserved."""
     out = []
     for t in _PRESETS[name]["transforms"]:
         entry = {"name": t["name"], "prob": t["prob"]}
         entry.update({k: v for k, v in t.items() if k not in ("name", "prob")})
         out.append(entry)
     return copy.deepcopy(out)
+
+
+def _saved_config_transforms(name: str) -> list[dict] | None:
+    """Flat transform list from a saved config named NAME, or None if no such config exists.
+
+    Only top-level {"name": ..., ...} entries are usable as checklist
+    pre-selections — a `one_of` block has no single transform name, so any
+    such entries are skipped rather than crashing the wizard.
+    """
+    try:
+        path = resolve_aug_file(name)
+    except click.BadParameter:
+        return None
+    raw = yaml.safe_load(Path(path).read_text()) or {}
+    return [t for t in (raw.get("transforms") or []) if isinstance(t, dict) and "name" in t]
+
+
+def _resolve_preset_transforms(preset: str) -> list[dict]:
+    """Resolve --preset to a flat transform list: built-in presets first, then any
+    saved config by name (so a previously generated config can seed a new one)."""
+    if preset in _PRESETS:
+        return _preset_transforms(preset)
+    saved = _saved_config_transforms(preset)
+    if saved is not None:
+        return saved
+    raise click.BadParameter(
+        f"Unknown preset '{preset}' — expected one of "
+        f"{', '.join([*_PRESETS, 'reference'])}, or the name of a saved config (see 'aug list').",
+        param_hint="--preset",
+    )
 
 
 def _reference_yaml() -> str:
@@ -328,7 +358,7 @@ def _yaml_scalar(v) -> str:
     return yaml.safe_dump(v, default_flow_style=True).split("\n", 1)[0]
 
 
-def _render_config_yaml(transforms: list[dict], preset_label: str) -> str:
+def _render_config_yaml(transforms: list[dict]) -> str:
     """Render TRANSFORMS as YAML with a compact description + param notes per block.
 
     This is what `aug generate` saves — meant to be opened in an editor
@@ -339,7 +369,6 @@ def _render_config_yaml(transforms: list[dict], preset_label: str) -> str:
 
     lines = [
         "meta:",
-        f"  preset: {preset_label}",
         f"  created: '{date.today().isoformat()}'",
         "",
         "transforms:",
@@ -450,8 +479,8 @@ def list_saved():
         return
 
     _console.table(
-        ["Name", "Preset", ("Transforms", "right"), ("Modified", "right")],
-        [(e["name"], e["preset"], e["n_transforms"], e["modified"]) for e in entries],
+        ["Name", ("Transforms", "right"), ("Modified", "right")],
+        [(e["name"], e["n_transforms"], e["modified"]) for e in entries],
     )
 
 
@@ -461,12 +490,15 @@ def list_saved():
     examples=[
         ("aug generate", "Check off transforms from the full catalogue, nothing pre-selected"),
         ("aug generate --preset standard", "Same checklist, pre-checked with the 'standard' preset"),
+        ("aug generate --preset my-config", "Pre-checked with a config you saved earlier"),
         ("aug generate --preset reference --name ref", "Save the fully-commented reference sheet"),
     ],
     see_also=[("train data/ --augmentation <name>", "train with the config you saved")],
 )
-@click.option("--preset", type=click.Choice(["light", "standard", "heavy", "reference"]),
-              default=None, help="Seed the wizard from this preset instead of starting blank.")
+@click.option("--preset", default=None,
+              help="Seed the wizard from this preset instead of starting blank — one of "
+                   "light/standard/heavy/reference, or the name of any saved config (see "
+                   "'aug list').")
 @click.option("--name", default=None, help="Save under this name (prompted if omitted).")
 def generate(preset, name):
     """Interactively select transforms and save them as a named config.
@@ -474,9 +506,11 @@ def generate(preset, name):
     Shows a checklist of every available transform, each with a short
     description — space to toggle, enter to confirm — pre-checked for
     whichever ones --preset includes (nothing pre-checked without --preset).
-    The saved file gets a compact comment above each transform explaining
-    what it does and what its parameters mean, so it's ready to fine-tune by
-    opening it in an editor afterward.
+    --preset accepts a built-in preset name (light/standard/heavy/reference)
+    or the name of any config you've already saved, so you can seed a new
+    config from a previous one. The saved file gets a compact comment above
+    each transform explaining what it does and what its parameters mean, so
+    it's ready to fine-tune by opening it in an editor afterward.
     """
     from datetime import date
 
@@ -484,13 +518,13 @@ def generate(preset, name):
 
     if preset == "reference":
         save_name = name or click.prompt("Save as", default="reference")
-        header = f"meta:\n  preset: reference\n  created: '{date.today().isoformat()}'\n"
+        header = f"meta:\n  created: '{date.today().isoformat()}'\n"
         path = write_augmentation_text(save_name, header + _reference_yaml())
         _console.success(f"Saved → {path}")
         print(f"  Usage:  train data/ --augmentation {save_name}")
         return
 
-    preset_map = {t["name"]: t for t in _preset_transforms(preset)} if preset else {}
+    preset_map = {t["name"]: t for t in _resolve_preset_transforms(preset)} if preset else {}
     catalogue = _catalogue()
 
     print(_console.rule(thick=True))
@@ -510,7 +544,7 @@ def generate(preset, name):
     ]
 
     save_name = name or click.prompt("Save as", default=preset or "config")
-    content = _render_config_yaml(kept, preset or "custom")
+    content = _render_config_yaml(kept)
     path = write_augmentation_text(save_name, content)
     _console.success(f"Saved → {path}  ({len(kept)} transform(s))")
     print("  Open it in an editor to fine-tune any value.")
