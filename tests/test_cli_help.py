@@ -126,7 +126,7 @@ def test_overview_lists_every_command_and_the_tmux_helpers():
     screen = _ANSI.sub("", overview.render())
     for path in _paths():
         assert path in screen, f"{path} missing from `commands` output"
-    for token in ("tm -n", "tm -c", "tm -d", "tm -l"):
+    for token in ("tm new", "tm connect", "tm delete", "tm list"):
         assert token in screen, f"{token} missing from `commands` output"
 
 
@@ -137,13 +137,13 @@ def test_overview_omits_container_managed_services():
     assert "jupyter" not in screen
 
 
-def test_bashrc_tm_flags_are_all_in_the_overview():
+def test_bashrc_tm_verbs_are_all_in_the_overview():
     bashrc = (REPO / "scripts" / "bashrc").read_text()
-    flags = set(re.findall(r"tm (-[ncdl])\b", bashrc))
-    assert flags, "no tm flags found in scripts/bashrc"
+    verbs = set(re.findall(r"^\s*(new|connect|delete|list)\)", bashrc, re.MULTILINE))
+    assert verbs, "no tm verbs found in scripts/bashrc"
     extras = "".join(c for _, rows in overview.EXTRAS for c, _ in rows)
-    for flag in flags:
-        assert f"tm {flag}" in extras, f"tm {flag} is in bashrc but not the overview"
+    for verb in verbs:
+        assert f"tm {verb}" in extras, f"tm {verb} is in bashrc but not the overview"
 
 
 def test_overview_ports_are_exposed_by_the_dockerfile():

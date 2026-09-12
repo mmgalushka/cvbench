@@ -183,7 +183,7 @@ From a JupyterLab terminal or SSH session:
 
 ```bash
 docker exec -it cvbench bash
-tm -n train
+tm new train
 train data --epochs 20 --backbone efficientnet_b0
 # Ctrl+B D to detach — training continues after you close the terminal
 ```
@@ -198,7 +198,7 @@ the container (`docker exec -it cvbench bash`):
 <!-- BEGIN QUICKSTART -->
 ```
 1  commands                           # show this screen again any time
-2  tm -n <name>                       # start a tmux session so training survives closing your terminal
+2  tm new <name>                      # start a tmux session so training survives closing your terminal
 3  data generate                      # make a 4-class synthetic dataset in data/synthetic/
 4  train data/synthetic --epochs 5    # train a model — prints the run name when it finishes
 5  runs list                          # see every run, newest first
