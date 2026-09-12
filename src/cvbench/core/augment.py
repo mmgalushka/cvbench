@@ -19,7 +19,7 @@ def apply_augmentation(train_ds: tf.data.Dataset, transforms: list) -> tf.data.D
     if not transforms:
         return train_ds
 
-    from cvbench.augmentations.pipeline import build_keras_aug_fn, build_custom_aug_fn
+    from cvbench.augmentations.pipeline import build_custom_aug_fn, build_keras_aug_fn
 
     keras_aug = build_keras_aug_fn(transforms)
     custom_aug = build_custom_aug_fn(transforms)

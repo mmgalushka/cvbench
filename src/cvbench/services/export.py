@@ -25,6 +25,7 @@ def _subfolder_name(format: str, quantize: str) -> str:
 
 def _export_tflite(model, output_path: Path, quantize: str) -> None:
     import tempfile
+
     import tensorflow as tf
 
     # TFLiteConverter.from_keras_model() fails with Keras 3 models due to an LLVM
@@ -49,13 +50,13 @@ def _export_tflite(model, output_path: Path, quantize: str) -> None:
 
 def _export_onnx(model, output_path: Path, input_size: int) -> None:
     try:
-        import tf2onnx
         import tensorflow as tf
+        import tf2onnx
     except ImportError:
         raise RuntimeError(
             "tf2onnx is required for ONNX export. "
             "Install it with: pip install 'cvbench[export]'"
-        )
+        ) from None
 
     input_spec = (
         tf.TensorSpec(
@@ -92,7 +93,7 @@ def _prepare_plan_package(run_dir: Path, cfg) -> Path:
 
 def _print_plan_instructions(run_name: str, onnx_exists: bool) -> None:
     print(_console.rule())
-    print(f" TensorRT Engine Plan — Jetson deployment")
+    print(" TensorRT Engine Plan — Jetson deployment")
     print(_console.rule())
     print()
     print(
@@ -188,7 +189,7 @@ def _build_calibration_set(
                     n_clusters=n_clusters, random_state=42, n_init=3
                 ).fit_predict(feats_np)
                 clusters: dict[int, list[Path]] = {}
-                for path, label in zip(files, labels):
+                for path, label in zip(files, labels, strict=True):
                     clusters.setdefault(int(label), []).append(path)
                 for bucket in clusters.values():
                     selected.append(rng.choice(bucket))
@@ -218,7 +219,7 @@ def _build_calibration_set(
         labels = kmeans.fit_predict(features_np)
 
         clusters: list[list[Path]] = [[] for _ in range(N_CLUSTERS)]
-        for path, label in zip(all_files, labels):
+        for path, label in zip(all_files, labels, strict=True):
             clusters[label].append(path)
 
         non_empty = [c for c in clusters if c]
@@ -284,7 +285,7 @@ def _prepare_hailo_package(
 
     tflite_path = export_dir / "model.tflite"
     if tflite_path.exists():
-        print(_console.dim(f"  Reusing   model.tflite"))
+        print(_console.dim("  Reusing   model.tflite"))
     else:
         with warnings.catch_warnings():
             warnings.filterwarnings(
@@ -318,7 +319,7 @@ def _prepare_hailo_package(
 def _print_hailo_instructions(run_name: str, export_dir: Path) -> None:
     rel = f"experiments/{run_name}/export/hailo"
     print(_console.rule())
-    print(f" Hailo HEF — hailo8l deployment")
+    print(" Hailo HEF — hailo8l deployment")
     print(_console.rule())
     print()
     print(
@@ -404,7 +405,7 @@ def run_export(
         (export_dir / "export_info.json").write_text(
             json.dumps(export_info, indent=2)
         )
-        print(f"  Written   export_info.json")
+        print("  Written   export_info.json")
         print(_console.rule())
         print(_console.green(f" Package ready → {export_dir}"))
         print(_console.rule())
@@ -449,7 +450,7 @@ def run_export(
         (export_dir / "export_info.json").write_text(
             json.dumps(export_info, indent=2)
         )
-        print(f"  Written   export_info.json")
+        print("  Written   export_info.json")
         print(_console.rule())
         print(_console.green(f" Package ready → {export_dir}"))
         print(_console.rule())
@@ -494,7 +495,7 @@ def run_export(
         _export_tflite(model, model_path, quantize)
     elif format == "onnx":
         model_path = export_dir / "model.onnx"
-        print(_console.dim(f"  Converting to ONNX (opset=13)..."))
+        print(_console.dim("  Converting to ONNX (opset=13)..."))
         _export_onnx(model, model_path, cfg.model.input_size)
 
     size_mb = model_path.stat().st_size / (1024 * 1024)
@@ -520,7 +521,7 @@ def run_export(
     info_path.write_text(json.dumps(export_info, indent=2))
 
     print(f"  Written   {model_path.name}  ({size_mb:.1f} MB)")
-    print(f"  Written   export_info.json")
+    print("  Written   export_info.json")
     print(_console.rule())
     print(_console.green(f" Export complete → {export_dir}"))
     print(_console.rule())

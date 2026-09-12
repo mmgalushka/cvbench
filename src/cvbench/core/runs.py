@@ -9,7 +9,6 @@ import click
 from cvbench.core._names import validate_slug
 from cvbench.core.config import CVBenchConfig, load_config
 
-
 EXPERIMENTS_DIR = "experiments"
 
 

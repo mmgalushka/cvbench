@@ -9,7 +9,6 @@ from cvbench.cli.generate import generate
 from cvbench.datasets.shapes import CLASSES, random_shape, shape_bbox
 from cvbench.datasets.synth import generate_detection_image, to_yolo_line
 
-
 # ---------------------------------------------------------------------------
 # Geometry
 # ---------------------------------------------------------------------------
@@ -101,8 +100,8 @@ def test_yolo_labels_are_valid(yolo_dataset):
             assert 0 <= cls_id < len(CLASSES)
             xc, yc, w, h = (float(p) for p in parts[1:])
             assert 0 < w <= 1 and 0 < h <= 1
-            assert 0 <= xc - w / 2 and xc + w / 2 <= 1.0001
-            assert 0 <= yc - h / 2 and yc + h / 2 <= 1.0001
+            assert xc - w / 2 >= 0 and xc + w / 2 <= 1.0001
+            assert yc - h / 2 >= 0 and yc + h / 2 <= 1.0001
 
 
 def test_yolo_data_yaml(yolo_dataset):

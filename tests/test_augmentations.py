@@ -3,7 +3,6 @@ import numpy as np
 import pytest
 
 from cvbench.augmentations.blur import aug_blur
-from cvbench.augmentations.transmission import aug_rf_transmission
 from cvbench.augmentations.edges import (
     aug_brighten_edges_h,
     aug_brighten_edges_v,
@@ -15,8 +14,8 @@ from cvbench.augmentations.noise import aug_salt_pepper
 from cvbench.augmentations.pipeline import build_aug_pipeline
 from cvbench.augmentations.profiles import aug_random_profile_h, aug_random_profile_v
 from cvbench.augmentations.tone import aug_fog, aug_gamma
+from cvbench.augmentations.transmission import aug_rf_transmission
 from cvbench.core.config import TransformConfig
-
 
 # TF's image_dataset_from_directory always produces explicit channel dim:
 # grayscale -> (H, W, 1), colour -> (H, W, 3); batches add B as the first axis.

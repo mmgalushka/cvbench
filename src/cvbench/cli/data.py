@@ -171,10 +171,11 @@ def upsample(src_dir, dst_dir, aug_file, target):
     DST_DIR must be empty or non-existent.
     """
     from PIL import Image
-    from cvbench.core import _console
-    from cvbench.core.config import load_aug_file
-    from cvbench.core.augmentations_store import resolve_aug_file
+
     from cvbench.augmentations.pipeline import build_aug_pipeline
+    from cvbench.core import _console
+    from cvbench.core.augmentations_store import resolve_aug_file
+    from cvbench.core.config import load_aug_file
 
     src = Path(src_dir)
     dst = Path(dst_dir)
@@ -529,7 +530,7 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
     try:
         plan = split_mod.split_dataset(src_dir, dst_dir, ratios, seed, dry_run)
     except ValueError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     print(_console.rule())
     print(f" {_console.bold('CVBench — data split')}")
@@ -593,7 +594,7 @@ def flatten(src, dst, dry_run):
     try:
         plan = flatten_mod.flatten_dataset(src_dir, dst_dir, dry_run)
     except ValueError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     print(_console.rule())
     print(f" {_console.bold('CVBench — data flatten')}")

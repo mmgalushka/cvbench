@@ -38,7 +38,6 @@ def test_task_implements_every_abstract_method(name):
     additionally confirms nothing overrides an abstract method with a
     non-callable, and that no abstract method is left on the base class name.
     """
-    import inspect
 
     from cvbench.core.task import Task
 

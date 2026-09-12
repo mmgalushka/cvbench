@@ -24,7 +24,7 @@ _TASKS: dict[str, tuple[str, str]] = {
 TASK_NAMES: tuple[str, ...] = tuple(_TASKS)
 
 
-def get_task(name: str) -> "Task":
+def get_task(name: str) -> Task:
     """Instantiate the task registered under NAME.
 
     Raises ValueError with the list of valid names if NAME isn't registered.
@@ -40,6 +40,6 @@ def get_task(name: str) -> "Task":
     return task_cls()
 
 
-def resolve_task(cfg: "CVBenchConfig") -> "Task":
+def resolve_task(cfg: CVBenchConfig) -> Task:
     """Instantiate the task named by cfg.task, defaulting to classification."""
     return get_task(getattr(cfg, "task", None) or "classification")

@@ -115,11 +115,11 @@ def test_encode_decode_round_trip_recovers_the_box():
         return float(np.log(p / (1 - p)))
 
     preds = []
-    for si, (t, stride) in enumerate(zip(targets, _STRIDES)):
+    for si, (t, stride) in enumerate(zip(targets, _STRIDES, strict=True)):
         g = 64 // stride
         A = len(_ANCHORS[si])
         pred = np.zeros((1, g, g, A, 5 + num_classes), dtype=np.float32)
-        for gy, gx, a in zip(*np.where(t[..., 4] == 1.0)):
+        for gy, gx, a in zip(*np.where(t[..., 4] == 1.0), strict=True):
             cell = t[gy, gx, a]
             pred[0, gy, gx, a, 0] = _logit(cell[0])
             pred[0, gy, gx, a, 1] = _logit(cell[1])

@@ -48,14 +48,14 @@ class Task(abc.ABC):
     # ---- layout / config ---------------------------------------------------
 
     @abc.abstractmethod
-    def resolve_layout(self, cfg: "CVBenchConfig") -> DatasetSpec:
+    def resolve_layout(self, cfg: CVBenchConfig) -> DatasetSpec:
         """Inspect the dataset on disk and resolve it into a DatasetSpec.
 
         The sole writer of ``cfg.data.{train,val,test}_dir``, ``cfg.data.classes``
         and ``cfg.model.num_classes`` — no other code may assign these.
         """
 
-    def validate_config(self, cfg: "CVBenchConfig") -> list[str]:
+    def validate_config(self, cfg: CVBenchConfig) -> list[str]:
         """Return human-readable errors for a config this task cannot run.
 
         The caller (``run_training``) raises when this is non-empty. The
@@ -71,12 +71,12 @@ class Task(abc.ABC):
 
     @abc.abstractmethod
     def build_datasets(
-        self, cfg: "CVBenchConfig", spec: DatasetSpec
-    ) -> tuple["tf.data.Dataset", "tf.data.Dataset", int]:
+        self, cfg: CVBenchConfig, spec: DatasetSpec
+    ) -> tuple[tf.data.Dataset, tf.data.Dataset, int]:
         """Build (train_ds, val_ds, num_train_samples)."""
 
     @abc.abstractmethod
-    def build_eval_dataset(self, cfg: "CVBenchConfig", spec: DatasetSpec) -> "tf.data.Dataset":
+    def build_eval_dataset(self, cfg: CVBenchConfig, spec: DatasetSpec) -> tf.data.Dataset:
         """Build the dataset used by ``evaluate`` (typically over the test split)."""
 
     def filter_transforms(self, transforms: list) -> list:
@@ -87,17 +87,17 @@ class Task(abc.ABC):
         """
         return transforms
 
-    def fit_class_weight(self, cfg: "CVBenchConfig", spec: DatasetSpec) -> dict[int, float] | None:
+    def fit_class_weight(self, cfg: CVBenchConfig, spec: DatasetSpec) -> dict[int, float] | None:
         """Resolve a Keras-compatible ``{class_index: weight}`` dict, or None."""
         return None
 
     # ---- model ----------------------------------------------------------------
 
     @abc.abstractmethod
-    def build_model(self, cfg: "CVBenchConfig") -> "keras.Model":
+    def build_model(self, cfg: CVBenchConfig) -> keras.Model:
         """Build and compile a model for this task."""
 
-    def load_model(self, path: str) -> "keras.Model":
+    def load_model(self, path: str) -> keras.Model:
         """Load a saved model for evaluation/prediction/export.
 
         Overriding this is how a task forces the import of the module that
@@ -121,9 +121,9 @@ class Task(abc.ABC):
     @abc.abstractmethod
     def evaluate(
         self,
-        model: "keras.Model",
-        eval_ds: "tf.data.Dataset",
-        cfg: "CVBenchConfig",
+        model: keras.Model,
+        eval_ds: tf.data.Dataset,
+        cfg: CVBenchConfig,
         spec: DatasetSpec,
         run_dir: str,
         output_dir: str | None,

@@ -15,7 +15,6 @@ from cvbench.core.augmentations_store import (
     write_augmentation_text,
 )
 
-
 # ---------------------------------------------------------------------------
 # Keras transform catalogue (name → default params)
 # Defined here as plain data to avoid triggering TF/Keras import.

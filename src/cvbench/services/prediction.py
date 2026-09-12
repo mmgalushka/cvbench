@@ -92,7 +92,7 @@ def _infer_onnx(model_path: Path, images: list[str], size: int) -> list[np.ndarr
         raise RuntimeError(
             "onnxruntime is required for ONNX inference. "
             "Install it with: pip install onnxruntime"
-        )
+        ) from None
     sess = ort.InferenceSession(str(model_path))
     input_name = sess.get_inputs()[0].name
     return [
@@ -105,7 +105,7 @@ def _infer_tflite(model_path: Path, images: list[str], size: int) -> list[np.nda
     try:
         import tensorflow as tf
     except ImportError:
-        raise RuntimeError("tensorflow is required for TFLite inference.")
+        raise RuntimeError("tensorflow is required for TFLite inference.") from None
     interp = tf.lite.Interpreter(model_path=str(model_path))
     interp.allocate_tensors()
     inp = interp.get_input_details()
@@ -124,7 +124,7 @@ def _build_results(
     class_names: list[str] | None,
 ) -> list[dict]:
     results = []
-    for img_path, probs in zip(images, probs_list):
+    for img_path, probs in zip(images, probs_list, strict=True):
         top_idx = int(np.argmax(probs))
         confidence = float(probs[top_idx])
         class_name = (

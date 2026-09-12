@@ -1,5 +1,4 @@
 """Tests for classification/evaluator.py — the eval_report.json envelope shape."""
-from pathlib import Path
 
 import numpy as np
 import pytest

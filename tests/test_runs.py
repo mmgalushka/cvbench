@@ -2,16 +2,13 @@ import json
 from datetime import date
 from pathlib import Path
 
-import pytest
-
-from cvbench.core.config import CVBenchConfig, build_config, save_config
+from cvbench.core.config import build_config, save_config
 from cvbench.core.runs import (
     best_experiment,
     make_run_name,
     make_unique_dir,
     scan_experiments,
 )
-
 
 # ---------------------------------------------------------------------------
 # Run name generation

@@ -9,7 +9,6 @@ from typing import Any
 
 import yaml
 
-
 # ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------
@@ -309,9 +308,9 @@ def build_config(
     input_size: int | None = None,
     dropout: float | None = None,
     class_weight: Any = None,
-    loss: "LossConfig | None" = None,
-    optimizer: "OptimizerConfig | None" = None,
-    lr_scheduler: "LRSchedulerConfig | None" = None,
+    loss: LossConfig | None = None,
+    optimizer: OptimizerConfig | None = None,
+    lr_scheduler: LRSchedulerConfig | None = None,
     fine_tune_from_layer: int | None = None,
     val_split: float | None = None,
     seed: int | None = None,
@@ -322,10 +321,7 @@ def build_config(
     Any non-None CLI options override the loaded/default values.
     Data directories are always derived from data_dir.
     """
-    if from_dir is not None:
-        cfg = load_config(from_dir)
-    else:
-        cfg = CVBenchConfig()
+    cfg = load_config(from_dir) if from_dir is not None else CVBenchConfig()
 
     cfg.data.data_dir = data_dir
     cfg.data.train_dir = str(Path(data_dir) / "train")

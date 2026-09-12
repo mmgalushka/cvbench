@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import Literal, Optional
+from typing import Literal
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -37,10 +37,7 @@ def aug_chirp_artifacts(
         np.random.seed(seed)
 
     float_input = img.dtype in (np.float32, np.float64)
-    if float_input:
-        img_u8 = (np.clip(img, 0.0, 1.0) * 255).astype(np.uint8)
-    else:
-        img_u8 = img.astype(np.uint8)
+    img_u8 = (np.clip(img, 0.0, 1.0) * 255).astype(np.uint8) if float_input else img.astype(np.uint8)
 
     grayscale = img_u8.ndim == 2
     if grayscale:
@@ -118,10 +115,11 @@ def _render_chirp_mask(
 
         mode = random.choice(_JUSTIFY_MODES) if justification == "random" else justification
 
-        if justification == "random":
-            anchor = random.randint(0, width - 1)
-        else:
-            anchor = anchors[i % len(anchors)]
+        anchor = (
+            random.randint(0, width - 1)
+            if justification == "random"
+            else anchors[i % len(anchors)]
+        )
 
         if mode == "left":
             x0 = anchor

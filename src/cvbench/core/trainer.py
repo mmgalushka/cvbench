@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 
 import keras
 
+from cvbench.core import _console
 from cvbench.core.checkpoint import build_checkpoint_callback, load_best_history, prune_checkpoints
 from cvbench.core.config import CVBenchConfig, update_run_status
-from cvbench.core import _console
 
 if TYPE_CHECKING:
     from cvbench.core.task import Task
@@ -30,7 +30,10 @@ def _print_header(exp_dir: str, cfg: CVBenchConfig):
     print(f" Optimizer : {opt_label}")
     lrs = cfg.training.lr_scheduler
     if lrs.patience > 0:
-        print(f" LR        : {cfg.training.learning_rate}  →  reduce by {lrs.factor}x after {lrs.patience} flat epoch(s) (min {lrs.min_lr})")
+        print(
+            f" LR        : {cfg.training.learning_rate}  →  reduce by {lrs.factor}x after"
+            f" {lrs.patience} flat epoch(s) (min {lrs.min_lr})"
+        )
     else:
         print(f" LR        : {cfg.training.learning_rate}")
     n_transforms = len(cfg.augmentation.transforms)
@@ -52,7 +55,7 @@ def _apply_fine_tune_flags(model: keras.Model, fine_tune_from_layer: int) -> Non
         # Checkpoint saved before backbone layers were named "backbone" —
         # fall back to the old isinstance scan.
         backbone = next(
-            (l for l in model.layers if isinstance(l, keras.Model) and l is not model),
+            (lyr for lyr in model.layers if isinstance(lyr, keras.Model) and lyr is not model),
             None,
         )
     if backbone is None:
@@ -78,7 +81,7 @@ def train(
     val_ds,
     class_names: list[str],
     model: keras.Model,
-    task: "Task",
+    task: Task,
     resume_checkpoint: str | None = None,
     num_train_samples: int | None = None,
     class_weight: dict | None = None,
@@ -195,11 +198,6 @@ def train(
     for k, v in history.history.items():
         if v:
             final_metrics[k] = round(float(v[-1]), 4)
-
-    stopped_by = "interrupted" if interrupted else f"completed ({last_epoch} epochs)"
-    if not interrupted and history.history:
-        if model.stop_training and last_epoch < cfg.training.epochs:
-            stopped_by = "early stopping (patience)"
 
     update_run_status(
         exp_dir,

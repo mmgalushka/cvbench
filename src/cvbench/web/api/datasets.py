@@ -2,15 +2,13 @@
 import base64
 import secrets
 import shutil
-import os
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
-from cvbench.core.runs import EXPERIMENTS_DIR, scan_experiments, resolve_run_dir
 from cvbench.core.config import load_config
+from cvbench.core.runs import EXPERIMENTS_DIR, resolve_run_dir, scan_experiments
 from cvbench.datasets import layout as dataset_layout
 
 router = APIRouter()
@@ -30,14 +28,14 @@ def _decode_dir(dir_id: str) -> Path:
         raw = base64.urlsafe_b64decode(dir_id + '=' * pad).decode()
         return Path(raw).resolve()
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid directory ID")
+        raise HTTPException(status_code=400, detail="Invalid directory ID") from None
 
 
 def _assert_safe(path: Path, root: Path) -> None:
     try:
         path.resolve().relative_to(root)
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Access denied") from None
 
 
 DATA_DIR = Path("data")
@@ -166,7 +164,7 @@ def list_datasets():
     return list(seen.values())
 
 
-def _list_yolo_images(root: Path, ds_root: Path, cls: Optional[str],
+def _list_yolo_images(root: Path, ds_root: Path, cls: str | None,
                       page: int, page_size: int) -> dict:
     """Paginate a YOLO split directory, attaching annotations to every item."""
     label_dir = dataset_layout.yolo_label_dir(root, ds_root)
@@ -205,7 +203,7 @@ def _list_yolo_images(root: Path, ds_root: Path, cls: Optional[str],
 @router.get("/datasets/{dir_id}/images")
 def list_images(
     dir_id: str,
-    cls: Optional[str] = Query(None, alias='class'),
+    cls: str | None = Query(None, alias='class'),
     page: int = Query(1, ge=1),
     page_size: int = Query(PAGE_SIZE_DEFAULT, ge=1, le=PAGE_SIZE_MAX),
 ):
@@ -269,7 +267,7 @@ def serve_image(dir_id: str, path: str):
 async def upload_images(
     dir_id: str,
     files: list[UploadFile] = File(...),
-    cls: Optional[str] = Query(None, alias='class'),
+    cls: str | None = Query(None, alias='class'),
 ):
     root = _decode_dir(dir_id)
     if not root.is_dir():

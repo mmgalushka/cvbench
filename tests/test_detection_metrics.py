@@ -7,10 +7,8 @@ from cvbench.detection.metrics import (
     detection_class_breakdown,
     detection_confusion,
     iou,
-    localization_metrics,
     match_detections,
 )
-
 
 # ---------------------------------------------------------------------------
 # iou

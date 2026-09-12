@@ -197,7 +197,7 @@ def build_detection_dataset(
         img = tf.cast(img, tf.float32)
         img.set_shape((size, size, 3))
 
-        for t, g, ch in zip(targets, grids, channels):
+        for t, g, ch in zip(targets, grids, channels, strict=True):
             t.set_shape((g, g, ch))
         return img, tuple(targets)
 

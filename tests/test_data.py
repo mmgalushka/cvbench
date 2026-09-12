@@ -1,5 +1,4 @@
 """Tests that require TensorFlow — mark with @pytest.mark.tf."""
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -30,8 +29,8 @@ def test_get_class_names(image_dir):
 
 
 def test_build_dataset_shape(image_dir):
-    from cvbench.core.config import CVBenchConfig
     from cvbench.classification.data import build_dataset, get_class_names
+    from cvbench.core.config import CVBenchConfig
 
     cfg = CVBenchConfig()
     cfg.model.input_size = 64
@@ -47,8 +46,8 @@ def test_build_dataset_shape(image_dir):
 
 
 def test_build_datasets_returns_class_names(image_dir):
-    from cvbench.core.config import CVBenchConfig
     from cvbench.classification.data import build_datasets
+    from cvbench.core.config import CVBenchConfig
 
     cfg = CVBenchConfig()
     cfg.model.input_size = 64

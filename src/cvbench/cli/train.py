@@ -3,7 +3,7 @@ import json
 import click
 
 from cvbench.cli import _help
-from cvbench.core.config import LossConfig, OptimizerConfig, LRSchedulerConfig
+from cvbench.core.config import LossConfig, LRSchedulerConfig, OptimizerConfig
 
 # NOTE: cvbench.services.training is imported inside train() — it pulls in
 # TensorFlow, and importing it at module scope would make `train --help` (and
@@ -145,8 +145,8 @@ def train(
     DATA_DIR must contain train/, val/, and test/ subdirectories.
     All parameters have sensible defaults and can be overridden individually.
     """
-    from cvbench.services.training import run_training  # deferred: pulls in TensorFlow
     from cvbench.core.augmentations_store import resolve_aug_file
+    from cvbench.services.training import run_training  # deferred: pulls in TensorFlow
 
     if aug_file:
         aug_file = resolve_aug_file(aug_file)

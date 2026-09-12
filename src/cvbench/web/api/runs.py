@@ -10,14 +10,14 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from cvbench.core.config import TransformConfig, load_config, update_run_status
 from cvbench.core.runs import (
     EXPERIMENTS_DIR,
-    scan_experiments,
-    resolve_run_dir,
-    validate_run_name,
     assert_name_available,
+    resolve_run_dir,
+    scan_experiments,
+    validate_run_name,
 )
-from cvbench.core.config import load_config, update_run_status, OneOfConfig, TransformConfig
 
 router = APIRouter()
 
@@ -36,7 +36,7 @@ def get_run_image(name: str, path: str):
     try:
         run_dir = resolve_run_dir(name)
     except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found")
+        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
 
     cfg = load_config(run_dir)
     test_dir = Path(cfg.data.test_dir).resolve()
@@ -45,7 +45,7 @@ def get_run_image(name: str, path: str):
     try:
         img_path.relative_to(test_dir)
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Access denied") from None
 
     if not img_path.exists():
         raise HTTPException(status_code=404, detail=f"Image not found: {path}")
@@ -58,7 +58,7 @@ def get_run(name: str):
     try:
         run_dir = resolve_run_dir(name)
     except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found")
+        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
 
     run_path = Path(run_dir)
     cfg = load_config(run_dir)
@@ -148,7 +148,7 @@ def rename_run(name: str, body: RenameRequest):
     try:
         run_dir = Path(resolve_run_dir(name))
     except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found")
+        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
 
     cfg = load_config(str(run_dir))
     if cfg.run.status == "running":
@@ -158,7 +158,7 @@ def rename_run(name: str, body: RenameRequest):
         validate_run_name(body.new_name)
         assert_name_available(body.new_name, current_dir=run_dir)
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
     new_dir = run_dir.parent / body.new_name
     os.rename(run_dir, new_dir)
@@ -171,13 +171,13 @@ def delete_run(name: str):
     try:
         run_dir = Path(resolve_run_dir(name))
     except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found")
+        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
 
     experiments_base = Path(EXPERIMENTS_DIR).resolve()
     try:
         run_dir.resolve().relative_to(experiments_base)
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Access denied") from None
 
     shutil.rmtree(run_dir)
     return {"deleted": name}

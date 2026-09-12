@@ -10,7 +10,6 @@ Two layouts are recognised:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -57,7 +56,7 @@ def dedupe_filename(name: str, used: set[str]) -> str:
             return candidate
 
 
-def yolo_root(split_dir: Path) -> Optional[Path]:
+def yolo_root(split_dir: Path) -> Path | None:
     """Return the dataset root if SPLIT_DIR is a YOLO split image directory."""
     parent = split_dir.parent
     if parent.name == IMAGES_DIRNAME and is_yolo_dataset(parent.parent):
@@ -84,11 +83,9 @@ def yolo_class_names(root: Path) -> list[str]:
             pass
 
     max_id = -1
-    scanned = 0
-    for label_path in sorted((root / LABELS_DIRNAME).rglob('*.txt')):
+    for scanned, label_path in enumerate(sorted((root / LABELS_DIRNAME).rglob('*.txt')), start=1):
         for cls_id, _ in read_yolo_boxes(label_path):
             max_id = max(max_id, cls_id)
-        scanned += 1
         if scanned >= NAME_SCAN_LIMIT:
             break
     return [str(i) for i in range(max_id + 1)]

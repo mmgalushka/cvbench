@@ -66,8 +66,9 @@ def test_build_checkpoint_callback_best_only(tmp_path):
 
 
 def test_build_checkpoint_callback_every_epoch(tmp_path):
-    from cvbench.core.checkpoint import build_checkpoint_callback
     import keras
+
+    from cvbench.core.checkpoint import build_checkpoint_callback
     cfg = _make_cfg(strategy="every_epoch")
     cb = build_checkpoint_callback(cfg, str(tmp_path))
     assert cb is not None

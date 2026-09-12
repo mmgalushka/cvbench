@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import random
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 from cvbench.datasets import layout
 

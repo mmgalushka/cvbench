@@ -60,7 +60,7 @@ def evaluate(
     total = int(n_batches) if n_batches > 0 else None
     for images, _targets in tqdm.tqdm(test_ds, total=total, desc=" Evaluating", unit="batch"):
         batch_preds = model.predict(images, verbose=0)
-        for scale_preds, acc in zip(batch_preds, all_preds):
+        for scale_preds, acc in zip(batch_preds, all_preds, strict=True):
             acc.append(scale_preds)
     all_preds_np = [np.concatenate(scale_preds, axis=0) for scale_preds in all_preds]
 

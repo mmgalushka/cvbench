@@ -10,8 +10,8 @@ from pathlib import Path
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
-from cvbench.core.config import CVBenchConfig
 from cvbench.core import _console
+from cvbench.core.config import CVBenchConfig
 
 
 def get_class_names(train_dir: str) -> list[str]:

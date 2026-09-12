@@ -4,17 +4,17 @@ import os
 import sys
 from datetime import date
 
+from cvbench.core import trainer as _trainer
 from cvbench.core.augment import apply_augmentation
 from cvbench.core.config import (
+    LossConfig,
+    LRSchedulerConfig,
+    OptimizerConfig,
     build_config,
     save_config,
     update_run_status,
-    LossConfig,
-    OptimizerConfig,
-    LRSchedulerConfig,
 )
-from cvbench.core.runs import make_run_name, make_unique_dir, EXPERIMENTS_DIR
-from cvbench.core import trainer as _trainer
+from cvbench.core.runs import EXPERIMENTS_DIR, make_run_name, make_unique_dir
 from cvbench.datasets.layout import detect_task_name
 from cvbench.services._runtime import print_device_banner
 from cvbench.tasks import get_task
