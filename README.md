@@ -225,34 +225,35 @@ the container (`docker exec -it cvbench bash`):
 
 <!-- BEGIN CLI REFERENCE -->
 ```
-train                Train a model on DATA_DIR.
-evaluate             Evaluate a trained model on the held-out test split.
-predict              Run inference on INPUT using a trained EXPERIMENT.
-serve                Start the CVBench WebUI server.
+train           Train a model on DATA_DIR.
+evaluate        Evaluate a trained model on the held-out test split.
+predict         Run inference on INPUT using a trained EXPERIMENT.
+serve           Start the CVBench WebUI server.
 
-data                 Generate, inspect and reshape datasets.
-data aug             Discover, generate, and manage augmentation configurations.
-data aug delete      Delete a saved augmentation config.
-data aug generate    Interactively build and save a new augmentation config.
-data aug list        List saved augmentation configs.
-data aug show        Print a saved augmentation config.
-data aug transforms  List every available transform with its default parameters.
-data clean           Copy a dataset, dropping OS/editor junk files.
-data dedup           Copy a dataset, dropping exact-duplicate images.
-data explore         Report per-class brightness and class balance.
-data flatten         Pool an already-split dataset back into one flat folder.
-data generate        Generate a synthetic geometric shapes dataset for pipeline testing.
-data hashify         Copy a dataset, renaming images to content hashes.
-data split           Split a flat dataset into train/val/test, stratified by class.
-data upsample        Grow a class folder to TARGET images via augmentation.
+data            Generate, inspect and reshape datasets.
+data clean      Copy a dataset, dropping OS/editor junk files.
+data dedup      Copy a dataset, dropping exact-duplicate images.
+data explore    Report per-class brightness and class balance.
+data flatten    Pool an already-split dataset back into one flat folder.
+data generate   Generate a synthetic geometric shapes dataset for pipeline testing.
+data hashify    Copy a dataset, renaming images to content hashes.
+data split      Split a flat dataset into train/val/test, stratified by class.
+data upsample   Grow a class folder to TARGET images via augmentation.
 
-runs                 Manage and inspect experiment runs.
-runs best            Show the single best run by a metric.
-runs compare         Compare two runs side by side.
-runs delete          Delete a run, or just one of its exports.
-runs export          Export a run to TFLite / ONNX / Hailo, or print Jetson steps.
-runs list            List experiment runs (default: experiments/).
-runs rename          Rename a run directory and update its config.
+aug             Discover, generate, and manage augmentation configurations.
+aug delete      Delete a saved augmentation config.
+aug generate    Interactively build and save a new augmentation config.
+aug list        List saved augmentation configs.
+aug show        Print a saved augmentation config.
+aug transforms  List every available transform with its default parameters.
+
+runs            Manage and inspect experiment runs.
+runs best       Show the single best run by a metric.
+runs compare    Compare two runs side by side.
+runs delete     Delete a run, or just one of its exports.
+runs export     Export a run to TFLite / ONNX / Hailo, or print Jetson steps.
+runs list       List experiment runs (default: experiments/).
+runs rename     Rename a run directory and update its config.
 ```
 
 Every command has worked examples in its `--help`. In the container, run `commands` for the full picture (CLI plus the tmux session helpers).
@@ -370,29 +371,51 @@ disk).
 **Discover what's available:**
 
 ```bash
-data aug transforms                    # every building-block transform + default params
-data aug list                          # every config you've saved
+aug transforms                    # every building-block transform + default params
+aug list                          # every config you've saved
 ```
 
-**Generate a config** — `data aug generate` always walks a short wizard: seed
-from a preset (`light` / `standard` / `heavy`) or start blank, keep/drop/
-customize each transform, optionally add more from the full catalogue, then
-save it under a name:
+**Generate a config** — `aug generate` shows a checklist of every available
+transform, each with a short description (space to toggle, arrow keys to
+move, enter to confirm), pre-checked with a preset's transforms if `--preset`
+is given, all unchecked otherwise:
 
 ```bash
-$ data aug generate --preset standard
- keras_flip  prob=1.0  mode: "horizontal"
-  Keep 'keras_flip'? [Y/n]:
-  Customize its parameters? [y/N]:
- ...
-Add another transform from the catalogue? [y/N]: n
+$ aug generate --preset standard
+? Select transforms to include (space to toggle, enter to confirm):
+ » ● keras_flip        Randomly flip the image.
+   ● keras_rotation    Randomly rotate the image.
+   ● keras_brightness  Randomly adjust brightness.
+   ● keras_contrast    Randomly adjust contrast.
+   ● aug_blur          Gaussian blur.
+   ○ aug_fog           Add a fog/haze effect.
+   ○ ...
+
 Save as [standard]: my_config
   ✓ Saved → workspace/augmentations/my_config.yaml  (5 transform(s))
+  Open it in an editor to fine-tune any value.
   Usage:  train data/ --augmentation my_config
 ```
 
+The saved file is ready to fine-tune — each transform gets a compact comment
+explaining what it does and what its parameters mean, so you can open it in
+any editor (VS Code, vim, ...) and tweak values without looking anything up:
+
+```yaml
+transforms:
+  # Randomly rotate the image.
+  - name: keras_rotation
+    prob: 0.7  # chance this fires per image
+    factor: 0.1
+
+  # Gaussian blur.
+  - name: aug_blur
+    prob: 0.3  # chance this fires per image
+    radius: 1.0  # range 0.5–15.0
+```
+
 ```bash
-data aug show my_config                # print its YAML
+aug show my_config                # print its YAML
 train data/ --augmentation my_config --epochs 30
 ```
 
@@ -401,7 +424,7 @@ showing every available transform (including range-sampling and `one_of`
 syntax) — open it in an editor and uncomment what you want:
 
 ```bash
-data aug generate --preset reference --name aug_ref
+aug generate --preset reference --name aug_ref
 ```
 
 ### Upsampling a class folder
@@ -425,7 +448,7 @@ data upsample data/my_data/train/dog data/my_data_aug/train/dog \
 
 | Option | Required | Description |
 |---|---|---|
-| `--augmentation NAME\|FILE` | ✓ | A saved `data aug` config name, or a path to an augmentation YAML file (same format as `--augmentation` in `train`) |
+| `--augmentation NAME\|FILE` | ✓ | A saved `aug` config name, or a path to an augmentation YAML file (same format as `--augmentation` in `train`) |
 | `--target N` | ✓ | Total number of images the destination folder should contain |
 
 ### Cleaning a dataset

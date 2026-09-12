@@ -49,10 +49,8 @@ def resolve_aug_file(name_or_path: str) -> str:
     )
 
 
-def save_augmentation_config(
-    name: str, transforms: list[dict], preset_label: str, directory: str | None = None,
-) -> Path:
-    """Write TRANSFORMS (list of {"name", "prob", ...params} dicts) under NAME.
+def write_augmentation_text(name: str, content: str, directory: str | None = None) -> Path:
+    """Write raw text (already-rendered YAML, comments and all) under NAME.
 
     Returns the path written to. Creates `directory` if it doesn't exist yet.
     """
@@ -60,14 +58,24 @@ def save_augmentation_config(
     out_dir = Path(directory or AUGMENTATIONS_DIR)
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{name}.yaml"
+    with open(path, "w") as f:
+        f.write(content)
+    return path
 
+
+def save_augmentation_config(
+    name: str, transforms: list[dict], preset_label: str, directory: str | None = None,
+) -> Path:
+    """Write TRANSFORMS (list of {"name", "prob", ...params} dicts) under NAME, uncommented.
+
+    Returns the path written to. Creates `directory` if it doesn't exist yet.
+    """
     doc = {
         "meta": {"preset": preset_label, "created": date.today().isoformat()},
         "transforms": transforms,
     }
-    with open(path, "w") as f:
-        yaml.dump(doc, f, default_flow_style=False, sort_keys=False)
-    return path
+    content = yaml.dump(doc, default_flow_style=False, sort_keys=False)
+    return write_augmentation_text(name, content, directory)
 
 
 def list_saved_augmentations(directory: str | None = None) -> list[dict]:

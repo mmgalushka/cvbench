@@ -23,7 +23,7 @@ action_usage(){
     echo -e "  ${CMD}release${OPT} [--dry-run]${NC}  preview the next version bump (CI does the real one)"
     echo -e "  ${CMD}docs${NC}                 regenerate the CLI reference block in README.md"
     echo -e ""
-    echo -e "  ${CMD}data|train|evaluate|predict|runs|augmentations|serve${NC}  pass through to the CLI"
+    echo -e "  ${CMD}data|train|evaluate|predict|runs|aug|serve${NC}  pass through to the CLI"
     echo -e ""
     if [ -x .venv/bin/commands ]; then
         .venv/bin/commands
@@ -117,9 +117,9 @@ action_runs(){
     runs "$@"
 }
 
-action_augmentations(){
+action_aug(){
     action_activate
-    augmentations "$@"
+    aug "$@"
 }
 
 action_serve(){
@@ -172,8 +172,8 @@ case $1 in
     runs)
         action_runs ${@:2}
         ;;
-    augmentations)
-        action_augmentations ${@:2}
+    aug)
+        action_aug ${@:2}
         ;;
     serve)
         action_serve ${@:2}

@@ -13,6 +13,8 @@ dependencies = [
     "tokenizers==0.22.2",
     "sentencepiece==0.2.1",
     "click==8.3.2",
+    "questionary==2.1.1",
+    "rich==15.0.0",
     "pyyaml==6.0.3",
     "scikit-learn==1.7.2",
     "matplotlib==3.10.8",
@@ -50,6 +52,7 @@ evaluate = "cvbench.cli.evaluate:evaluate"
 predict  = "cvbench.cli.predict:predict"
 runs     = "cvbench.cli.runs:runs"
 data     = "cvbench.cli.data:data"
+aug      = "cvbench.cli.augmentations:augmentations"
 serve    = "cvbench.cli.serve:serve"
 commands = "cvbench.cli.overview:commands"
 

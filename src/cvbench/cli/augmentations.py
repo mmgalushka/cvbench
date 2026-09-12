@@ -3,13 +3,16 @@ import inspect
 from pathlib import Path
 
 import click
+import questionary
+import yaml
 
+from cvbench.augmentations.registry import _RANGES
 from cvbench.cli import _help
 from cvbench.core.augmentations_store import (
     AUGMENTATIONS_DIR,
     list_saved_augmentations,
     resolve_aug_file,
-    save_augmentation_config,
+    write_augmentation_text,
 )
 
 
@@ -66,13 +69,58 @@ _PRESETS = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# Short, one-line descriptions for every catalogue transform — shown in the
+# `generate` checklist and as a comment above each block in a saved config.
+# Per-parameter notes (ranges/choices) come from augmentations/registry.py's
+# _RANGES instead of being duplicated here.
+# ---------------------------------------------------------------------------
+
+_DESCRIPTIONS = {
+    "keras_flip": "Randomly flip the image.",
+    "keras_rotation": "Randomly rotate the image.",
+    "keras_zoom": "Randomly zoom in or out.",
+    "keras_translation": "Randomly shift the image horizontally/vertically.",
+    "keras_crop": "Randomly crop to a fixed size.",
+    "keras_brightness": "Randomly adjust brightness.",
+    "keras_contrast": "Randomly adjust contrast.",
+    "keras_noise": "Add Gaussian noise.",
+    "aug_blur": "Gaussian blur.",
+    "aug_brighten_edges": "Brighten or darken an edge (choose orientation).",
+    "aug_brighten_edges_h": "Brighten or darken the left/right edges.",
+    "aug_brighten_edges_v": "Brighten or darken the top/bottom edges.",
+    "aug_chirp_artifacts": "Add curved, chirp-like line artifacts.",
+    "aug_fade": "Fade an edge to a fixed value (choose orientation/side).",
+    "aug_fade_horizontal": "Fade the left or right edge to a fixed value.",
+    "aug_fade_vertical": "Fade the top or bottom edge to a fixed value.",
+    "aug_fog": "Add a fog/haze effect.",
+    "aug_gamma": "Gamma correction (brightens or darkens midtones).",
+    "aug_interference": "Add a wave-like interference pattern.",
+    "aug_lines": "Draw random lines (choose orientation).",
+    "aug_lines_h": "Draw random horizontal lines.",
+    "aug_lines_v": "Draw random vertical lines.",
+    "aug_mask": "Blank out a random band (choose orientation).",
+    "aug_mask_h": "Blank out a random horizontal band.",
+    "aug_mask_v": "Blank out a random vertical band.",
+    "aug_net": "Overlay a net-like grid of lines/stripes.",
+    "aug_random_profile_h": "Apply a smooth random brightness profile along rows.",
+    "aug_random_profile_v": "Apply a smooth random brightness profile along columns.",
+    "aug_rf_transmission": "Simulate RF/radio transmission-style banding noise.",
+    "aug_salt_pepper": "Add salt-and-pepper (random black/white pixel) noise.",
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _aug_function_defaults() -> list[tuple[str, dict]]:
-    """Return (name, defaults_dict) for each aug_* function in the augmentations package."""
+    """Return (name, defaults_dict) for each aug_* function in the augmentations package.
+
+    A parameter with no default in the function signature (e.g. aug_blur's
+    radius) is filled in from registry.py's _RANGES fallback default instead
+    of a placeholder, so every value here is directly usable.
+    """
     import cvbench.augmentations as aug_mod
     result = []
     for name in sorted(n for n in dir(aug_mod) if n.startswith("aug_")):
@@ -83,7 +131,8 @@ def _aug_function_defaults() -> list[tuple[str, dict]]:
             if pname == "img":
                 continue
             if param.default is inspect.Parameter.empty:
-                defaults[pname] = "<required>"
+                fallback = _RANGES.get(name, {}).get("params", {}).get(pname, {}).get("default")
+                defaults[pname] = fallback if fallback is not None else "<required>"
             else:
                 defaults[pname] = param.default
         result.append((name, defaults))
@@ -262,68 +311,101 @@ def _reference_yaml() -> str:
     return "\n".join(lines) + "\n"
 
 
-def _prompt_params(defaults: dict, current: dict | None = None) -> dict:
-    """Prompt for each param in DEFAULTS, showing CURRENT (or the default) as the default.
+def _param_note(t_name: str, pname: str) -> str | None:
+    """A short 'how to change this' note for one transform's parameter, from _RANGES."""
+    meta = _RANGES.get(t_name, {}).get("params", {}).get(pname)
+    if not meta:
+        return None
+    if "choices" in meta:
+        return " | ".join(str(c) for c in meta["choices"])
+    if "min" in meta and "max" in meta:
+        return f"range {meta['min']}–{meta['max']}"
+    return None
 
-    Type is inferred from the shown default value. Returns the collected params.
+
+def _yaml_scalar(v) -> str:
+    """Render a single Python value the way it would appear as a YAML scalar."""
+    return yaml.safe_dump(v, default_flow_style=True).split("\n", 1)[0]
+
+
+def _render_config_yaml(transforms: list[dict], preset_label: str) -> str:
+    """Render TRANSFORMS as YAML with a compact description + param notes per block.
+
+    This is what `aug generate` saves — meant to be opened in an editor
+    afterward, so each block carries enough context to tweak it without
+    looking anything up (`aug transforms` / future docs have the full detail).
     """
-    current = current or {}
-    params = {}
-    for pname, default in defaults.items():
-        shown = current.get(pname, default)
-        if shown == "<required>":
-            value = click.prompt(f"    {pname} (required)", type=str)
-            if value == "":
-                raise click.ClickException(f"'{pname}' is required.")
-            params[pname] = value
-        elif shown is None:
-            # e.g. seed=None — optional, blank keeps it unset.
-            raw = click.prompt(f"    {pname} (optional)", default="", show_default=False)
-            params[pname] = raw if raw != "" else None
-        else:
-            params[pname] = click.prompt(f"    {pname}", default=shown, type=type(shown))
-    return params
+    from datetime import date
+
+    lines = [
+        "meta:",
+        f"  preset: {preset_label}",
+        f"  created: '{date.today().isoformat()}'",
+        "",
+        "transforms:",
+    ]
+    for t in transforms:
+        t_name = t["name"]
+        rest = {k: v for k, v in t.items() if k not in ("name", "prob")}
+        desc = _DESCRIPTIONS.get(t_name)
+        if desc:
+            lines.append(f"  # {desc}")
+        lines.append(f"  - name: {t_name}")
+        lines.append(f"    prob: {_yaml_scalar(t['prob'])}  # chance this fires per image")
+        for pname, v in rest.items():
+            note = _param_note(t_name, pname)
+            trailer = f"  # {note}" if note else ""
+            lines.append(f"    {pname}: {_yaml_scalar(v)}{trailer}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _print_catalogue():
     from cvbench.core import _fmt
 
+    name_width = max(len(name) for name, _ in _catalogue())
+
+    def _print_group(title: str, rows: list[tuple[str, dict]]):
+        print(f" {_fmt.bold(f'{title}:')}")
+        for name, defaults in rows:
+            colored_name = _fmt.blue(f"{name:<{name_width}}")
+            print(f"   {colored_name}  {_DESCRIPTIONS.get(name, '')}")
+            print(f"   {'':<{name_width}}  {_fmt.dim(_fmt_params(defaults))}")
+        print()
+
     print(_fmt.rule(thick=True))
     print(f" {_fmt.bold('Available transforms')}")
     print(_fmt.rule(thick=True))
-    print(" Keras layers:")
-    for name, defaults in _KERAS_TRANSFORMS:
-        print(f"   {name:<26}  {_fmt_params(defaults)}")
-    print()
-    print(" Custom functions:")
-    for name, defaults in _aug_function_defaults():
-        print(f"   {name:<26}  {_fmt_params(defaults)}")
+    _print_group("Keras layers", _KERAS_TRANSFORMS)
+    _print_group("Custom functions", _aug_function_defaults())
     print(_fmt.rule(thick=True))
 
 
-def _choose_from_catalogue() -> dict:
-    """Print the numbered catalogue, prompt for a pick, and return a new transform dict."""
-    catalogue = _catalogue()
-    print()
-    for i, (name, defaults) in enumerate(catalogue, 1):
-        print(f"   {i:>2}) {name:<26}  {_fmt_params(defaults)}")
-    print()
-    choice = click.prompt("  Transform number or name")
-    match = None
-    if choice.isdigit() and 1 <= int(choice) <= len(catalogue):
-        match = catalogue[int(choice) - 1]
-    else:
-        match = next((c for c in catalogue if c[0] == choice), None)
-    if match is None:
-        raise click.ClickException(f"Unknown transform: '{choice}'")
+def _checklist_prompt(catalogue: list[tuple[str, dict]], preselected: set) -> list[str] | None:
+    """Show a [x]/[ ] checkbox list of every transform in CATALOGUE (arrow keys to
+    move, space to toggle, enter to confirm), pre-checking names in PRESELECTED.
 
-    name, defaults = match
-    print(f"  Adding '{name}':")
-    prob = click.prompt("    prob", default=1.0, type=float)
-    params = _prompt_params(defaults)
-    entry = {"name": name, "prob": prob}
-    entry.update(params)
-    return entry
+    Returns the selected names in catalogue order, or None if the user aborted
+    (Ctrl-C / Esc). Split out so tests can monkeypatch this one function instead
+    of driving a real terminal.
+    """
+    name_width = max(len(name) for name, _ in catalogue)
+    choices = [
+        questionary.Choice(
+            title=f"{name:<{name_width}}  {_DESCRIPTIONS.get(name, '')}",
+            value=name,
+            checked=name in preselected,
+        )
+        for name, _defaults in catalogue
+    ]
+    selected = questionary.checkbox(
+        "Select transforms to include (space to toggle, enter to confirm):",
+        choices=choices,
+    ).ask()
+    if selected is None:
+        return None
+    order = {name: i for i, (name, _) in enumerate(catalogue)}
+    return sorted(selected, key=order.get)
 
 
 # ---------------------------------------------------------------------------
@@ -332,8 +414,8 @@ def _choose_from_catalogue() -> dict:
 
 @_help.group(
     examples=[
-        ("data aug generate --preset standard", "generate + customize a config, save it under a name"),
-        ("data aug list", "see every augmentation config you've saved"),
+        ("aug generate --preset standard", "check off transforms, save under a name"),
+        ("aug list", "see every augmentation config you've saved"),
     ],
 )
 def augmentations():
@@ -343,8 +425,8 @@ def augmentations():
 @augmentations.command(
     "transforms",
     short_help="List every available transform with its default parameters.",
-    examples=[("data aug transforms", "Print the full transform catalogue")],
-    see_also=[("data aug generate", "build a config from these building blocks")],
+    examples=[("aug transforms", "Print the full transform catalogue")],
+    see_also=[("aug generate", "build a config from these building blocks")],
 )
 def transforms_cmd():
     """List every available transform (keras layers + custom functions)."""
@@ -354,8 +436,8 @@ def transforms_cmd():
 @augmentations.command(
     "list",
     short_help="List saved augmentation configs.",
-    examples=[("data aug list", "See every config you've generated and saved")],
-    see_also=[("data aug generate", "create a new saved config")],
+    examples=[("aug list", "See every config you've generated and saved")],
+    see_also=[("aug generate", "create a new saved config")],
 )
 def list_saved():
     """List augmentation configs saved under workspace/augmentations/."""
@@ -364,7 +446,7 @@ def list_saved():
     entries = list_saved_augmentations()
     if not entries:
         print(f" No augmentation configs found in '{AUGMENTATIONS_DIR}'.")
-        print(" Run 'data aug generate' to create one.")
+        print(" Run 'aug generate' to create one.")
         return
 
     max_name = max(len(e["name"]) for e in entries)
@@ -384,9 +466,9 @@ def list_saved():
     "generate",
     short_help="Interactively build and save a new augmentation config.",
     examples=[
-        ("data aug generate", "Start from a blank config and add transforms one at a time"),
-        ("data aug generate --preset standard", "Start from the 'standard' preset and customize it"),
-        ("data aug generate --preset reference --name ref", "Save the fully-commented reference sheet"),
+        ("aug generate", "Check off transforms from the full catalogue, nothing pre-selected"),
+        ("aug generate --preset standard", "Same checklist, pre-checked with the 'standard' preset"),
+        ("aug generate --preset reference --name ref", "Save the fully-commented reference sheet"),
     ],
     see_also=[("train data/ --augmentation <name>", "train with the config you saved")],
 )
@@ -394,83 +476,79 @@ def list_saved():
               default=None, help="Seed the wizard from this preset instead of starting blank.")
 @click.option("--name", default=None, help="Save under this name (prompted if omitted).")
 def generate(preset, name):
-    """Interactively build an augmentation config, then save it under a name.
+    """Interactively select transforms and save them as a named config.
 
-    With --preset, the wizard starts from that preset's transforms — keep,
-    drop, or customize each one, then optionally add more from the full
-    catalogue. Without --preset, it starts blank and only adds what you pick.
+    Shows a checklist of every available transform, each with a short
+    description — space to toggle, enter to confirm — pre-checked for
+    whichever ones --preset includes (nothing pre-checked without --preset).
+    The saved file gets a compact comment above each transform explaining
+    what it does and what its parameters mean, so it's ready to fine-tune by
+    opening it in an editor afterward.
     """
+    from datetime import date
+
     from cvbench.core import _fmt
 
     if preset == "reference":
         save_name = name or click.prompt("Save as", default="reference")
-        path = _save_reference(save_name)
+        header = f"meta:\n  preset: reference\n  created: '{date.today().isoformat()}'\n"
+        path = write_augmentation_text(save_name, header + _reference_yaml())
         print(f"  {_fmt.green('✓')} Saved → {path}")
         print(f"  Usage:  train data/ --augmentation {save_name}")
         return
 
-    transforms = _preset_transforms(preset) if preset else []
+    preset_map = {t["name"]: t for t in _preset_transforms(preset)} if preset else {}
+    catalogue = _catalogue()
 
     print(_fmt.rule(thick=True))
     print(f" {_fmt.bold('Augmentation wizard')}")
     print(_fmt.rule(thick=True))
 
-    kept = []
-    for t in transforms:
-        t_name = t["name"]
-        rest = {k: v for k, v in t.items() if k not in ("name", "prob")}
-        print(f" {t_name}  prob={t['prob']}  {_fmt_params(rest)}")
-        if not click.confirm(f"  Keep '{t_name}'?", default=True):
-            continue
-        if click.confirm("  Customize its parameters?", default=False):
-            prob = click.prompt("    prob", default=t["prob"], type=float)
-            params = _prompt_params(rest, current=rest)
-            entry = {"name": t_name, "prob": prob}
-            entry.update(params)
-            kept.append(entry)
-        else:
-            kept.append(t)
-
-    while click.confirm("Add another transform from the catalogue?", default=False):
-        kept.append(_choose_from_catalogue())
-
-    if not kept:
+    selected = _checklist_prompt(catalogue, set(preset_map))
+    if selected is None:
+        raise click.Abort()
+    if not selected:
         raise click.ClickException("No transforms selected — nothing to save.")
 
+    defaults_by_name = dict(catalogue)
+    kept = [
+        preset_map.get(t_name) or {"name": t_name, "prob": 1.0, **defaults_by_name[t_name]}
+        for t_name in selected
+    ]
+
     save_name = name or click.prompt("Save as", default=preset or "config")
-    path = save_augmentation_config(save_name, kept, preset or "custom")
+    content = _render_config_yaml(kept, preset or "custom")
+    path = write_augmentation_text(save_name, content)
     print(f"  {_fmt.green('✓')} Saved → {path}  ({len(kept)} transform(s))")
+    print("  Open it in an editor to fine-tune any value.")
     print(f"  Usage:  train data/ --augmentation {save_name}")
-
-
-def _save_reference(name: str) -> Path:
-    from datetime import date
-
-    out_dir = Path(AUGMENTATIONS_DIR)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{name}.yaml"
-    header = f"meta:\n  preset: reference\n  created: '{date.today().isoformat()}'\n"
-    with open(path, "w") as f:
-        f.write(header + _reference_yaml())
-    return path
 
 
 @augmentations.command(
     "show",
     short_help="Print a saved augmentation config.",
-    examples=[("data aug show standard", "Print the saved 'standard' config's YAML")],
+    examples=[("aug show standard", "Print the saved 'standard' config's YAML")],
 )
 @click.argument("name")
 def show(name):
-    """Print the raw YAML of a saved augmentation config."""
+    """Print the raw YAML of a saved augmentation config, syntax-highlighted."""
+    from rich.console import Console
+    from rich.syntax import Syntax
+
     path = resolve_aug_file(name)
-    print(Path(path).read_text(), end="")
+    content = Path(path).read_text()
+    console = Console()
+    if console.is_terminal:
+        console.print(Syntax(content, "yaml", theme="ansi_dark", background_color="default",
+                              word_wrap=True))
+    else:
+        print(content, end="")
 
 
 @augmentations.command(
     "delete",
     short_help="Delete a saved augmentation config.",
-    examples=[("data aug delete standard -y", "Remove the saved 'standard' config without confirming")],
+    examples=[("aug delete standard -y", "Remove the saved 'standard' config without confirming")],
 )
 @click.argument("name")
 @click.option("--yes", "-y", is_flag=True, default=False, help="Skip the confirmation prompt.")

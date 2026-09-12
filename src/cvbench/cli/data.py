@@ -9,7 +9,6 @@ import click
 import numpy as np
 
 from cvbench.cli import _help
-from cvbench.cli.augmentations import augmentations
 from cvbench.cli.generate import generate
 from cvbench.datasets import clean as clean_mod
 from cvbench.datasets import dedup as dedup_mod
@@ -43,7 +42,6 @@ def data():
 
 
 data.add_command(generate, name="generate")
-data.add_command(augmentations, name="aug")
 
 
 def _mean_brightness(path: Path) -> float:
@@ -154,12 +152,12 @@ def explore(data_dir, split):
         ("data upsample data/train/dog data_aug/train/dog --augmentation aug.yaml --target 1500",
          "Copy originals, then add augmented variants until the folder holds 1500 images"),
     ],
-    see_also=[("data aug generate", "make an augmentation spec first")],
+    see_also=[("aug generate", "make an augmentation spec first")],
 )
 @click.argument("src_dir")
 @click.argument("dst_dir")
 @click.option("--augmentation", "aug_file", required=True,
-              help="Augmentation YAML spec file, or the name of a saved 'data aug' config.")
+              help="Augmentation YAML spec file, or the name of a saved 'aug' config.")
 @click.option("--target", required=True, type=int,
               help="Target number of images in the output folder.")
 def upsample(src_dir, dst_dir, aug_file, target):

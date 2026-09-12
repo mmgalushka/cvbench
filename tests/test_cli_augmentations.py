@@ -1,7 +1,11 @@
+from unittest import mock
+
 import pytest
 from click.testing import CliRunner
 
+import cvbench.cli.augmentations as aug_mod
 from cvbench.cli.augmentations import augmentations
+from cvbench.core.config import load_aug_file
 
 
 @pytest.fixture(autouse=True)
@@ -14,6 +18,38 @@ def _run(args, input=None):
     return CliRunner().invoke(augmentations, args, input=input)
 
 
+def _checked(names):
+    """Patch the checkbox screen to return NAMES, bypassing the real terminal UI."""
+    return mock.patch.object(aug_mod, "_checklist_prompt", return_value=list(names))
+
+
+def test_checklist_prompt_preselects_and_preserves_catalogue_order():
+    catalogue = [("keras_flip", {"mode": "horizontal"}), ("keras_rotation", {"factor": 0.1}),
+                 ("aug_blur", {"radius": 1.0})]
+    with mock.patch.object(aug_mod.questionary, "checkbox") as checkbox:
+        checkbox.return_value.ask.return_value = ["aug_blur", "keras_flip"]  # out of order
+        result = aug_mod._checklist_prompt(catalogue, preselected={"keras_flip"})
+
+    assert result == ["keras_flip", "aug_blur"]  # restored to catalogue order
+    choices = checkbox.call_args.kwargs["choices"]
+    assert [c.checked for c in choices] == [True, False, False]
+
+
+def test_checklist_prompt_returns_none_on_abort():
+    with mock.patch.object(aug_mod.questionary, "checkbox") as checkbox:
+        checkbox.return_value.ask.return_value = None
+        assert aug_mod._checklist_prompt([("keras_flip", {})], preselected=set()) is None
+
+
+def test_checklist_prompt_shows_descriptions():
+    catalogue = [("keras_flip", {"mode": "horizontal"})]
+    with mock.patch.object(aug_mod.questionary, "checkbox") as checkbox:
+        checkbox.return_value.ask.return_value = []
+        aug_mod._checklist_prompt(catalogue, preselected=set())
+    choices = checkbox.call_args.kwargs["choices"]
+    assert "flip" in choices[0].title.lower()
+
+
 def test_transforms_lists_keras_and_custom_functions():
     """Regression test: _aug_function_defaults() used to `import augmentations`
     (the wrong module), crashing this command outside the Docker container."""
@@ -23,41 +59,60 @@ def test_transforms_lists_keras_and_custom_functions():
     assert "aug_blur" in result.output
 
 
-def test_generate_blank_slate_add_one_transform():
-    # Add another? y -> pick "1" (keras_flip) -> prob default -> mode default -> add another? n
-    result = _run(["generate", "--name", "blank1"], input="y\n1\n\n\nn\n")
-    assert result.exit_code == 0, result.output
-    assert "Saved" in result.output
-
-    show = _run(["show", "blank1"])
-    assert show.exit_code == 0
-    assert "keras_flip" in show.output
-
-
 def test_generate_zero_transforms_raises():
-    result = _run(["generate", "--name", "empty"], input="n\n")
+    with _checked([]):
+        result = _run(["generate", "--name", "empty"])
     assert result.exit_code != 0
     assert "No transforms selected" in result.output
 
 
-def test_generate_from_preset_keep_drop_customize():
-    # standard preset transforms, in order: keras_flip, keras_rotation,
-    # keras_brightness, keras_contrast, aug_blur.
-    answers = "\n".join([
-        "y", "n",             # keras_flip: keep, don't customize
-        "n",                  # keras_rotation: drop
-        "y", "y", "0.9", "",  # keras_brightness: keep, customize prob=0.9, factor=default
-        "y", "n",             # keras_contrast: keep, don't customize
-        "y", "n",             # aug_blur: keep, don't customize
-        "n",                  # don't add another
-    ]) + "\n"
-    result = _run(["generate", "--preset", "standard", "--name", "customized"], input=answers)
-    assert result.exit_code == 0, result.output
-    assert "4 transform(s)" in result.output
+def test_generate_aborted_checklist_raises_abort():
+    with mock.patch.object(aug_mod, "_checklist_prompt", return_value=None):
+        result = _run(["generate", "--name", "aborted"])
+    assert result.exit_code != 0
 
-    show = _run(["show", "customized"])
-    assert "keras_rotation" not in show.output
-    assert "prob: 0.9" in show.output
+
+def test_generate_no_customize_prompts_needed():
+    """Selection alone is enough — no per-item 'customize?' round trip."""
+    with _checked(["keras_flip", "aug_blur"]):
+        result = _run(["generate", "--preset", "standard", "--name", "quick"])
+    assert result.exit_code == 0, result.output
+    assert "2 transform(s)" in result.output
+
+
+def test_generate_preserves_preset_tuned_values():
+    """A selected preset transform keeps the preset's own prob/params."""
+    with _checked(["aug_blur"]):
+        result = _run(["generate", "--preset", "standard", "--name", "asis"])
+    assert result.exit_code == 0, result.output
+
+    cfg = load_aug_file("workspace/augmentations/asis.yaml")
+    assert cfg.transforms[0].prob == 0.3          # standard preset's aug_blur prob
+    assert cfg.transforms[0].params["radius"] == 1.0
+
+    show = _run(["show", "asis"])
+    assert "Gaussian blur" in show.output          # description comment present
+
+
+def test_generate_non_preset_transform_gets_usable_default_not_placeholder():
+    """A transform picked outside any preset (or with no --preset at all) must
+    get a real, usable default — never the bare '<required>' placeholder."""
+    with _checked(["aug_fog"]):  # 'strength' has no signature default
+        result = _run(["generate", "--name", "fogonly"])
+    assert result.exit_code == 0, result.output
+
+    cfg = load_aug_file("workspace/augmentations/fogonly.yaml")
+    assert cfg.transforms[0].params["strength"] != "<required>"
+    assert isinstance(cfg.transforms[0].params["strength"], float)
+
+
+def test_generate_writes_param_notes_from_registry():
+    with _checked(["aug_fade_horizontal"]):
+        result = _run(["generate", "--name", "faded"])
+    assert result.exit_code == 0, result.output
+
+    show = _run(["show", "faded"])
+    assert "left | right | both" in show.output    # side's choices, from registry._RANGES
 
 
 def test_generate_reference_preset_bypasses_wizard():
@@ -70,9 +125,10 @@ def test_generate_reference_preset_bypasses_wizard():
 
 
 def test_list_show_delete_round_trip():
-    # "a": blank slate, no transforms added -> generate fails, nothing saved.
-    _run(["generate", "--name", "a"], input="n\n")
-    _run(["generate", "--preset", "light", "--name", "b"], input="y\nn\ny\nn\nn\n")
+    with _checked([]):
+        _run(["generate", "--name", "a"])  # nothing checked -> fails, nothing saved
+    with _checked(["keras_flip"]):
+        _run(["generate", "--preset", "light", "--name", "b"])
 
     listing = _run(["list"])
     assert listing.exit_code == 0

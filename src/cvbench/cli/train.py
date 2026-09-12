@@ -118,7 +118,7 @@ def _parse_loss(value: str | None) -> LossConfig | None:
 @click.option("--input-size", default=None, type=int, help="Image input size in pixels.")
 @click.option("--dropout", default=None, type=float, help="Dropout rate.")
 @click.option("--augmentation", "aug_file", default=None,
-              help="Path to an augmentation YAML file, or the name of a saved 'data aug' config.")
+              help="Path to an augmentation YAML file, or the name of a saved 'aug' config.")
 @click.option("--resume", default=None,
               help="Path to a checkpoint file to resume training from.")
 @click.option("--class-weight", "class_weight_raw", default=None,
