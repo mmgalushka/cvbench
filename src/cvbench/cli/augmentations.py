@@ -1,10 +1,16 @@
+import copy
 import inspect
-import sys
+from pathlib import Path
 
 import click
-import yaml
 
 from cvbench.cli import _help
+from cvbench.core.augmentations_store import (
+    AUGMENTATIONS_DIR,
+    list_saved_augmentations,
+    resolve_aug_file,
+    save_augmentation_config,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -66,8 +72,8 @@ _PRESETS = {
 # ---------------------------------------------------------------------------
 
 def _aug_function_defaults() -> list[tuple[str, dict]]:
-    """Return (name, defaults_dict) for each aug_* function in augmentations package."""
-    import augmentations as aug_mod
+    """Return (name, defaults_dict) for each aug_* function in the augmentations package."""
+    import cvbench.augmentations as aug_mod
     result = []
     for name in sorted(n for n in dir(aug_mod) if n.startswith("aug_")):
         fn = getattr(aug_mod, name)
@@ -94,18 +100,19 @@ def _fmt_params(d: dict) -> str:
     return ",  ".join(parts)
 
 
-def _preset_to_yaml(name: str) -> str:
-    if name == "reference":
-        return _reference_yaml()
-    preset = _PRESETS[name]
-    transforms = preset["transforms"]
-    # Build a list of dicts preserving key order: name, prob, then rest
-    out_transforms = []
-    for t in transforms:
+def _catalogue() -> list[tuple[str, dict]]:
+    """Every available transform (keras layers + custom functions), name → defaults."""
+    return list(_KERAS_TRANSFORMS) + _aug_function_defaults()
+
+
+def _preset_transforms(name: str) -> list[dict]:
+    """Deep-copy of a preset's transform list, key order name/prob/...params preserved."""
+    out = []
+    for t in _PRESETS[name]["transforms"]:
         entry = {"name": t["name"], "prob": t["prob"]}
         entry.update({k: v for k, v in t.items() if k not in ("name", "prob")})
-        out_transforms.append(entry)
-    return yaml.dump({"transforms": out_transforms}, default_flow_style=False, sort_keys=False)
+        out.append(entry)
+    return copy.deepcopy(out)
 
 
 def _reference_yaml() -> str:
@@ -255,29 +262,30 @@ def _reference_yaml() -> str:
     return "\n".join(lines) + "\n"
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+def _prompt_params(defaults: dict, current: dict | None = None) -> dict:
+    """Prompt for each param in DEFAULTS, showing CURRENT (or the default) as the default.
 
-@_help.group(
-    examples=[
-        ("augmentations list", "see every transform and its default parameters"),
-        ("augmentations example standard --output workspace/aug.yaml",
-         "write a ready-to-edit augmentation spec"),
-    ],
-)
-def augmentations():
-    """Discover and generate augmentation configurations."""
+    Type is inferred from the shown default value. Returns the collected params.
+    """
+    current = current or {}
+    params = {}
+    for pname, default in defaults.items():
+        shown = current.get(pname, default)
+        if shown == "<required>":
+            value = click.prompt(f"    {pname} (required)", type=str)
+            if value == "":
+                raise click.ClickException(f"'{pname}' is required.")
+            params[pname] = value
+        elif shown is None:
+            # e.g. seed=None — optional, blank keeps it unset.
+            raw = click.prompt(f"    {pname} (optional)", default="", show_default=False)
+            params[pname] = raw if raw != "" else None
+        else:
+            params[pname] = click.prompt(f"    {pname}", default=shown, type=type(shown))
+    return params
 
 
-@augmentations.command(
-    "list",
-    short_help="List every transform with its default parameters.",
-    examples=[("augmentations list", "Print the full transform catalogue")],
-    see_also=[("augmentations example reference", "a commented lookup sheet of all of them")],
-)
-def list_transforms():
-    """List all available transforms with their default parameters."""
+def _print_catalogue():
     from cvbench.core import _fmt
 
     print(_fmt.rule(thick=True))
@@ -285,57 +293,198 @@ def list_transforms():
     print(_fmt.rule(thick=True))
     print(" Keras layers:")
     for name, defaults in _KERAS_TRANSFORMS:
-        params_str = _fmt_params(defaults)
-        print(f"   {name:<26}  {params_str}")
+        print(f"   {name:<26}  {_fmt_params(defaults)}")
     print()
     print(" Custom functions:")
     for name, defaults in _aug_function_defaults():
-        params_str = _fmt_params(defaults)
-        print(f"   {name:<26}  {params_str}")
+        print(f"   {name:<26}  {_fmt_params(defaults)}")
     print(_fmt.rule(thick=True))
 
 
-@augmentations.command(
-    "example",
-    short_help="Generate a preset augmentation config (light/standard/heavy/reference).",
-    examples=[
-        ("augmentations example", "List the presets with a one-line description of each"),
-        ("augmentations example standard", "Print the 'standard' preset to stdout"),
-        ("augmentations example heavy --output workspace/aug.yaml", "Save a preset to a file"),
-    ],
-    see_also=[("train data/ --augmentation workspace/aug.yaml", "train with the spec you saved")],
-)
-@click.argument("preset", required=False,
-                type=click.Choice(["light", "standard", "heavy", "reference"]))
-@click.option("--output", "output_file", default=None, type=click.Path(),
-              help="Write to this file instead of stdout.")
-def example(preset, output_file):
-    """Generate a preset augmentation configuration.
+def _choose_from_catalogue() -> dict:
+    """Print the numbered catalogue, prompt for a pick, and return a new transform dict."""
+    catalogue = _catalogue()
+    print()
+    for i, (name, defaults) in enumerate(catalogue, 1):
+        print(f"   {i:>2}) {name:<26}  {_fmt_params(defaults)}")
+    print()
+    choice = click.prompt("  Transform number or name")
+    match = None
+    if choice.isdigit() and 1 <= int(choice) <= len(catalogue):
+        match = catalogue[int(choice) - 1]
+    else:
+        match = next((c for c in catalogue if c[0] == choice), None)
+    if match is None:
+        raise click.ClickException(f"Unknown transform: '{choice}'")
 
-    Available presets: light, standard, heavy, reference.
-    Run without a preset name to see descriptions.
+    name, defaults = match
+    print(f"  Adding '{name}':")
+    prob = click.prompt("    prob", default=1.0, type=float)
+    params = _prompt_params(defaults)
+    entry = {"name": name, "prob": prob}
+    entry.update(params)
+    return entry
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+@_help.group(
+    examples=[
+        ("data aug generate --preset standard", "generate + customize a config, save it under a name"),
+        ("data aug list", "see every augmentation config you've saved"),
+    ],
+)
+def augmentations():
+    """Discover, generate, and manage augmentation configurations."""
+
+
+@augmentations.command(
+    "transforms",
+    short_help="List every available transform with its default parameters.",
+    examples=[("data aug transforms", "Print the full transform catalogue")],
+    see_also=[("data aug generate", "build a config from these building blocks")],
+)
+def transforms_cmd():
+    """List every available transform (keras layers + custom functions)."""
+    _print_catalogue()
+
+
+@augmentations.command(
+    "list",
+    short_help="List saved augmentation configs.",
+    examples=[("data aug list", "See every config you've generated and saved")],
+    see_also=[("data aug generate", "create a new saved config")],
+)
+def list_saved():
+    """List augmentation configs saved under workspace/augmentations/."""
+    from cvbench.core import _fmt
+
+    entries = list_saved_augmentations()
+    if not entries:
+        print(f" No augmentation configs found in '{AUGMENTATIONS_DIR}'.")
+        print(" Run 'data aug generate' to create one.")
+        return
+
+    max_name = max(len(e["name"]) for e in entries)
+    tr = _fmt.rule(thick=True)
+    print(tr)
+    print(f" {'Name':<{max_name}}  {'Preset':<10}  {'Transforms':>10}  {'Modified':>10}")
+    print(tr)
+    for e in entries:
+        print(
+            f" {e['name']:<{max_name}}  {e['preset']:<10}  "
+            f"{e['n_transforms']:>10}  {e['modified']:>10}"
+        )
+    print(tr)
+
+
+@augmentations.command(
+    "generate",
+    short_help="Interactively build and save a new augmentation config.",
+    examples=[
+        ("data aug generate", "Start from a blank config and add transforms one at a time"),
+        ("data aug generate --preset standard", "Start from the 'standard' preset and customize it"),
+        ("data aug generate --preset reference --name ref", "Save the fully-commented reference sheet"),
+    ],
+    see_also=[("train data/ --augmentation <name>", "train with the config you saved")],
+)
+@click.option("--preset", type=click.Choice(["light", "standard", "heavy", "reference"]),
+              default=None, help="Seed the wizard from this preset instead of starting blank.")
+@click.option("--name", default=None, help="Save under this name (prompted if omitted).")
+def generate(preset, name):
+    """Interactively build an augmentation config, then save it under a name.
+
+    With --preset, the wizard starts from that preset's transforms — keep,
+    drop, or customize each one, then optionally add more from the full
+    catalogue. Without --preset, it starts blank and only adds what you pick.
     """
     from cvbench.core import _fmt
 
-    if preset is None:
-        print(_fmt.rule(thick=True))
-        print(f" {_fmt.bold('Augmentation presets')}")
-        print(_fmt.rule(thick=True))
-        for name, data in _PRESETS.items():
-            print(f"   {name:<12}  {data['description']}")
-        print(f"   {'reference':<12}  All transforms commented out — a lookup sheet.")
-        print(_fmt.rule(thick=True))
-        print(" Usage: augmentations example <preset> [--output FILE]")
+    if preset == "reference":
+        save_name = name or click.prompt("Save as", default="reference")
+        path = _save_reference(save_name)
+        print(f"  {_fmt.green('✓')} Saved → {path}")
+        print(f"  Usage:  train data/ --augmentation {save_name}")
         return
 
-    content = _preset_to_yaml(preset)
+    transforms = _preset_transforms(preset) if preset else []
 
-    if output_file:
-        from pathlib import Path
-        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-        with open(output_file, "w") as f:
-            f.write(content)
-        print(f" Saved → {output_file}")
-        print(f" Usage:  train data/ --augmentation {output_file}")
-    else:
-        sys.stdout.write(content)
+    print(_fmt.rule(thick=True))
+    print(f" {_fmt.bold('Augmentation wizard')}")
+    print(_fmt.rule(thick=True))
+
+    kept = []
+    for t in transforms:
+        t_name = t["name"]
+        rest = {k: v for k, v in t.items() if k not in ("name", "prob")}
+        print(f" {t_name}  prob={t['prob']}  {_fmt_params(rest)}")
+        if not click.confirm(f"  Keep '{t_name}'?", default=True):
+            continue
+        if click.confirm("  Customize its parameters?", default=False):
+            prob = click.prompt("    prob", default=t["prob"], type=float)
+            params = _prompt_params(rest, current=rest)
+            entry = {"name": t_name, "prob": prob}
+            entry.update(params)
+            kept.append(entry)
+        else:
+            kept.append(t)
+
+    while click.confirm("Add another transform from the catalogue?", default=False):
+        kept.append(_choose_from_catalogue())
+
+    if not kept:
+        raise click.ClickException("No transforms selected — nothing to save.")
+
+    save_name = name or click.prompt("Save as", default=preset or "config")
+    path = save_augmentation_config(save_name, kept, preset or "custom")
+    print(f"  {_fmt.green('✓')} Saved → {path}  ({len(kept)} transform(s))")
+    print(f"  Usage:  train data/ --augmentation {save_name}")
+
+
+def _save_reference(name: str) -> Path:
+    from datetime import date
+
+    out_dir = Path(AUGMENTATIONS_DIR)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{name}.yaml"
+    header = f"meta:\n  preset: reference\n  created: '{date.today().isoformat()}'\n"
+    with open(path, "w") as f:
+        f.write(header + _reference_yaml())
+    return path
+
+
+@augmentations.command(
+    "show",
+    short_help="Print a saved augmentation config.",
+    examples=[("data aug show standard", "Print the saved 'standard' config's YAML")],
+)
+@click.argument("name")
+def show(name):
+    """Print the raw YAML of a saved augmentation config."""
+    path = resolve_aug_file(name)
+    print(Path(path).read_text(), end="")
+
+
+@augmentations.command(
+    "delete",
+    short_help="Delete a saved augmentation config.",
+    examples=[("data aug delete standard -y", "Remove the saved 'standard' config without confirming")],
+)
+@click.argument("name")
+@click.option("--yes", "-y", is_flag=True, default=False, help="Skip the confirmation prompt.")
+def delete(name, yes):
+    """Delete a saved augmentation config."""
+    from cvbench.core import _fmt
+
+    path = Path(resolve_aug_file(name))
+
+    if not yes:
+        click.confirm(
+            f"{_fmt.yellow('Warning:')} This will permanently delete '{path}'. Continue?",
+            abort=True,
+        )
+
+    path.unlink()
+    print(_fmt.green(f" Deleted '{path}'."))

@@ -174,7 +174,7 @@ def test_readme_quickstart_is_up_to_date():
 
 def test_no_stale_umbrella_command_references():
     pattern = re.compile(
-        r"\bcvbench\s+(train|evaluate|predict|runs|data|augmentations|serve|commands)\b"
+        r"\bcvbench\s+(train|evaluate|predict|runs|data|serve|commands)\b"
     )
     offenders = []
     for rel in ("src", "tests", "scripts", "README.md", "helper.sh", "Dockerfile"):

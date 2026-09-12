@@ -45,14 +45,13 @@ dev = [
 ]
 
 [project.scripts]
-train        = "cvbench.cli.train:train"
-evaluate     = "cvbench.cli.evaluate:evaluate"
-predict      = "cvbench.cli.predict:predict"
-runs         = "cvbench.cli.runs:runs"
-data          = "cvbench.cli.data:data"
-augmentations = "cvbench.cli.augmentations:augmentations"
-serve         = "cvbench.cli.serve:serve"
-commands      = "cvbench.cli.overview:commands"
+train    = "cvbench.cli.train:train"
+evaluate = "cvbench.cli.evaluate:evaluate"
+predict  = "cvbench.cli.predict:predict"
+runs     = "cvbench.cli.runs:runs"
+data     = "cvbench.cli.data:data"
+serve    = "cvbench.cli.serve:serve"
+commands = "cvbench.cli.overview:commands"
 
 [tool.setuptools.packages.find]
 where = ["src"]

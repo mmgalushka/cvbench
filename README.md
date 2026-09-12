@@ -225,32 +225,34 @@ the container (`docker exec -it cvbench bash`):
 
 <!-- BEGIN CLI REFERENCE -->
 ```
-train                  Train a model on DATA_DIR.
-evaluate               Evaluate a trained model on the held-out test split.
-predict                Run inference on INPUT using a trained EXPERIMENT.
-serve                  Start the CVBench WebUI server.
+train                Train a model on DATA_DIR.
+evaluate             Evaluate a trained model on the held-out test split.
+predict              Run inference on INPUT using a trained EXPERIMENT.
+serve                Start the CVBench WebUI server.
 
-data                   Generate, inspect and reshape datasets.
-data clean             Copy a dataset, dropping OS/editor junk files.
-data dedup             Copy a dataset, dropping exact-duplicate images.
-data explore           Report per-class brightness and class balance.
-data flatten           Pool an already-split dataset back into one flat folder.
-data generate          Generate a synthetic geometric shapes dataset for pipeline testing.
-data hashify           Copy a dataset, renaming images to content hashes.
-data split             Split a flat dataset into train/val/test, stratified by class.
-data upsample          Grow a class folder to TARGET images via augmentation.
+data                 Generate, inspect and reshape datasets.
+data aug             Discover, generate, and manage augmentation configurations.
+data aug delete      Delete a saved augmentation config.
+data aug generate    Interactively build and save a new augmentation config.
+data aug list        List saved augmentation configs.
+data aug show        Print a saved augmentation config.
+data aug transforms  List every available transform with its default parameters.
+data clean           Copy a dataset, dropping OS/editor junk files.
+data dedup           Copy a dataset, dropping exact-duplicate images.
+data explore         Report per-class brightness and class balance.
+data flatten         Pool an already-split dataset back into one flat folder.
+data generate        Generate a synthetic geometric shapes dataset for pipeline testing.
+data hashify         Copy a dataset, renaming images to content hashes.
+data split           Split a flat dataset into train/val/test, stratified by class.
+data upsample        Grow a class folder to TARGET images via augmentation.
 
-runs                   Manage and inspect experiment runs.
-runs best              Show the single best run by a metric.
-runs compare           Compare two runs side by side.
-runs delete            Delete a run, or just one of its exports.
-runs export            Export a run to TFLite / ONNX / Hailo, or print Jetson steps.
-runs list              List experiment runs (default: experiments/).
-runs rename            Rename a run directory and update its config.
-
-augmentations          Discover and generate augmentation configurations.
-augmentations example  Generate a preset augmentation config (light/standard/heavy/reference).
-augmentations list     List every transform with its default parameters.
+runs                 Manage and inspect experiment runs.
+runs best            Show the single best run by a metric.
+runs compare         Compare two runs side by side.
+runs delete          Delete a run, or just one of its exports.
+runs export          Export a run to TFLite / ONNX / Hailo, or print Jetson steps.
+runs list            List experiment runs (default: experiments/).
+runs rename          Rename a run directory and update its config.
 ```
 
 Every command has worked examples in its `--help`. In the container, run `commands` for the full picture (CLI plus the tmux session helpers).
@@ -359,27 +361,47 @@ train data/ --from experiments/phase1 --resume experiments/phase1/interrupt_epoc
 
 ## Augmentation
 
-Augmentation is configured via a standalone YAML file and passed to `train` with `--augmentation`.
+Augmentation configs are named, saved artifacts managed under
+`workspace/augmentations/` — the same way `runs` manages `experiments/`.
+Once saved, a config is used by name with `train --augmentation` (applied
+live during training) or `data upsample --augmentation` (materialized to
+disk).
 
 **Discover what's available:**
 
 ```bash
-augmentations list                          # all transforms + default params
-augmentations example                       # list presets (light / standard / heavy / reference)
+data aug transforms                    # every building-block transform + default params
+data aug list                          # every config you've saved
 ```
 
-**Generate a starting config:**
+**Generate a config** — `data aug generate` always walks a short wizard: seed
+from a preset (`light` / `standard` / `heavy`) or start blank, keep/drop/
+customize each transform, optionally add more from the full catalogue, then
+save it under a name:
 
 ```bash
-augmentations example standard --output workspace/my_aug.yaml
-# edit workspace/my_aug.yaml as needed
-train data/ --augmentation workspace/my_aug.yaml --epochs 30
+$ data aug generate --preset standard
+ keras_flip  prob=1.0  mode: "horizontal"
+  Keep 'keras_flip'? [Y/n]:
+  Customize its parameters? [y/N]:
+ ...
+Add another transform from the catalogue? [y/N]: n
+Save as [standard]: my_config
+  ✓ Saved → workspace/augmentations/my_config.yaml  (5 transform(s))
+  Usage:  train data/ --augmentation my_config
 ```
 
-**`reference` preset** generates a commented-out file showing every available transform — open it in an editor and uncomment what you want:
+```bash
+data aug show my_config                # print its YAML
+train data/ --augmentation my_config --epochs 30
+```
+
+**`reference` preset** bypasses the wizard and saves a commented-out file
+showing every available transform (including range-sampling and `one_of`
+syntax) — open it in an editor and uncomment what you want:
 
 ```bash
-augmentations example reference --output workspace/aug_ref.yaml
+data aug generate --preset reference --name aug_ref
 ```
 
 ### Upsampling a class folder
@@ -390,7 +412,7 @@ Use `data upsample` to materialise an augmented copy of a single class folder on
 # Upsample the 'dog' class from however many originals it has to 1500 images.
 # The destination folder must be empty or non-existent.
 data upsample data/my_data/train/dog data/my_data_aug/train/dog \
-  --augmentation workspace/my_aug.yaml \
+  --augmentation my_config \
   --target 1500
 ```
 
@@ -403,7 +425,7 @@ data upsample data/my_data/train/dog data/my_data_aug/train/dog \
 
 | Option | Required | Description |
 |---|---|---|
-| `--augmentation FILE` | ✓ | Augmentation YAML spec (same format as `--augmentation` in `train`) |
+| `--augmentation NAME\|FILE` | ✓ | A saved `data aug` config name, or a path to an augmentation YAML file (same format as `--augmentation` in `train`) |
 | `--target N` | ✓ | Total number of images the destination folder should contain |
 
 ### Cleaning a dataset

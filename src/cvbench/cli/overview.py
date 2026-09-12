@@ -34,7 +34,6 @@ ENTRY_POINTS: tuple[tuple[str, str], ...] = (
     ("serve", "cvbench.cli.serve:serve"),
     ("data", "cvbench.cli.data:data"),
     ("runs", "cvbench.cli.runs:runs"),
-    ("augmentations", "cvbench.cli.augmentations:augmentations"),
 )
 
 # The happy path, top to bottom — rendered into the README's Quickstart section
