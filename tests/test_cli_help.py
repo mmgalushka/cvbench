@@ -76,10 +76,26 @@ def _all_example_lines():
         yield line
 
 
-@pytest.mark.parametrize("line", sorted(set(_all_example_lines())))
+# Container conveniences (tmux helpers, see EXTRAS in overview.py) that are
+# documented alongside the CLI commands but aren't Click commands themselves —
+# `_resolve` walks the Click registry, so there's nothing for it to check
+# these against. Cross-checked instead by
+# test_bashrc_tm_flags_are_all_in_the_overview.
+_NON_CLICK_HELPERS = {"tm"}
+
+
+def _resolvable_example_lines():
+    for line in set(_all_example_lines()):
+        if shlex.split(line)[0] not in _NON_CLICK_HELPERS:
+            yield line
+
+
+@pytest.mark.parametrize("line", sorted(_resolvable_example_lines()))
 def test_example_lines_resolve(line):
-    if "<" in line or "--help" in line:  # placeholder / generic
-        pytest.skip("placeholder line")
+    # A placeholder positional arg (`<run>`) or a trailing `--help` doesn't
+    # need special-casing here: `_resolve` only checks the command/subcommand
+    # prefix and any `--options`, never positional values, and `--help` is a
+    # real option Click adds to every command.
     _resolve(line)
 
 
