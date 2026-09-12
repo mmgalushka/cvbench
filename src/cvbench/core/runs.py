@@ -1,30 +1,21 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import date
 from pathlib import Path
 
 import click
 
+from cvbench.core._names import validate_slug
 from cvbench.core.config import CVBenchConfig, load_config
 
 
 EXPERIMENTS_DIR = "experiments"
 
-_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_\-]*$")
-
 
 def validate_run_name(name: str) -> str:
     """Raise ValueError if name is not safe to use as an experiment directory name."""
-    if not name or len(name) > 100:
-        raise ValueError("Name must be 1–100 characters.")
-    if not _NAME_RE.match(name):
-        raise ValueError(
-            "Name may only contain letters, digits, underscores, and hyphens, "
-            "and must start with a letter or digit."
-        )
-    return name
+    return validate_slug(name, what="Name")
 
 
 def assert_name_available(new_name: str, current_dir: Path | None = None) -> None:

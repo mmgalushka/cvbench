@@ -33,8 +33,8 @@ ENTRY_POINTS: tuple[tuple[str, str], ...] = (
     ("predict", "cvbench.cli.predict:predict"),
     ("serve", "cvbench.cli.serve:serve"),
     ("data", "cvbench.cli.data:data"),
+    ("aug", "cvbench.cli.augmentations:augmentations"),
     ("runs", "cvbench.cli.runs:runs"),
-    ("augmentations", "cvbench.cli.augmentations:augmentations"),
 )
 
 # The happy path, top to bottom — rendered into the README's Quickstart section
