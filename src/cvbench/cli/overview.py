@@ -3,7 +3,7 @@
 Everything a newcomer at the container prompt can do: the CVBench CLI commands
 (enumerated live from the Click registry — never hand-listed, so this can't rot
 the way the old bash function did), plus the container conveniences that are not
-Click commands (tmux sessions, TensorBoard, JupyterLab).
+Click commands (tmux sessions, JupyterLab).
 
 The same data renders three ways:
 
@@ -51,9 +51,9 @@ QUICKSTART: tuple[tuple[str, str], ...] = (
 )
 
 # Container conveniences that are NOT Click commands. Declared once, here, and
-# cross-checked by tests (tm flags vs scripts/bashrc). TensorBoard and JupyterLab
-# are deliberately omitted — the container provides those as services, they are
-# not something the user starts by hand.
+# cross-checked by tests (tm flags vs scripts/bashrc). JupyterLab is deliberately
+# omitted — the container provides it as a service, it is not something the
+# user starts by hand.
 EXTRAS: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
     ("Sessions (tmux) — keep training alive after you close the terminal", (
         ("tm -n <name>", "new session"),
@@ -117,7 +117,7 @@ def render() -> str:
     top, groups = _grouped()
 
     cmd_col = max(len(p) for p, _ in iter_commands()) + 3
-    # Short shell aliases share a column; long one-liners (tensorboard, jupyter)
+    # Short shell aliases share a column; long one-liners (jupyter lab ...)
     # exceed it and wrap their description onto the next line.
     x_col = max((len(c) for _, rows in EXTRAS for c, _ in rows if len(c) <= 20), default=16) + 2
 

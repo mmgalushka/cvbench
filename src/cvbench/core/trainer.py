@@ -119,7 +119,6 @@ def train(
 
     # Callbacks
     callbacks = [
-        keras.callbacks.TensorBoard(log_dir=str(run_dir / "logs"), update_freq="epoch"),
         keras.callbacks.CSVLogger(str(run_dir / "training_log.csv"), append=bool(initial_epoch)),
     ]
     ckpt_cb = build_checkpoint_callback(cfg, str(run_dir))

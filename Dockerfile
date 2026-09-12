@@ -20,7 +20,7 @@ COPY pyproject.toml README.md ./
 # Stub the package so pip resolves and caches all dependencies without the real source.
 # On code-only changes this layer is reused, skipping the full dependency download.
 RUN mkdir -p src/cvbench && touch src/cvbench/__init__.py \
- && pip install --no-cache-dir ".[web,export]" jupyterlab tensorboard \
+ && pip install --no-cache-dir ".[web,export]" jupyterlab \
  && rm -rf src/
 
 COPY src/ ./src/
@@ -47,11 +47,10 @@ WORKDIR /home/cvbench
 
 # 8000 — CVBench WebUI (serve)
 # 8888 — JupyterLab (start manually: jupyter lab --ip=0.0.0.0 --no-browser)
-# 6006 — TensorBoard (start manually: tensorboard --logdir experiments/)
-EXPOSE 8000 8888 6006
+EXPOSE 8000 8888
 
-# WebUI starts automatically — same pattern as JupyterLab / TensorBoard.
-# JupyterLab and TensorBoard remain available but must be started manually
+# WebUI starts automatically — same pattern as JupyterLab.
+# JupyterLab remains available but must be started manually
 # inside the container when needed.
 CMD ["serve", "--host", "0.0.0.0", "--port", "8000"]
 

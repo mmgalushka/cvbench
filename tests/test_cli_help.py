@@ -131,7 +131,7 @@ def test_overview_lists_every_command_and_the_tmux_helpers():
 
 
 def test_overview_omits_container_managed_services():
-    # TensorBoard / JupyterLab are container services, not commands the user runs.
+    # JupyterLab is a container service, not a command the user runs.
     screen = _ANSI.sub("", overview.render()).lower()
     assert "tensorboard" not in screen
     assert "jupyter" not in screen

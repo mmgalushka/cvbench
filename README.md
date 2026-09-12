@@ -31,7 +31,6 @@ docker run -d \
   --name cvbench \
   --gpus all \
   -p 0.0.0.0:8888:8888 \
-  -p 0.0.0.0:6006:6006 \
   -v ~/cvbench/data:/home/cvbench/data \
   -v ~/cvbench/workspace:/home/cvbench/workspace \
   -v ~/cvbench/experiments:/home/cvbench/experiments \
@@ -45,7 +44,6 @@ docker run -d \
 docker run -d \
   --name cvbench \
   -p 0.0.0.0:8888:8888 \
-  -p 0.0.0.0:6006:6006 \
   -v ~/cvbench/data:/home/cvbench/data \
   -v ~/cvbench/workspace:/home/cvbench/workspace \
   -v ~/cvbench/experiments:/home/cvbench/experiments \
@@ -78,7 +76,6 @@ services:
     ports:
       - "0.0.0.0:8000:8000"
       - "0.0.0.0:8888:8888"
-      - "0.0.0.0:6006:6006"
     volumes:
       - ~/cvbench/data:/home/cvbench/data
       - ~/cvbench/workspace:/home/cvbench/workspace
@@ -98,7 +95,6 @@ services:
     ports:
       - "0.0.0.0:8000:8000"
       - "0.0.0.0:8888:8888"
-      - "0.0.0.0:6006:6006"
     volumes:
       - ~/cvbench/data:/home/cvbench/data
       - ~/cvbench/workspace:/home/cvbench/workspace
@@ -113,7 +109,6 @@ After starting:
 ```bash
 # CVBench WebUI → http://<server-ip>:8000  (starts automatically; set URL via CVBENCH_URL)
 # JupyterLab    → http://<server-ip>:8888
-# TensorBoard   → http://<server-ip>:6006
 ```
 
 ---
@@ -191,13 +186,6 @@ docker exec -it cvbench bash
 tm -n train
 train data --epochs 20 --backbone efficientnet_b0
 # Ctrl+B D to detach — training continues after you close the terminal
-```
-
-### TensorBoard
-
-```bash
-docker exec cvbench tensorboard --logdir /home/cvbench/experiments --host 0.0.0.0 --port 6006
-# → http://<server-ip>:6006
 ```
 
 ---

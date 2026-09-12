@@ -415,7 +415,7 @@ def _is_pid_alive(pid: int) -> bool:
 # Legacy runs (created before RunConfig.pid existed) have no PID to check, so a
 # stuck status="running" is instead inferred from file inactivity: no training run
 # should go this long without touching a single file in its directory (CSVLogger
-# and TensorBoard both write at least once per epoch).
+# writes at least once per epoch).
 _LEGACY_STALE_SECONDS = 6 * 3600  # 6 hours
 
 
