@@ -8,6 +8,7 @@ from pathlib import Path
 import click
 import numpy as np
 
+from cvbench.cli import _help
 from cvbench.cli.generate import generate
 from cvbench.datasets import clean as clean_mod
 from cvbench.datasets import dedup as dedup_mod
@@ -29,9 +30,15 @@ def _fresh_token(used: set) -> str:
     raise RuntimeError("Could not generate a unique token after 10,000 attempts.")
 
 
-@click.group()
+@_help.group(
+    examples=[
+        ("data generate", "make a synthetic dataset to experiment with"),
+        ("data split data/pool data/ready", "turn a flat folder into train/val/test"),
+        ("data explore data/ready", "check class balance and brightness bias"),
+    ],
+)
 def data():
-    """Manage and inspect datasets."""
+    """Generate, inspect and reshape datasets."""
 
 
 data.add_command(generate, name="generate")
@@ -42,7 +49,16 @@ def _mean_brightness(path: Path) -> float:
     return float(np.array(Image.open(path).convert("L")).mean())
 
 
-@data.command("explore")
+@data.command(
+    "explore",
+    short_help="Report per-class brightness and class balance.",
+    examples=[
+        ("data explore data/ready", "Analyse the train split"),
+        ("data explore data/ready --split test", "Analyse a different split"),
+    ],
+    see_also=[("data upsample <src> <dst> --augmentation aug.yaml --target 500",
+               "grow an under-represented class")],
+)
 @click.argument("data_dir")
 @click.option("--split", default="train", show_default=True,
               help="Dataset split to analyse (train / val / test).")
@@ -129,7 +145,15 @@ def explore(data_dir, split):
     print(_fmt.rule())
 
 
-@data.command("upsample")
+@data.command(
+    "upsample",
+    short_help="Grow a class folder to TARGET images via augmentation.",
+    examples=[
+        ("data upsample data/train/dog data_aug/train/dog --augmentation aug.yaml --target 1500",
+         "Copy originals, then add augmented variants until the folder holds 1500 images"),
+    ],
+    see_also=[("augmentations example standard --output aug.yaml", "make an augmentation spec first")],
+)
 @click.argument("src_dir")
 @click.argument("dst_dir")
 @click.option("--augmentation", "aug_file", required=True,
@@ -245,7 +269,14 @@ def upsample(src_dir, dst_dir, aug_file, target):
     print(_fmt.rule())
 
 
-@data.command("clean")
+@data.command(
+    "clean",
+    short_help="Copy a dataset, dropping OS/editor junk files.",
+    examples=[
+        ("data clean data/raw data/clean", "Drop .DS_Store, Thumbs.db, ._* and editor temp files"),
+        ("data clean data/raw data/clean --dry-run", "List the junk without writing anything"),
+    ],
+)
 @click.argument("src")
 @click.argument("dst")
 @click.option("--dry-run", is_flag=True, default=False,
@@ -301,7 +332,16 @@ def clean(src, dst, dry_run):
     print(_fmt.rule())
 
 
-@data.command("hashify")
+@data.command(
+    "hashify",
+    short_help="Copy a dataset, renaming images to content hashes.",
+    examples=[
+        ("data hashify data/raw data/hashed",
+         "Give every image a deterministic content-based filename"),
+        ("data hashify data/raw data/hashed --dry-run", "Preview the renames"),
+    ],
+    see_also=[("data dedup data/hashed data/final", "then drop genuine duplicates")],
+)
 @click.argument("src")
 @click.argument("dst")
 @click.option("--dry-run", is_flag=True, default=False,
@@ -351,7 +391,15 @@ def hashify(src, dst, dry_run):
     print(_fmt.rule())
 
 
-@data.command("dedup")
+@data.command(
+    "dedup",
+    short_help="Copy a dataset, dropping exact-duplicate images.",
+    examples=[
+        ("data dedup data/raw data/deduped", "Keep one copy of each image"),
+        ("data dedup data/split data/deduped --across-splits",
+         "Also warn when the same image appears in more than one split"),
+    ],
+)
 @click.argument("src")
 @click.argument("dst")
 @click.option("--across-splits", is_flag=True, default=False,
@@ -420,7 +468,17 @@ def dedup(src, dst, across_splits, dry_run):
     print(_fmt.rule())
 
 
-@data.command("split")
+@data.command(
+    "split",
+    short_help="Split a flat dataset into train/val/test, stratified by class.",
+    examples=[
+        ("data split data/pool data/ready", "Default 80/10/10 stratified split"),
+        ("data split data/pool data/ready --train 0.7 --val 0.15 --test 0.15",
+         "Custom ratios — the three must sum to 1.0"),
+        ("data split data/pool data/ready --dry-run", "Preview the per-class counts"),
+    ],
+    see_also=[("train data/ready --epochs 20", "train on the result")],
+)
 @click.argument("src")
 @click.argument("dst")
 @click.option("--train", "train_ratio", default=0.8, show_default=True, type=float,
@@ -494,7 +552,14 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
     print(_fmt.rule())
 
 
-@data.command("flatten")
+@data.command(
+    "flatten",
+    short_help="Pool an already-split dataset back into one flat folder.",
+    examples=[
+        ("data flatten data/ready data/pool", "Undo a split so you can re-partition"),
+    ],
+    see_also=[("data split data/pool data/ready", "re-split with new ratios or seed")],
+)
 @click.argument("src")
 @click.argument("dst")
 @click.option("--dry-run", is_flag=True, default=False,

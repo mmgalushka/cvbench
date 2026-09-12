@@ -408,7 +408,7 @@ function buildDetectionEvalTab(run, report) {
     galleryCard = `
       <article class="cm-card">
         <h4>Detections</h4>
-        <p class="cm-hint">Re-run <kbd>cvbench evaluate</kbd> to use the detection sample browser.</p>
+        <p class="cm-hint">Re-run <kbd>evaluate</kbd> to use the detection sample browser.</p>
       </article>`;
   } else if (breakdownReady) {
     galleryCard = `
@@ -812,7 +812,7 @@ function buildGalleryThumb({ id, imgSrc, path, boxes = [], modalBoxes, caption, 
 // `<class>:<outcome>` / `duplicate:<class>` / `spurious:<class>`.
 function buildDetClassBreakdown(report, runName) {
   const bd = (report.detection || {}).class_breakdown;
-  if (!bd) return '<p class="cm-hint">No breakdown data — re-run <kbd>cvbench evaluate</kbd>.</p>';
+  if (!bd) return '<p class="cm-hint">No breakdown data — re-run <kbd>evaluate</kbd>.</p>';
 
   const cols = [
     ['matched',    'Matched',     'located & classified'],
@@ -1168,8 +1168,8 @@ function buildExportTab(run) {
           <span class="export-cli-alt-label">or run from terminal</span>
           <div class="cli-command-bar" id="export-cli-cmd">
             <svg class="cli-label" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-            <code class="cli-code">cvbench runs export ${escHtml(run.name)} --format tflite</code>
-            <button class="cli-copy-btn" data-cmd="cvbench runs export ${escHtml(run.name)} --format tflite" onclick="copyCliCommand(this)">Copy</button>
+            <code class="cli-code">runs export ${escHtml(run.name)} --format tflite</code>
+            <button class="cli-copy-btn" data-cmd="runs export ${escHtml(run.name)} --format tflite" onclick="copyCliCommand(this)">Copy</button>
           </div>
         </div>
       `}
@@ -1199,7 +1199,7 @@ function updateFormatDropdown(exports) {
 
 function buildExportCliCmd(runName) {
   const fmt = document.getElementById('export-format')?.value || 'tflite';
-  let cmd = `cvbench runs export ${runName} --format ${fmt}`;
+  let cmd = `runs export ${runName} --format ${fmt}`;
   if (fmt === 'tflite') {
     const q = document.getElementById('export-quantize')?.value || 'none';
     if (q !== 'none') cmd += ` --quantize ${q}`;
@@ -1242,8 +1242,8 @@ function buildPlanInstructions(runName, cardMode = false) {
       <strong>ONNX export not found.</strong> Generate it first:
       <div class="cli-command-bar plan-cmd-inline">
         ${termIcon}
-        <code class="cli-code">cvbench runs export ${escHtml(runName)} --format onnx</code>
-        <button class="cli-copy-btn" data-cmd="cvbench runs export ${escHtml(runName)} --format onnx" onclick="copyCliCommand(this)">Copy</button>
+        <code class="cli-code">runs export ${escHtml(runName)} --format onnx</code>
+        <button class="cli-copy-btn" data-cmd="runs export ${escHtml(runName)} --format onnx" onclick="copyCliCommand(this)">Copy</button>
       </div>
     </div>`;
 

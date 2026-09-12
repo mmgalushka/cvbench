@@ -2,8 +2,12 @@ import json
 
 import click
 
+from cvbench.cli import _help
 from cvbench.core.config import LossConfig, OptimizerConfig, LRSchedulerConfig
-from cvbench.services.training import run_training
+
+# NOTE: cvbench.services.training is imported inside train() — it pulls in
+# TensorFlow, and importing it at module scope would make `train --help` (and
+# the `commands` overview, which enumerates every command) take ~1.5s to start.
 
 
 def _parse_class_weight(value: str | None):
@@ -83,7 +87,21 @@ def _parse_loss(value: str | None) -> LossConfig | None:
     )
 
 
-@click.command()
+@_help.command(
+    examples=[
+        ("train data/synthetic --epochs 5",
+         "Smoke-test the whole pipeline on the synthetic dataset"),
+        ("train data --epochs 20 --backbone efficientnet_b0",
+         "Train on your own dataset (needs train/, val/, test/ subfolders)"),
+        ("train data --augmentation workspace/my_aug.yaml --loss focal:gamma=2.0",
+         "Add augmentation and swap the loss function"),
+    ],
+    see_also=[
+        ("runs list", "find the name of the run you just created"),
+        ("evaluate <run>", "score it on the held-out test split"),
+        ("runs export <run> --format tflite", "package it for a device"),
+    ],
+)
 @click.argument("data_dir", type=click.Path(exists=True))
 @click.option("--output", "output_dir", default=None,
               help="Experiment output directory (default: experiments/<auto-name>/).")
@@ -127,6 +145,8 @@ def train(
     DATA_DIR must contain train/, val/, and test/ subdirectories.
     All parameters have sensible defaults and can be overridden individually.
     """
+    from cvbench.services.training import run_training  # deferred: pulls in TensorFlow
+
     class_weight = _parse_class_weight(class_weight_raw)
     loss = _parse_loss(loss_raw)
     optimizer = _parse_optimizer(optimizer_raw)

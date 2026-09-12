@@ -5,6 +5,7 @@ import pytest
 from click.testing import CliRunner
 
 from cvbench.cli.runs import runs
+from cvbench.cli.serve import serve
 from cvbench.core.config import build_config, save_config
 
 
@@ -96,3 +97,14 @@ def test_runs_compare_no_config(tmp_path):
     result = runner.invoke(runs, ["compare", str(exp_a), str(empty_dir)])
     assert result.exit_code != 0
     assert "config.yaml" in result.output
+
+
+# ---------------------------------------------------------------------------
+# serve --help (no uvicorn / TensorFlow needed)
+# ---------------------------------------------------------------------------
+
+def test_serve_help():
+    result = CliRunner().invoke(serve, ["--help"])
+    assert result.exit_code == 0
+    for token in ("--host", "--port", "CVBENCH_URL"):
+        assert token in result.output

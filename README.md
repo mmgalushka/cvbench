@@ -111,7 +111,7 @@ Replace `<server-ip>` with the actual IP or hostname of your Docker host.
 After starting:
 
 ```bash
-# CVBench WebUI → http://<server-ip>:8000  (set via CVBENCH_URL)
+# CVBench WebUI → http://<server-ip>:8000  (starts automatically; set URL via CVBENCH_URL)
 # JupyterLab    → http://<server-ip>:8888
 # TensorBoard   → http://<server-ip>:6006
 ```
@@ -202,34 +202,62 @@ docker exec cvbench tensorboard --logdir /home/cvbench/experiments --host 0.0.0.
 
 ---
 
+## Quickstart
+
+Five commands, top to bottom, and you have a trained model. Run these inside
+the container (`docker exec -it cvbench bash`):
+
+<!-- BEGIN QUICKSTART -->
+```
+1  commands                           # show this screen again any time
+2  tm -n <name>                       # start a tmux session so training survives closing your terminal
+3  data generate                      # make a 4-class synthetic dataset in data/synthetic/
+4  train data/synthetic --epochs 5    # train a model — prints the run name when it finishes
+5  runs list                          # see every run, newest first
+6  evaluate <run-name>                # score that run on the held-out test split
+7  serve --host 0.0.0.0 --port 8000   # browse it all in the WebUI → http://<server-ip>:8000
+```
+<!-- END QUICKSTART -->
+
+---
+
 ## CLI reference
 
+<!-- BEGIN CLI REFERENCE -->
 ```
-train         <data_dir> [--epochs N] [--backbone efficientnet_b0..b5|resnet_18|resnet_50] [--lr FLOAT] [--batch-size N]
-                         [--optimizer adam|sgd[:weight_decay=F][,momentum=F]]
-                         [--lr-scheduler patience=N[,factor=F][,min=F]]
-                         [--loss crossentropy|focal[:gamma=F][,label_smoothing=F]]
-                         [--fine-tune-from-layer N] [--augmentation FILE]
-                         [--val-split FLOAT] [--resume CHECKPOINT] [--output DIR]
-evaluate      <experiment>  [--output-dir PATH]
-predict       <experiment> <image-or-folder> [--format keras|onnx|tflite|plan|all]
-runs          list       [dir] [--sort val_accuracy|date|backbone]
-runs          compare    <experiment_a> <experiment_b>
-runs          best       [dir] [--metric val_accuracy|val_loss|test_accuracy]
-runs          rename     <experiment> <new-name>
-runs          export     <experiment> --format tflite|onnx|plan|hailo [--quantize none|float16|int8] [--output DIR] [--calib-total N] [--calib-strategy stratified|proportional|equal|diverse]
-data          generate   [out_dir]  [--format classification|yolo] [--train N] [--val N] [--test N]
-                                    [--image-size N] [--max-objects N] [--seed N] [--overwrite]
-data          explore    <data_dir> [--split train|val|test] [--threshold N]
-data          upsample   <src_dir> <dst_dir> --augmentation <file> --target <N>
-data          clean      <src> <dst> [--dry-run]
-data          hashify    <src> <dst> [--dry-run]
-data          dedup      <src> <dst> [--across-splits] [--dry-run]
-data          split      <src> <dst> [--train F] [--val F] [--test F] [--seed N] [--dry-run]
-data          flatten    <src> <dst> [--dry-run]
-augmentations list
-augmentations example    [light|standard|heavy|reference] [--output FILE]
+train                  Train a model on DATA_DIR.
+evaluate               Evaluate a trained model on the held-out test split.
+predict                Run inference on INPUT using a trained EXPERIMENT.
+serve                  Start the CVBench WebUI server.
+
+data                   Generate, inspect and reshape datasets.
+data clean             Copy a dataset, dropping OS/editor junk files.
+data dedup             Copy a dataset, dropping exact-duplicate images.
+data explore           Report per-class brightness and class balance.
+data flatten           Pool an already-split dataset back into one flat folder.
+data generate          Generate a synthetic geometric shapes dataset for pipeline testing.
+data hashify           Copy a dataset, renaming images to content hashes.
+data split             Split a flat dataset into train/val/test, stratified by class.
+data upsample          Grow a class folder to TARGET images via augmentation.
+
+runs                   Manage and inspect experiment runs.
+runs best              Show the single best run by a metric.
+runs compare           Compare two runs side by side.
+runs delete            Delete a run, or just one of its exports.
+runs export            Export a run to TFLite / ONNX / Hailo, or print Jetson steps.
+runs list              List experiment runs (default: experiments/).
+runs rename            Rename a run directory and update its config.
+
+augmentations          Discover and generate augmentation configurations.
+augmentations example  Generate a preset augmentation config (light/standard/heavy/reference).
+augmentations list     List every transform with its default parameters.
 ```
+
+Every command has worked examples in its `--help`. In the container, run `commands` for the full picture (CLI plus the tmux session helpers).
+<!-- END CLI REFERENCE -->
+
+This block is generated from the CLI — run `./helper.sh docs` after changing a
+command to refresh it.
 
 ---
 
