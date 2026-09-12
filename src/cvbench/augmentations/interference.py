@@ -61,7 +61,7 @@ def aug_interference(
     alpha_min: float = 0.3,
     alpha_max: float = 0.6,
     orientation: str = "random",
-    seed: int = None,
+    seed: int | None = None,
 ) -> np.ndarray:
     """Blend a synthetic interference pattern over a spectrogram image.
 

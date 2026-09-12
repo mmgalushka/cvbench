@@ -1,6 +1,7 @@
 import copy
 import inspect
 from pathlib import Path
+from typing import Any
 
 import click
 import questionary
@@ -20,7 +21,7 @@ from cvbench.core.augmentations_store import (
 # Defined here as plain data to avoid triggering TF/Keras import.
 # ---------------------------------------------------------------------------
 
-_KERAS_TRANSFORMS = [
+_KERAS_TRANSFORMS: list[tuple[str, dict[str, Any]]] = [
     ("keras_flip",        {"mode": "horizontal"}),
     ("keras_rotation",    {"factor": 0.1}),
     ("keras_zoom",        {"height_factor": 0.1}),
@@ -35,7 +36,7 @@ _KERAS_TRANSFORMS = [
 # Presets
 # ---------------------------------------------------------------------------
 
-_PRESETS = {
+_PRESETS: dict[str, dict[str, Any]] = {
     "light": {
         "description": "Horizontal flip + tiny rotation. Safe for any dataset.",
         "transforms": [
@@ -433,7 +434,7 @@ def _checklist_prompt(catalogue: list[tuple[str, dict]], preselected: set) -> li
     if selected is None:
         return None
     order = {name: i for i, (name, _) in enumerate(catalogue)}
-    return sorted(selected, key=order.get)
+    return sorted(selected, key=lambda n: order[n])
 
 
 # ---------------------------------------------------------------------------

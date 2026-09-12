@@ -7,7 +7,7 @@ def aug_lines(
     width: int = 2,
     brightness: int = 128,
     orientation: str = "h",
-    seed: int = None,
+    seed: int | None = None,
 ) -> np.ndarray:
     """Draw N random lines along the given orientation ('h' or 'v')."""
     rng = np.random.default_rng(seed)
@@ -30,7 +30,7 @@ def aug_lines_h(
     n_lines: int = 5,
     width: int = 2,
     brightness: int = 128,
-    seed: int = None,
+    seed: int | None = None,
 ) -> np.ndarray:
     """Draw N random horizontal lines with given width and brightness."""
     return aug_lines(img, n_lines, width, brightness, "h", seed)
@@ -41,7 +41,7 @@ def aug_lines_v(
     n_lines: int = 5,
     width: int = 2,
     brightness: int = 128,
-    seed: int = None,
+    seed: int | None = None,
 ) -> np.ndarray:
     """Draw N random vertical lines with given width and brightness."""
     return aug_lines(img, n_lines, width, brightness, "v", seed)

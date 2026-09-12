@@ -50,7 +50,7 @@ class CVBenchContext(click.Context):
 class HelpMixin:
     """Shared help rendering for :class:`CVBenchCommand` and :class:`CVBenchGroup`."""
 
-    context_class = CVBenchContext
+    context_class: type[click.Context] = CVBenchContext
 
     def __init__(self, *args, examples=(), see_also=(), **kwargs):
         self.examples: tuple[Example, ...] = tuple(examples)

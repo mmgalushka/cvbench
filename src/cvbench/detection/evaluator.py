@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import keras
 import numpy as np
@@ -157,7 +158,7 @@ def _print_class_outcomes(breakdown: dict, counts: dict) -> None:
     notes = {c: _confused_note(c) for c in classes}
     has_notes = any(notes.values())
 
-    columns = [
+    columns: list[str | tuple[str, Literal["left", "center", "right"]]] = [
         "class",
         ("instances", "right"),
         ("matched", "right"),
