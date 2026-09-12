@@ -242,6 +242,7 @@ data upsample   Grow a class folder to TARGET images via augmentation.
 
 aug             Discover, generate, and manage augmentation configurations.
 aug delete      Delete a saved augmentation config.
+aug edit        Open a saved augmentation config in your editor.
 aug generate    Interactively build and save a new augmentation config.
 aug list        List saved augmentation configs.
 aug show        Print a saved augmentation config.
@@ -415,9 +416,15 @@ transforms:
 ```
 
 ```bash
-aug show my_config                # print its YAML
+aug show my_config                # print its YAML, syntax-highlighted
+aug edit my_config                # open it in $EDITOR to fine-tune a value
 train data/ --augmentation my_config --epochs 30
 ```
+
+`aug edit` opens the file in `$EDITOR`/`$VISUAL` (falling back to a platform
+default) and writes back whatever you save — no validation, so a typo just
+surfaces the next time you run `train`/`upsample` with it. GUI editors need a
+"wait" flag to work here, e.g. `EDITOR="code --wait"` for VS Code.
 
 **`reference` preset** bypasses the wizard and saves a commented-out file
 showing every available transform (including range-sampling and `one_of`

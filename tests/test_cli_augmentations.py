@@ -152,3 +152,34 @@ def test_delete_missing_name_reports_friendly_error():
     result = _run(["delete", "does-not-exist", "--yes"])
     assert result.exit_code != 0
     assert "not found" in result.output.lower()
+
+
+def test_edit_writes_back_editor_output():
+    with _checked(["keras_flip"]):
+        _run(["generate", "--name", "editme"])
+
+    with mock.patch.object(aug_mod.click, "edit", return_value="transforms: []\n"):
+        result = _run(["edit", "editme"])
+    assert result.exit_code == 0, result.output
+    assert "Saved" in result.output
+
+    cfg = load_aug_file("workspace/augmentations/editme.yaml")
+    assert cfg.transforms == []
+
+
+def test_edit_no_changes_leaves_file_untouched():
+    with _checked(["keras_flip"]):
+        _run(["generate", "--name", "untouched"])
+    before = open("workspace/augmentations/untouched.yaml").read()
+
+    with mock.patch.object(aug_mod.click, "edit", return_value=None):
+        result = _run(["edit", "untouched"])
+    assert result.exit_code == 0
+    assert "No changes made" in result.output
+    assert open("workspace/augmentations/untouched.yaml").read() == before
+
+
+def test_edit_missing_name_reports_friendly_error():
+    result = _run(["edit", "does-not-exist"])
+    assert result.exit_code != 0
+    assert "not found" in result.output.lower()

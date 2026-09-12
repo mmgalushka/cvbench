@@ -546,6 +546,34 @@ def show(name):
 
 
 @augmentations.command(
+    "edit",
+    short_help="Open a saved augmentation config in your editor.",
+    examples=[("aug edit standard", "Edit the saved 'standard' config in $EDITOR")],
+    see_also=[("aug show standard", "just print it instead of editing")],
+)
+@click.argument("name")
+def edit(name):
+    """Open a saved augmentation config in $EDITOR and save your changes.
+
+    Uses the EDITOR/VISUAL environment variable, falling back to a platform
+    default. GUI editors need a "wait" flag to work here, e.g. set
+    EDITOR="code --wait" for VS Code.
+    """
+    from cvbench.core import _fmt
+
+    path = Path(resolve_aug_file(name))
+    original = path.read_text()
+
+    edited = click.edit(original, extension=".yaml")
+    if edited is None:
+        print("No changes made.")
+        return
+
+    path.write_text(edited)
+    print(f"  {_fmt.green('✓')} Saved → {path}")
+
+
+@augmentations.command(
     "delete",
     short_help="Delete a saved augmentation config.",
     examples=[("aug delete standard -y", "Remove the saved 'standard' config without confirming")],
