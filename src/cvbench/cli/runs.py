@@ -4,7 +4,7 @@ import shutil
 import click
 
 from cvbench.cli import _help
-from cvbench.core import _fmt
+from cvbench.core import _console
 from cvbench.core.runs import (
     scan_experiments,
     best_experiment,
@@ -68,19 +68,16 @@ def list_runs(experiments_dir, sort):
         print(f" No experiments found in '{experiments_dir}'.")
         return
 
-    tr = _fmt.rule(81, "white")
-    print(tr)
-    print(f" {'Run':<40} {'Task':<5} {'Status':<12} {'Val Loss':>9}  {'Epochs':>6}")
-    print(tr)
+    rows = []
     for r in entries:
         loss = r.get("val_loss")
-        loss_str = f"{loss:.4f}" if loss is not None else "   —   "
-        name = _fit(r["name"], 40)
+        loss_str = f"{loss:.4f}" if loss is not None else "—"
         task_short = "det" if r.get("task") == "detection" else "cls"
-        print(
-            f" {name:<40} {task_short:<5} {r.get('status', '?'):<12} {loss_str:>9}  {r.get('epochs_run', '?'):>6}"
-        )
-    print(tr)
+        rows.append((_fit(r["name"], 40), task_short, r.get("status", "?"), loss_str, r.get("epochs_run", "?")))
+    _console.table(
+        ["Run", "Task", "Status", ("Val Loss", "right"), ("Epochs", "right")],
+        rows,
+    )
 
 
 @runs.command(
@@ -130,7 +127,7 @@ def compare(experiment_a, experiment_b):
     name_b = b.get("name", run_b)
 
     col_w = 26
-    tr = _fmt.rule(79, "white")
+    tr = _console.rule(79, "white")
     print(tr)
     print(
         f" {'Field':<22}  {_fit(name_a, col_w):<{col_w}}  {_fit(name_b, col_w):<{col_w}}"
@@ -179,7 +176,7 @@ def rename(experiment, new_name):
     new_dir = run_dir.parent / new_name
     os.rename(run_dir, new_dir)
     update_run_status(str(new_dir), name=new_name)
-    print(_fmt.green(f" Renamed '{run_dir.name}' → '{new_name}'."))
+    print(_console.green(f" Renamed '{run_dir.name}' → '{new_name}'."))
 
 
 @runs.command(
@@ -297,12 +294,12 @@ def delete(experiment, export_subfolder, yes):
 
     if not yes:
         click.confirm(
-            f"{_fmt.yellow('Warning:')} This will permanently delete {label}. Continue?",
+            f"{_console.yellow('Warning:')} This will permanently delete {label}. Continue?",
             abort=True,
         )
 
     shutil.rmtree(target)
-    print(_fmt.green(f" Deleted {label}."))
+    print(_console.green(f" Deleted {label}."))
 
 
 @runs.command(
@@ -328,11 +325,11 @@ def best(experiments_dir, metric):
         )
         return
 
-    print(_fmt.rule())
-    print(f" {_fmt.bold(f'CVBench — best run by {metric}')}")
-    print(_fmt.rule())
+    print(_console.rule())
+    print(f" {_console.bold(f'CVBench — best run by {metric}')}")
+    print(_console.rule())
     for k, v in run.items():
         print(f" {k:<22}: {v}")
-    print(_fmt.rule())
+    print(_console.rule())
 
 

@@ -6,7 +6,7 @@ import keras
 import numpy as np
 import tqdm
 
-from cvbench.core import _fmt
+from cvbench.core import _console
 from cvbench.core._confusion import print_confusion_matrix
 from cvbench.core.report import report_envelope, write_report
 
@@ -161,27 +161,27 @@ def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: P
     run_name = Path(run_dir).name
     n_images = report["n_images"]
     overall_acc = f"{report['overall_accuracy'] * 100:.1f}%"
-    print(_fmt.rule())
-    print(f" {_fmt.bold('CVBench — evaluate')}  {_fmt.dim('|')}  {_fmt.dim('run: ' + run_name)}")
-    print(_fmt.rule())
-    print(_fmt.dim(" Split             : test"))
-    print(_fmt.dim(f" Images evaluated  : {n_images}"))
-    print(f" {_fmt.bold('Overall accuracy')}  : {_fmt.bold(overall_acc)}")
+    print(_console.rule())
+    print(f" {_console.bold('CVBench — evaluate')}  {_console.dim('|')}  {_console.dim('run: ' + run_name)}")
+    print(_console.rule())
+    print(_console.dim(" Split             : test"))
+    print(_console.dim(f" Images evaluated  : {n_images}"))
+    print(f" {_console.bold('Overall accuracy')}  : {_console.bold(overall_acc)}")
     if report["top3_accuracy"] is not None:
         top3_acc = f"{report['top3_accuracy'] * 100:.1f}%"
-        print(f" {_fmt.bold('Top-3 accuracy')}    : {_fmt.bold(top3_acc)}")
+        print(f" {_console.bold('Top-3 accuracy')}    : {_console.bold(top3_acc)}")
     print()
-    print(f" {_fmt.bold('Per-class breakdown:')}")
-    max_cls = max(len(cls) for cls in report["per_class"]) if report["per_class"] else 10
-    for cls, m in report["per_class"].items():
-        p = f"{m['precision']:.4f}"
-        r = f"{m['recall']:.4f}"
-        f1 = f"{m['f1']:.4f}"
-        support = f"({m['support']} samples)"
-        print(f"   {cls:<{max_cls}}  P: {_fmt.bold(p)}  R: {_fmt.bold(r)}  F1: {_fmt.bold(f1)}  {_fmt.dim(support)}")
+    print(f" {_console.bold('Per-class breakdown:')}")
+    _console.table(
+        ["class", ("P", "right"), ("R", "right"), ("F1", "right"), ("support", "right")],
+        [
+            (cls, f"{m['precision']:.4f}", f"{m['recall']:.4f}", f"{m['f1']:.4f}", f"{m['support']} samples")
+            for cls, m in report["per_class"].items()
+        ],
+    )
     print()
     if cm is not None:
         print_confusion_matrix(cm, class_names)
-    print(f" {_fmt.bold('Saved:')}")
-    print(f"   {_fmt.dim(str(out_dir / 'eval_report.json'))}")
-    print(_fmt.rule())
+    print(f" {_console.bold('Saved:')}")
+    print(f"   {_console.dim(str(out_dir / 'eval_report.json'))}")
+    print(_console.rule())

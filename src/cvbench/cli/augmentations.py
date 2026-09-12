@@ -139,7 +139,7 @@ def _aug_function_defaults() -> list[tuple[str, dict]]:
     return result
 
 
-def _fmt_params(d: dict) -> str:
+def _format_params(d: dict) -> str:
     parts = []
     for k, v in d.items():
         if isinstance(v, str):
@@ -361,24 +361,24 @@ def _render_config_yaml(transforms: list[dict], preset_label: str) -> str:
 
 
 def _print_catalogue():
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     name_width = max(len(name) for name, _ in _catalogue())
 
     def _print_group(title: str, rows: list[tuple[str, dict]]):
-        print(f" {_fmt.bold(f'{title}:')}")
+        print(f" {_console.bold(f'{title}:')}")
         for name, defaults in rows:
-            colored_name = _fmt.blue(f"{name:<{name_width}}")
+            colored_name = _console.blue(f"{name:<{name_width}}")
             print(f"   {colored_name}  {_DESCRIPTIONS.get(name, '')}")
-            print(f"   {'':<{name_width}}  {_fmt.dim(_fmt_params(defaults))}")
+            print(f"   {'':<{name_width}}  {_console.dim(_format_params(defaults))}")
         print()
 
-    print(_fmt.rule(thick=True))
-    print(f" {_fmt.bold('Available transforms')}")
-    print(_fmt.rule(thick=True))
+    print(_console.rule(thick=True))
+    print(f" {_console.bold('Available transforms')}")
+    print(_console.rule(thick=True))
     _print_group("Keras layers", _KERAS_TRANSFORMS)
     _print_group("Custom functions", _aug_function_defaults())
-    print(_fmt.rule(thick=True))
+    print(_console.rule(thick=True))
 
 
 def _checklist_prompt(catalogue: list[tuple[str, dict]], preselected: set) -> list[str] | None:
@@ -441,7 +441,7 @@ def transforms_cmd():
 )
 def list_saved():
     """List augmentation configs saved under workspace/augmentations/."""
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     entries = list_saved_augmentations()
     if not entries:
@@ -449,17 +449,10 @@ def list_saved():
         print(" Run 'aug generate' to create one.")
         return
 
-    max_name = max(len(e["name"]) for e in entries)
-    tr = _fmt.rule(thick=True)
-    print(tr)
-    print(f" {'Name':<{max_name}}  {'Preset':<10}  {'Transforms':>10}  {'Modified':>10}")
-    print(tr)
-    for e in entries:
-        print(
-            f" {e['name']:<{max_name}}  {e['preset']:<10}  "
-            f"{e['n_transforms']:>10}  {e['modified']:>10}"
-        )
-    print(tr)
+    _console.table(
+        ["Name", "Preset", ("Transforms", "right"), ("Modified", "right")],
+        [(e["name"], e["preset"], e["n_transforms"], e["modified"]) for e in entries],
+    )
 
 
 @augmentations.command(
@@ -487,22 +480,22 @@ def generate(preset, name):
     """
     from datetime import date
 
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     if preset == "reference":
         save_name = name or click.prompt("Save as", default="reference")
         header = f"meta:\n  preset: reference\n  created: '{date.today().isoformat()}'\n"
         path = write_augmentation_text(save_name, header + _reference_yaml())
-        print(f"  {_fmt.green('✓')} Saved → {path}")
+        _console.success(f"Saved → {path}")
         print(f"  Usage:  train data/ --augmentation {save_name}")
         return
 
     preset_map = {t["name"]: t for t in _preset_transforms(preset)} if preset else {}
     catalogue = _catalogue()
 
-    print(_fmt.rule(thick=True))
-    print(f" {_fmt.bold('Augmentation wizard')}")
-    print(_fmt.rule(thick=True))
+    print(_console.rule(thick=True))
+    print(f" {_console.bold('Augmentation wizard')}")
+    print(_console.rule(thick=True))
 
     selected = _checklist_prompt(catalogue, set(preset_map))
     if selected is None:
@@ -519,7 +512,7 @@ def generate(preset, name):
     save_name = name or click.prompt("Save as", default=preset or "config")
     content = _render_config_yaml(kept, preset or "custom")
     path = write_augmentation_text(save_name, content)
-    print(f"  {_fmt.green('✓')} Saved → {path}  ({len(kept)} transform(s))")
+    _console.success(f"Saved → {path}  ({len(kept)} transform(s))")
     print("  Open it in an editor to fine-tune any value.")
     print(f"  Usage:  train data/ --augmentation {save_name}")
 
@@ -532,17 +525,11 @@ def generate(preset, name):
 @click.argument("name")
 def show(name):
     """Print the raw YAML of a saved augmentation config, syntax-highlighted."""
-    from rich.console import Console
-    from rich.syntax import Syntax
+    from cvbench.core import _console
 
     path = resolve_aug_file(name)
     content = Path(path).read_text()
-    console = Console()
-    if console.is_terminal:
-        console.print(Syntax(content, "yaml", theme="ansi_dark", background_color="default",
-                              word_wrap=True))
-    else:
-        print(content, end="")
+    _console.syntax(content, "yaml")
 
 
 @augmentations.command(
@@ -559,7 +546,7 @@ def edit(name):
     default. GUI editors need a "wait" flag to work here, e.g. set
     EDITOR="code --wait" for VS Code.
     """
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     path = Path(resolve_aug_file(name))
     original = path.read_text()
@@ -570,7 +557,7 @@ def edit(name):
         return
 
     path.write_text(edited)
-    print(f"  {_fmt.green('✓')} Saved → {path}")
+    _console.success(f"Saved → {path}")
 
 
 @augmentations.command(
@@ -582,15 +569,15 @@ def edit(name):
 @click.option("--yes", "-y", is_flag=True, default=False, help="Skip the confirmation prompt.")
 def delete(name, yes):
     """Delete a saved augmentation config."""
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     path = Path(resolve_aug_file(name))
 
     if not yes:
         click.confirm(
-            f"{_fmt.yellow('Warning:')} This will permanently delete '{path}'. Continue?",
+            f"{_console.yellow('Warning:')} This will permanently delete '{path}'. Continue?",
             abort=True,
         )
 
     path.unlink()
-    print(_fmt.green(f" Deleted '{path}'."))
+    print(_console.green(f" Deleted '{path}'."))

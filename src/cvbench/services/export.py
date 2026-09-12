@@ -9,7 +9,7 @@ from pathlib import Path
 
 import keras
 
-from cvbench.core import _fmt
+from cvbench.core import _console
 from cvbench.core.config import load_config
 from cvbench.core.runs import resolve_run_dir
 
@@ -77,58 +77,58 @@ def _prepare_plan_package(run_dir: Path, cfg) -> Path:
 
     onnx_path = export_dir / "model.onnx"
     if onnx_path.exists():
-        print(_fmt.dim("  Reusing   model.onnx"))
+        print(_console.dim("  Reusing   model.onnx"))
     else:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore", message="Skipping variable loading for optimizer"
             )
             model = keras.saving.load_model(str(run_dir / "best.keras"))
-        print(_fmt.dim("  Converting to ONNX (opset=13)..."))
+        print(_console.dim("  Converting to ONNX (opset=13)..."))
         _export_onnx(model, onnx_path, cfg.model.input_size)
 
     return export_dir
 
 
 def _print_plan_instructions(run_name: str, onnx_exists: bool) -> None:
-    print(_fmt.rule())
+    print(_console.rule())
     print(f" TensorRT Engine Plan — Jetson deployment")
-    print(_fmt.rule())
+    print(_console.rule())
     print()
     print(
-        _fmt.blue(
+        _console.blue(
             " A TensorRT .plan file must be built on the target Jetson device itself,"
         )
     )
-    print(_fmt.blue(" since it is compiled for a specific GPU architecture."))
+    print(_console.blue(" since it is compiled for a specific GPU architecture."))
     print()
     print(
-        f" {_fmt.bold('Step 1')} {_fmt.dim('— copy the ONNX model to your Jetson:')}"
+        f" {_console.bold('Step 1')} {_console.dim('— copy the ONNX model to your Jetson:')}"
     )
     print()
     print(f"   scp experiments/{run_name}/export/onnx/model.onnx \\")
     print("       user@jetson:/home/user/model.onnx")
     print()
     print(
-        f" {_fmt.bold('Step 2')} {_fmt.dim('— on the Jetson, convert to TensorRT engine plan:')}"
+        f" {_console.bold('Step 2')} {_console.dim('— on the Jetson, convert to TensorRT engine plan:')}"
     )
     print()
     print("   trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32")
     print()
     print(
-        f" {_fmt.bold('Step 3')} {_fmt.dim('— run inference using the TensorRT Python API or DeepStream.')}"
+        f" {_console.bold('Step 3')} {_console.dim('— run inference using the TensorRT Python API or DeepStream.')}"
     )
     print()
     if not onnx_exists:
         print(
-            _fmt.yellow(
+            _console.yellow(
                 " Note: ONNX export not found. Generate it first with:"
             )
         )
         print()
         print(f"   runs export {run_name} --format onnx")
         print()
-    print(_fmt.rule())
+    print(_console.rule())
 
 
 def _collect_images(directory: Path) -> list[Path]:
@@ -242,7 +242,7 @@ def _build_calibration_set(
 
     unit = "cluster(s)" if strategy == "diverse" else "class(es)"  # stratified also uses class(es)
     print(
-        _fmt.dim(
+        _console.dim(
             f"  Building  calib_set.npy ({len(selected)} images, "
             f"{strategy} across {n_classes} {unit}, {size}×{size})..."
         )
@@ -257,13 +257,13 @@ def _build_calibration_set(
 
     calib_set = np.array(calib_data)
     np.save(str(output_path), calib_set)
-    print(_fmt.dim(f"  Written   calib_set.npy  shape={calib_set.shape}"))
+    print(_console.dim(f"  Written   calib_set.npy  shape={calib_set.shape}"))
     return len(selected), n_classes
 
 
 def _write_alls(output_path: Path) -> None:
     if output_path.exists():
-        print(_fmt.dim("  Reusing   model.alls"))
+        print(_console.dim("  Reusing   model.alls"))
         return
     output_path.write_text(
         "model_optimization_flavor(optimization_level=2, compression_level=1)\n"
@@ -271,7 +271,7 @@ def _write_alls(output_path: Path) -> None:
         "quantization_param(avgpool3, precision_mode=a16_w16)\n"
         "quantization_param(fc11, precision_mode=a16_w16)\n"
     )
-    print(_fmt.dim("  Written   model.alls"))
+    print(_console.dim("  Written   model.alls"))
 
 
 def _prepare_hailo_package(
@@ -284,19 +284,19 @@ def _prepare_hailo_package(
 
     tflite_path = export_dir / "model.tflite"
     if tflite_path.exists():
-        print(_fmt.dim(f"  Reusing   model.tflite"))
+        print(_console.dim(f"  Reusing   model.tflite"))
     else:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore", message="Skipping variable loading for optimizer"
             )
             model = keras.saving.load_model(str(run_dir / "best.keras"))
-        print(_fmt.dim("  Converting to TFLite (float32)..."))
+        print(_console.dim("  Converting to TFLite (float32)..."))
         _export_tflite(model, tflite_path, quantize="none")
 
     calib_path = export_dir / "calib_set.npy"
     if calib_path.exists():
-        print(_fmt.dim("  Reusing   calib_set.npy"))
+        print(_console.dim("  Reusing   calib_set.npy"))
         shape = np.load(str(calib_path), mmap_mode="r").shape
         calib_meta = {"calib_set_images": shape[0], "calib_set_shuffled": True}
     else:
@@ -317,27 +317,27 @@ def _prepare_hailo_package(
 
 def _print_hailo_instructions(run_name: str, export_dir: Path) -> None:
     rel = f"experiments/{run_name}/export/hailo"
-    print(_fmt.rule())
+    print(_console.rule())
     print(f" Hailo HEF — hailo8l deployment")
-    print(_fmt.rule())
+    print(_console.rule())
     print()
     print(
-        _fmt.blue(
+        _console.blue(
             " The Hailo conversion commands must be run inside the Hailo Docker container."
         )
     )
     print(
-        _fmt.blue(
+        _console.blue(
             f" Mount or copy the export folder into the container: {rel}/"
         )
     )
     print()
-    print(f" {_fmt.bold('Step 1')} {_fmt.dim('— parse TFLite to HAR:')}")
+    print(f" {_console.bold('Step 1')} {_console.dim('— parse TFLite to HAR:')}")
     print()
     print("   hailo parser tf model.tflite")
     print()
     print(
-        f" {_fmt.bold('Step 2')} {_fmt.dim('— optimize with calibration data:')}"
+        f" {_console.bold('Step 2')} {_console.dim('— optimize with calibration data:')}"
     )
     print()
     print("   hailo optimize \\")
@@ -347,11 +347,11 @@ def _print_hailo_instructions(run_name: str, export_dir: Path) -> None:
     print("       --output-har-path model_optimized.har \\")
     print("       model.har")
     print()
-    print(f" {_fmt.bold('Step 3')} {_fmt.dim('— compile to HEF:')}")
+    print(f" {_console.bold('Step 3')} {_console.dim('— compile to HEF:')}")
     print()
     print("   hailo compiler --hw-arch hailo8l model_optimized.har")
     print()
-    print(_fmt.rule())
+    print(_console.rule())
 
 
 def run_export(
@@ -381,9 +381,9 @@ def run_export(
         if not checkpoint.exists():
             raise FileNotFoundError(f"No best.keras found in: {run_dir}")
 
-        print(_fmt.rule())
+        print(_console.rule())
         print(f" TensorRT Plan package — '{run_dir.name}'")
-        print(_fmt.rule())
+        print(_console.rule())
 
         export_dir = _prepare_plan_package(run_dir, cfg)
 
@@ -405,9 +405,9 @@ def run_export(
             json.dumps(export_info, indent=2)
         )
         print(f"  Written   export_info.json")
-        print(_fmt.rule())
-        print(_fmt.green(f" Package ready → {export_dir}"))
-        print(_fmt.rule())
+        print(_console.rule())
+        print(_console.green(f" Package ready → {export_dir}"))
+        print(_console.rule())
         _print_plan_instructions(run_dir.name, onnx_exists=True)
         return export_dir
 
@@ -424,9 +424,9 @@ def run_export(
         if not checkpoint.exists():
             raise FileNotFoundError(f"No best.keras found in: {run_dir}")
 
-        print(_fmt.rule())
+        print(_console.rule())
         print(f" Hailo package — '{run_dir.name}'")
-        print(_fmt.rule())
+        print(_console.rule())
 
         export_dir, calib_meta = _prepare_hailo_package(
             run_dir, cfg, calib_total=calib_total, calib_strategy=calib_strategy
@@ -450,9 +450,9 @@ def run_export(
             json.dumps(export_info, indent=2)
         )
         print(f"  Written   export_info.json")
-        print(_fmt.rule())
-        print(_fmt.green(f" Package ready → {export_dir}"))
-        print(_fmt.rule())
+        print(_console.rule())
+        print(_console.green(f" Package ready → {export_dir}"))
+        print(_console.rule())
         _print_hailo_instructions(run_dir.name, export_dir)
         return export_dir
 
@@ -474,10 +474,10 @@ def run_export(
     export_dir = export_base / subfolder
     export_dir.mkdir(parents=True, exist_ok=True)
 
-    print(_fmt.rule())
+    print(_console.rule())
     print(f" Exporting '{run_dir.name}' → {subfolder}")
-    print(_fmt.rule())
-    print(_fmt.dim(f"  Loading   {checkpoint}"))
+    print(_console.rule())
+    print(_console.dim(f"  Loading   {checkpoint}"))
 
     with warnings.catch_warnings():
         warnings.filterwarnings(
@@ -490,11 +490,11 @@ def run_export(
             f"model{_TFLITE_QUANTIZE_SUFFIX.get(quantize, '')}.tflite"
         )
         model_path = export_dir / model_filename
-        print(_fmt.dim(f"  Converting to TFLite (quantize={quantize})..."))
+        print(_console.dim(f"  Converting to TFLite (quantize={quantize})..."))
         _export_tflite(model, model_path, quantize)
     elif format == "onnx":
         model_path = export_dir / "model.onnx"
-        print(_fmt.dim(f"  Converting to ONNX (opset=13)..."))
+        print(_console.dim(f"  Converting to ONNX (opset=13)..."))
         _export_onnx(model, model_path, cfg.model.input_size)
 
     size_mb = model_path.stat().st_size / (1024 * 1024)
@@ -521,8 +521,8 @@ def run_export(
 
     print(f"  Written   {model_path.name}  ({size_mb:.1f} MB)")
     print(f"  Written   export_info.json")
-    print(_fmt.rule())
-    print(_fmt.green(f" Export complete → {export_dir}"))
-    print(_fmt.rule())
+    print(_console.rule())
+    print(_console.green(f" Export complete → {export_dir}"))
+    print(_console.rule())
 
     return export_dir

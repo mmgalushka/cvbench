@@ -95,11 +95,11 @@ class DetectionTask(Task):
             kept.append(t)
 
         if dropped:
-            from cvbench.core import _fmt
-            print(_fmt.yellow(
-                f"⚠️  Dropping geometric augmentation(s) for detection: {', '.join(dropped)}"
+            from cvbench.core import _console
+            _console.warning(
+                f"Dropping geometric augmentation(s) for detection: {', '.join(dropped)}"
                 " — they would move pixels without moving the boxes."
-            ))
+            )
         return kept
 
     def build_model(self, cfg):

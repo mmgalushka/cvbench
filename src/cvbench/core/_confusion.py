@@ -3,17 +3,23 @@
 Used by both the classification and detection evaluators — detection's matrix
 just carries an extra trailing ``background`` label, which prints like any
 other row/column.
+
+Colour goes through :mod:`cvbench.core._console`'s shared rich Console, so it
+respects ``NO_COLOR`` and non-TTY (piped) output like every other CLI helper.
 """
 from __future__ import annotations
 
 import shutil
 
 import numpy as np
+from rich.color import Color
+from rich.style import Style
+
+from cvbench.core._console import _color_enabled, _make_console
 
 # ANSI 256-colour blue ramp: white -> pure blue (no cyan tint)
 # 231=#ffffff  189=#d7d7ff  147=#afafff  105=#8787ff  63=#5f5fff  21=#0000ff
 _BLUE_RAMP = [231, 189, 147, 105, 63, 21]
-_RESET = "\033[0m"
 
 
 def print_confusion_matrix(
@@ -33,13 +39,21 @@ def print_confusion_matrix(
     label_w = max(len(cls) for cls in class_names)
     max_val = int(cm.max()) if cm.max() > 0 else 1
     term_w = shutil.get_terminal_size((80, 24)).columns
+    console = _make_console(color_system="256")
 
-    def _fmt_cell(val: int, is_diag: bool, cell_w: int) -> str:
+    def _shade_cell(val: int, is_diag: bool, cell_w: int) -> str:
+        text = f"{val:^{cell_w}}"
+        if not _color_enabled():
+            return text
         idx = min(int(val / max_val * (len(_BLUE_RAMP) - 1)), len(_BLUE_RAMP) - 1)
-        bg = f"\033[48;5;{_BLUE_RAMP[idx]}m"
-        fg = "\033[30m" if idx < 3 else "\033[97m"
-        bold = "\033[1m" if is_diag else ""
-        return f"{bg}{fg}{bold}{val:^{cell_w}}{_RESET}"
+        style = Style(
+            bgcolor=Color.from_ansi(_BLUE_RAMP[idx]),
+            color="black" if idx < 3 else "bright_white",
+            bold=is_diag,
+        )
+        with console.capture() as cap:
+            console.print(text, style=style, end="")
+        return cap.get()
 
     # --- measure whether normal layout fits ---
     num_w = len(str(max_val)) + 2
@@ -57,7 +71,7 @@ def print_confusion_matrix(
         col_header = " ".join(f"{cls:^{normal_cell_w}}" for cls in class_names)
         print(f"   {pad}{col_header}")
         for i, true_cls in enumerate(class_names):
-            cells = " ".join(_fmt_cell(int(cm[i, j]), i == j, normal_cell_w) for j in range(n))
+            cells = " ".join(_shade_cell(int(cm[i, j]), i == j, normal_cell_w) for j in range(n))
             print(f"   {true_cls:<{label_w}} | {cells}")
     else:
         # ── staircase layout ───────────────────────────────────────────
@@ -83,7 +97,7 @@ def print_confusion_matrix(
         print(vert_row)
 
         for i, true_cls in enumerate(class_names):
-            cells = " ".join(_fmt_cell(int(cm[i, j]), i == j, cell_w) for j in range(n))
+            cells = " ".join(_shade_cell(int(cm[i, j]), i == j, cell_w) for j in range(n))
             print(f"   {true_cls:<{label_w}} | {cells}")
 
     print()

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cvbench.core import _fmt
+from cvbench.core import _console
 
 
 def get_class_distribution(train_dir: str) -> dict[str, int]:
@@ -54,24 +54,21 @@ def print_class_distribution(class_dist: dict[str, int]) -> None:
     total = sum(counts)
     ratio = max_count / min_count if min_count > 0 else float("inf")
     uniform = all(c == counts[0] for c in counts)
-    max_cls = max(len(cls) for cls in class_dist)
 
     bar_width = 20
-    print(f" {_fmt.bold('Class distribution:')}")
-    print(_fmt.dim(f"   {'Class':<{max_cls}}  {'Images':>6}  {'':^{bar_width}}  {'%':>5}"))
+    print(f" {_console.bold('Class distribution:')}")
+    rows = []
     for cls, count in class_dist.items():
         pct = count / total * 100
-        if uniform:
-            print(f"   {cls:<{max_cls}}  {count:>6}  {'':^{bar_width}}  {pct:.1f}%")
-        else:
-            bar = "█" * int(count / max_count * bar_width)
-            print(f"   {cls:<{max_cls}}  {count:>6}  {bar:<{bar_width}}  {pct:.1f}%")
+        bar = "" if uniform else "█" * int(count / max_count * bar_width)
+        rows.append((cls, count, bar, f"{pct:.1f}%"))
+    _console.table(["Class", ("Images", "right"), "", ("%", "right")], rows)
 
     std_counts = (sum((c - total / len(counts)) ** 2 for c in counts) / len(counts)) ** 0.5
     imbalanced = std_counts > 0 and any(abs(c - total / len(counts)) > std_counts for c in counts)
     if imbalanced:
         print()
-        print(_fmt.yellow(f" ⚠️  Imbalance ratio {ratio:.0f}:1 detected"))
+        _console.warning(f"Imbalance ratio {ratio:.0f}:1 detected")
 
 
 def print_imbalance_warning(class_dist: dict[str, int], class_weight_cfg) -> None:
@@ -82,10 +79,10 @@ def print_imbalance_warning(class_dist: dict[str, int], class_weight_cfg) -> Non
     ratio = max_count / min_count
 
     if ratio >= 3.0:
-        print(_fmt.yellow(f" ⚠️  Imbalance ratio {ratio:.0f}:1 detected"))
+        _console.warning(f"Imbalance ratio {ratio:.0f}:1 detected")
         if class_weight_cfg is None:
-            print(f"   {_fmt.dim('Tip: rerun with --class-weight auto')}")
+            print(f"   {_console.dim('Tip: rerun with --class-weight auto')}")
         elif class_weight_cfg == "auto":
-            print(f"   {_fmt.green('✓ class_weight=auto applied')}")
+            _console.success("class_weight=auto applied")
         else:
-            print(f"   {_fmt.green('✓ custom class weights applied')}")
+            _console.success("custom class weights applied")
