@@ -42,7 +42,7 @@ ENTRY_POINTS: tuple[tuple[str, str], ...] = (
 # in <angle brackets> are not resolved against the registry by the tests.
 QUICKSTART: tuple[tuple[str, str], ...] = (
     ("commands", "show this screen again any time"),
-    ("tm -n <name>", "start a tmux session so training survives closing your terminal"),
+    ("tm new <name>", "start a tmux session so training survives closing your terminal"),
     ("data generate", "make a 4-class synthetic dataset in data/synthetic/"),
     ("train data/synthetic --epochs 5", "train a model — prints the run name when it finishes"),
     ("runs list", "see every run, newest first"),
@@ -56,10 +56,10 @@ QUICKSTART: tuple[tuple[str, str], ...] = (
 # user starts by hand.
 EXTRAS: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
     ("Sessions (tmux) — keep training alive after you close the terminal", (
-        ("tm -n <name>", "new session"),
-        ("tm -c <name>", "connect / attach"),
-        ("tm -d <name>", "delete session"),
-        ("tm -l", "list sessions"),
+        ("tm new <name>", "new session"),
+        ("tm connect <name>", "connect / attach"),
+        ("tm delete <name>", "delete session"),
+        ("tm list", "list sessions"),
         ("Ctrl+B then D", "detach from the session you are in"),
     )),
 )

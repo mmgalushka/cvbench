@@ -25,10 +25,10 @@ tm() {
     local usage
     usage=$(cat <<'EOF'
 Usage:
-  tm -n <name>   new tmux session
-  tm -c <name>   connect / attach to session
-  tm -d <name>   delete session
-  tm -l          list sessions
+  tm new <name>       new tmux session
+  tm connect <name>   connect / attach to session
+  tm delete <name>    delete session
+  tm list             list sessions
 EOF
 )
     if [[ $# -eq 0 ]]; then
@@ -36,23 +36,23 @@ EOF
         return 0
     fi
 
-    local flag="$1"
+    local verb="$1"
     local name="$2"
 
-    case "$flag" in
-        -n)
-            [[ -z "$name" ]] && { echo "tm -n requires a session name"; return 1; }
+    case "$verb" in
+        new)
+            [[ -z "$name" ]] && { echo "tm new requires a session name"; return 1; }
             tmux new-session -s "$name"
             ;;
-        -c)
-            [[ -z "$name" ]] && { echo "tm -c requires a session name"; return 1; }
+        connect)
+            [[ -z "$name" ]] && { echo "tm connect requires a session name"; return 1; }
             tmux attach-session -t "$name"
             ;;
-        -d)
-            [[ -z "$name" ]] && { echo "tm -d requires a session name"; return 1; }
+        delete)
+            [[ -z "$name" ]] && { echo "tm delete requires a session name"; return 1; }
             tmux kill-session -t "$name"
             ;;
-        -l)
+        list)
             tmux list-sessions 2>/dev/null || echo "No active tmux sessions."
             ;;
         *)
