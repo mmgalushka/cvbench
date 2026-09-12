@@ -11,7 +11,7 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 from cvbench.core.config import CVBenchConfig
-from cvbench.core import _fmt
+from cvbench.core import _console
 
 
 def get_class_names(train_dir: str) -> list[str]:
@@ -132,16 +132,16 @@ def build_datasets(
 
     if os.path.isdir(cfg.data.val_dir):
         if cfg.data.val_split_explicit:
-            print(_fmt.yellow(
-                f"⚠️  --val-split ignored: a val/ directory was found at {cfg.data.val_dir!r}."
+            _console.warning(
+                f"--val-split ignored: a val/ directory was found at {cfg.data.val_dir!r}."
                 " Remove val/ or omit --val-split to silence this warning."
-            ))
+            )
         n_val = sum(1 for _ in Path(cfg.data.val_dir).glob("*/*"))
         with contextlib.redirect_stdout(io.StringIO()):
             train_ds = build_dataset(cfg.data.train_dir, class_names, cfg, training=True)
             val_ds = build_dataset(cfg.data.val_dir, class_names, cfg, training=False)
-        print(_fmt.dim(f" Found {total_train} files for training ({len(class_names)} classes)."))
-        print(_fmt.dim(f" Found {n_val} files for validation ({len(class_names)} classes)."))
+        print(_console.dim(f" Found {total_train} files for training ({len(class_names)} classes)."))
+        print(_console.dim(f" Found {n_val} files for validation ({len(class_names)} classes)."))
         num_train_samples = total_train
     else:
         split = cfg.data.val_split
@@ -170,11 +170,11 @@ def build_datasets(
         ).prefetch(tf.data.AUTOTUNE)
         num_train_samples = math.floor(total_train * (1 - split))
         n_val_samples = total_train - num_train_samples
-        print(_fmt.dim(
+        print(_console.dim(
             f" Found {total_train} files belonging to {len(class_names)} classes"
             f" — auto-splitting ({pct_train}/{pct_val})"
         ))
-        print(_fmt.dim(f"   ├─ {num_train_samples} for training"))
-        print(_fmt.dim(f"   └─ {n_val_samples} for validation"))
+        print(_console.dim(f"   ├─ {num_train_samples} for training"))
+        print(_console.dim(f"   └─ {n_val_samples} for validation"))
 
     return train_ds, val_ds, class_names, num_train_samples

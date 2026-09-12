@@ -8,17 +8,17 @@ import keras
 
 from cvbench.core.checkpoint import build_checkpoint_callback, load_best_history, prune_checkpoints
 from cvbench.core.config import CVBenchConfig, update_run_status
-from cvbench.core import _fmt
+from cvbench.core import _console
 
 if TYPE_CHECKING:
     from cvbench.core.task import Task
 
 
 def _print_header(exp_dir: str, cfg: CVBenchConfig):
-    print(_fmt.rule())
-    print(f" {_fmt.bold('CVBench — train')}")
-    print(_fmt.rule())
-    print(f" Data      : {_fmt.dim(cfg.data.data_dir)}")
+    print(_console.rule())
+    print(f" {_console.bold('CVBench — train')}")
+    print(_console.rule())
+    print(f" Data      : {_console.dim(cfg.data.data_dir)}")
     print(f" Backbone  : {cfg.model.backbone}")
     print(f" Epochs    : {cfg.training.epochs}")
     opt = cfg.training.optimizer
@@ -35,8 +35,8 @@ def _print_header(exp_dir: str, cfg: CVBenchConfig):
         print(f" LR        : {cfg.training.learning_rate}")
     n_transforms = len(cfg.augmentation.transforms)
     print(f" Aug       : {n_transforms} transform(s)")
-    print(f" Output    : {_fmt.dim(exp_dir)}")
-    print(_fmt.rule())
+    print(f" Output    : {_console.dim(exp_dir)}")
+    print(_console.rule())
     print()  # breathing room before epoch output
 
 
@@ -56,10 +56,10 @@ def _apply_fine_tune_flags(model: keras.Model, fine_tune_from_layer: int) -> Non
             None,
         )
     if backbone is None:
-        print(_fmt.yellow(
-            "⚠️  Could not locate the backbone layer to apply fine_tune_from_layer;"
+        _console.warning(
+            "Could not locate the backbone layer to apply fine_tune_from_layer;"
             " leaving the reloaded checkpoint's trainable flags unchanged."
-        ))
+        )
         return
     if fine_tune_from_layer == 0:
         backbone.trainable = False
@@ -140,7 +140,12 @@ def train(
     _stop_flag = {"value": False}
 
     def _sigint_handler(signum, frame):
-        print(f"\r\033[K\n {_fmt.yellow('⚠️  Interrupt received')} — finishing current batch then saving...\n")
+        # \r\033[K is cursor control (clear the in-progress progress-bar line),
+        # not color — left as a deliberate exception to the "route color
+        # through _console" rule. The warning itself still goes through
+        # _console.warning() so NO_COLOR/non-TTY gating still applies.
+        print("\r\033[K")
+        _console.warning("Interrupt received — finishing current batch then saving...\n")
         _stop_flag["value"] = True
 
     if cfg.training.interrupt.enabled:
@@ -177,7 +182,7 @@ def train(
         ckpt_name = f"interrupt_epoch{last_epoch:03d}.keras"
         interrupt_ckpt = str(run_dir / ckpt_name)
         model.save(interrupt_ckpt)
-        print(f"\n {_fmt.green('Checkpoint saved')} → {_fmt.dim(interrupt_ckpt)}")
+        print(f"\n {_console.green('Checkpoint saved')} → {_console.dim(interrupt_ckpt)}")
         print(
             f" To resume: train {cfg.data.data_dir}"
             f" --from {exp_dir}"
@@ -207,23 +212,23 @@ def train(
     )
 
     status_label = "interrupted" if interrupted else "complete"
-    status_color = _fmt.yellow if interrupted else _fmt.green
+    status_color = _console.yellow if interrupted else _console.green
     print()  # breathing room after last epoch line
-    print(_fmt.rule())
-    print(f" {_fmt.bold(f'Training {status_color(status_label)}')}")
+    print(_console.rule())
+    print(f" {_console.bold(f'Training {status_color(status_label)}')}")
     if final_metrics:
         max_k = max(len(k) for k in final_metrics)
         for k, v in final_metrics.items():
-            print(f"   {_fmt.bold(f'{k:<{max_k}}')} : {v:.4f}")
+            print(f"   {_console.bold(f'{k:<{max_k}}')} : {v:.4f}")
     best_events = load_best_history(str(run_dir))
     if best_events:
         metric_name = best_events[0]["metric"]
-        print(f"\n {_fmt.bold('Best weights history')}  ({_fmt.dim(metric_name)})")
+        print(f"\n {_console.bold('Best weights history')}  ({_console.dim(metric_name)})")
         for e in best_events:
             val_str = f"{e['value']:.4f}" if e["value"] is not None else "—"
             epoch_str = f"{e['epoch']:>4}"
-            print(f"   epoch {_fmt.bold(epoch_str)}  →  {val_str}")
-    print(f"\n Run directory → {_fmt.dim(str(run_dir))}")
-    print(_fmt.rule())
+            print(f"   epoch {_console.bold(epoch_str)}  →  {val_str}")
+    print(f"\n Run directory → {_console.dim(str(run_dir))}")
+    print(_console.rule())
 
     return str(run_dir)

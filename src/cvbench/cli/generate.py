@@ -71,16 +71,16 @@ def generate(output, fmt, image_size, n_train, n_val, n_test, max_objects, seed,
                 f"Output directory '{out}' already exists. Use --overwrite to replace it."
             )
 
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     rng = random.Random(seed)
     is_yolo = fmt == "yolo"
     per_split = 1 if is_yolo else len(CLASSES)
     total = (n_train + n_val + n_test) * per_split
 
-    print(_fmt.rule(thick=True))
-    print(f" {_fmt.bold('CVBench — data generate')}")
-    print(_fmt.rule(thick=True))
+    print(_console.rule(thick=True))
+    print(f" {_console.bold('CVBench — data generate')}")
+    print(_console.rule(thick=True))
     print(f" Format     : {fmt}")
     print(f" Classes    : {', '.join(CLASSES)}")
     print(f" Image size : {image_size}×{image_size}  grayscale")
@@ -94,7 +94,7 @@ def generate(output, fmt, image_size, n_train, n_val, n_test, max_objects, seed,
         print(f" Val        : {n_val}  per class  ({n_val  * len(CLASSES)} total)")
         print(f" Test       : {n_test}  per class  ({n_test * len(CLASSES)} total)")
     print(f" Output     : {out}/")
-    print(_fmt.rule(thick=True))
+    print(_console.rule(thick=True))
 
     written_splits = []
     for split, n in [("train", n_train), ("val", n_val), ("test", n_test)]:
@@ -113,6 +113,6 @@ def generate(output, fmt, image_size, n_train, n_val, n_test, max_objects, seed,
         write_data_yaml(out, written_splits)
         print(f" Wrote {out / 'data.yaml'}")
 
-    print(_fmt.rule(thick=True))
+    print(_console.rule(thick=True))
     print(f" {total} images written to {out}/")
-    print(_fmt.rule(thick=True))
+    print(_console.rule(thick=True))

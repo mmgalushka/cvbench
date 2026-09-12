@@ -15,7 +15,7 @@ Worked examples and "what to run next" hints are passed as structured data::
 rendered by us (never through Click's paragraph rewrapper, so command lines stay
 copy-pasteable) and reused verbatim by the ``commands`` overview.
 
-All colour goes through :mod:`cvbench.core._fmt`, which already drops ANSI under
+All colour goes through :mod:`cvbench.core._console`, which already drops ANSI under
 ``NO_COLOR`` and when stdout is not a TTY.
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ from __future__ import annotations
 import click
 from click.formatting import HelpFormatter
 
-from cvbench.core import _fmt
+from cvbench.core import _console
 
 _MAX_WIDTH = 100
 
@@ -36,11 +36,11 @@ class CVBenchHelpFormatter(HelpFormatter):
 
     def __init__(self, indent_increment: int = 2, width=None, max_width=None):
         if width is None and max_width is None:
-            max_width = min(_fmt.term_width(80), _MAX_WIDTH)
+            max_width = min(_console.term_width(80), _MAX_WIDTH)
         super().__init__(indent_increment, width, max_width)
 
     def write_heading(self, heading: str) -> None:
-        self.write(f"{'':>{self.current_indent}}{_fmt.bold(heading)}\n")
+        self.write(f"{'':>{self.current_indent}}{_console.bold(heading)}\n")
 
 
 class CVBenchContext(click.Context):
@@ -59,9 +59,9 @@ class HelpMixin:
 
     def format_usage(self, ctx, formatter):
         w = formatter.width
-        formatter.write(_fmt.rule(w, "white") + "\n")
-        formatter.write(f" {_fmt.bold('CVBench')} {_fmt.dim('—')} {ctx.command_path}\n")
-        formatter.write(_fmt.rule(w, "white") + "\n")
+        formatter.write(_console.rule(w, "white") + "\n")
+        formatter.write(f" {_console.bold('CVBench')} {_console.dim('—')} {ctx.command_path}\n")
+        formatter.write(_console.rule(w, "white") + "\n")
         formatter.write_paragraph()
         pieces = self.collect_usage_pieces(ctx)
         formatter.write_usage(ctx.command_path, " ".join(pieces))
@@ -75,8 +75,8 @@ class HelpMixin:
                 if i:
                     formatter.write_paragraph()
                 pad = " " * formatter.current_indent
-                formatter.write(f"{pad}{_fmt.dim('# ' + desc)}\n")
-                formatter.write(f"{pad}{_fmt.green(line)}\n")
+                formatter.write(f"{pad}{_console.dim('# ' + desc)}\n")
+                formatter.write(f"{pad}{_console.green(line)}\n")
             formatter.dedent()
 
         if self.see_also:
@@ -84,12 +84,12 @@ class HelpMixin:
             formatter.write_heading("Next")
             formatter.indent()
             formatter.write_dl(
-                [(_fmt.green(cmd), why) for cmd, why in self.see_also], col_max=38
+                [(_console.green(cmd), why) for cmd, why in self.see_also], col_max=38
             )
             formatter.dedent()
 
         formatter.write_paragraph()
-        formatter.write(_fmt.rule(formatter.width) + "\n")
+        formatter.write(_console.rule(formatter.width) + "\n")
 
 
 class CVBenchCommand(HelpMixin, click.Command):

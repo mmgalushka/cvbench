@@ -68,7 +68,7 @@ def explore(data_dir, split):
     DATA_DIR is the root dataset directory (containing train/, val/, test/
     subdirectories) or a split directory directly.
     """
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     root = Path(data_dir)
     split_dir = root / split if (root / split).is_dir() else root
@@ -101,18 +101,18 @@ def explore(data_dir, split):
     std_of_means = float(np.std(means))
     max_cls = max(len(s["class"]) for s in stats)
 
-    print(_fmt.rule())
-    print(f" {_fmt.bold('CVBench — data explore')}  {_fmt.dim('|')}  {_fmt.dim(str(split_dir))}")
-    print(_fmt.rule())
-    print(f" {_fmt.bold('Brightness distribution per class')}  {_fmt.dim('[0–255 scale]')}")
+    print(_console.rule())
+    print(f" {_console.bold('CVBench — data explore')}  {_console.dim('|')}  {_console.dim(str(split_dir))}")
+    print(_console.rule())
+    print(f" {_console.bold('Brightness distribution per class')}  {_console.dim('[0–255 scale]')}")
     print()
-    print(_fmt.dim(f"   {'Class':<{max_cls}}  {'Images':>7}  {'Mean':>6}  {'Std':>6}  {'Min':>5}  {'Max':>5}"))
+    print(_console.dim(f"   {'Class':<{max_cls}}  {'Images':>7}  {'Mean':>6}  {'Std':>6}  {'Min':>5}  {'Max':>5}"))
 
     biased = [s for s in stats if std_of_means > 0 and abs(s["mean"] - dataset_mean) > std_of_means]
 
     for s in stats:
-        flag = f"  {_fmt.yellow('⚠️')}" if s in biased else ""
-        mean_str = _fmt.bold(f"{s['mean']:>6.1f}")
+        flag = f"  {_console.yellow('⚠️')}" if s in biased else ""
+        mean_str = _console.bold(f"{s['mean']:>6.1f}")
         print(
             f"   {s['class']:<{max_cls}}  {s['count']:>7}  "
             f"{mean_str}  {s['std']:>6.1f}  "
@@ -120,18 +120,18 @@ def explore(data_dir, split):
         )
 
     print()
-    print(f" Dataset mean brightness : {_fmt.bold(f'{dataset_mean:.1f}')}")
+    print(f" Dataset mean brightness : {_console.bold(f'{dataset_mean:.1f}')}")
 
     if biased:
         print()
         for s in biased:
             dev = s["mean"] - dataset_mean
             direction = "brighter" if dev > 0 else "darker"
-            print(_fmt.yellow(f" ⚠️  '{s['class']}' is {abs(dev):.1f} units {direction} than the dataset mean"))
+            _console.warning(f"'{s['class']}' is {abs(dev):.1f} units {direction} than the dataset mean")
         print()
-        print(f"   {_fmt.dim('Suggestion: consider brightness augmentation or per-image normalization.')}")
+        print(f"   {_console.dim('Suggestion: consider brightness augmentation or per-image normalization.')}")
     else:
-        print(_fmt.green(" ✓ No significant brightness bias detected."))
+        _console.success("No significant brightness bias detected.")
 
     print()
     dist = get_class_distribution(str(split_dir))
@@ -141,8 +141,8 @@ def explore(data_dir, split):
     mean_of_counts = float(np.mean(counts))
     imbalanced = std_of_counts > 0 and any(abs(c - mean_of_counts) > std_of_counts for c in counts)
     if not imbalanced:
-        print(_fmt.green(" ✓ No significant class imbalance detected."))
-    print(_fmt.rule())
+        _console.success("No significant class imbalance detected.")
+    print(_console.rule())
 
 
 @data.command(
@@ -171,7 +171,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
     DST_DIR must be empty or non-existent.
     """
     from PIL import Image
-    from cvbench.core import _fmt
+    from cvbench.core import _console
     from cvbench.core.config import load_aug_file
     from cvbench.core.augmentations_store import resolve_aug_file
     from cvbench.augmentations.pipeline import build_aug_pipeline
@@ -210,15 +210,15 @@ def upsample(src_dir, dst_dir, aug_file, target):
     used_tokens: set[str] = set()
     used_hashes: set[str] = set()
 
-    print(_fmt.rule())
-    print(f" {_fmt.bold('CVBench — data upsample')}")
-    print(_fmt.rule())
-    print(f"  Source  : {_fmt.dim(str(src))}  ({n_src} images)")
+    print(_console.rule())
+    print(f" {_console.bold('CVBench — data upsample')}")
+    print(_console.rule())
+    print(f"  Source  : {_console.dim(str(src))}  ({n_src} images)")
     print(f"  Target  : {target} images  (+{target - n_src} to generate)")
     print()
 
     # --- copy originals ---
-    print(f" {_fmt.bold('Copying originals...')}")
+    print(f" {_console.bold('Copying originals...')}")
     for img_path in images:
         token = _fresh_token(used_tokens)
         used_tokens.add(token)
@@ -226,12 +226,12 @@ def upsample(src_dir, dst_dir, aug_file, target):
         shutil.copy2(img_path, dst_path)
         arr = np.array(Image.open(img_path).convert("RGB"))
         used_hashes.add(hashify_mod.hash_array(arr))
-    print(f"  {_fmt.green('✓')} Copied {n_src} original(s)")
+    _console.success(f"Copied {n_src} original(s)")
     print()
 
     # --- generate augmented samples ---
     n_to_generate = target - n_src
-    print(f" {_fmt.bold(f'Generating {n_to_generate} augmented sample(s)...')}")
+    print(f" {_console.bold(f'Generating {n_to_generate} augmented sample(s)...')}")
 
     generated = 0
     total_skipped = 0
@@ -262,12 +262,12 @@ def upsample(src_dir, dst_dir, aug_file, target):
             bar.update(1)
 
     print()
-    print(f"  {_fmt.green('✓')} Generated {generated} augmented image(s)")
+    _console.success(f"Generated {generated} augmented image(s)")
     if total_skipped:
-        print(f"  {_fmt.yellow('⚠')}  Skipped {total_skipped} duplicate(s) after {_MAX_RETRIES} retries each")
+        print(f"  {_console.yellow('⚠')}  Skipped {total_skipped} duplicate(s) after {_MAX_RETRIES} retries each")
     print()
-    print(f"  Output  : {_fmt.bold(str(dst))}  ({_fmt.green(str(len(list(dst.iterdir()))))} images total)")
-    print(_fmt.rule())
+    print(f"  Output  : {_console.bold(str(dst))}  ({_console.green(str(len(list(dst.iterdir()))))} images total)")
+    print(_console.rule())
 
 
 @data.command(
@@ -293,7 +293,7 @@ def clean(src, dst, dry_run):
     left empty by junk removal are simply not created at DST. SRC is never
     modified.
     """
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     src_dir = Path(src)
     dst_dir = Path(dst)
@@ -309,28 +309,28 @@ def clean(src, dst, dry_run):
 
     plan = clean_mod.clean_dataset(src_dir, dst_dir, dry_run)
 
-    print(_fmt.rule())
-    print(f" {_fmt.bold('CVBench — data clean')}")
-    print(_fmt.rule())
-    print(f"  Source  : {_fmt.dim(str(src_dir))}")
-    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print(_console.rule())
+    print(f" {_console.bold('CVBench — data clean')}")
+    print(_console.rule())
+    print(f"  Source  : {_console.dim(str(src_dir))}")
+    print(f"  Dest    : {_console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
     print()
 
     n_junk = len(plan.junk_files) + len(plan.junk_dirs)
     if n_junk:
-        print(f" {_fmt.bold('Junk found:')}")
+        print(f" {_console.bold('Junk found:')}")
         for rel in plan.junk_dirs:
-            print(f"   {_fmt.yellow('⚠')}  {rel}/  {_fmt.dim('(directory)')}")
+            print(f"   {_console.yellow('⚠')}  {rel}/  {_console.dim('(directory)')}")
         for rel in plan.junk_files:
-            print(f"   {_fmt.yellow('⚠')}  {rel}")
+            print(f"   {_console.yellow('⚠')}  {rel}")
     else:
-        print(f" {_fmt.green('✓')} No junk found.")
+        _console.success("No junk found.")
 
     print()
     verb = "Would keep" if dry_run else "Kept"
-    suffix = f"  {_fmt.dim(f'({n_junk} junk item(s) skipped)')}" if n_junk else ""
-    print(f"  {_fmt.green('✓')} {verb} {len(plan.keep)} file(s){suffix}")
-    print(_fmt.rule())
+    suffix = f"  {_console.dim(f'({n_junk} junk item(s) skipped)')}" if n_junk else ""
+    _console.success(f"{verb} {len(plan.keep)} file(s){suffix}")
+    print(_console.rule())
 
 
 @data.command(
@@ -360,7 +360,7 @@ def hashify(src, dst, dry_run):
     Use 'data dedup' to remove genuine duplicates. YOLO label files are
     renamed to match their image's new name. SRC is never modified.
     """
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     src_dir = Path(src)
     dst_dir = Path(dst)
@@ -378,18 +378,18 @@ def hashify(src, dst, dry_run):
 
     collisions = sum(1 for a in plan.actions if "-" in Path(a.dst_image).stem)
 
-    print(_fmt.rule())
-    print(f" {_fmt.bold('CVBench — data hashify')}")
-    print(_fmt.rule())
-    print(f"  Source  : {_fmt.dim(str(src_dir))}")
-    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print(_console.rule())
+    print(f" {_console.bold('CVBench — data hashify')}")
+    print(_console.rule())
+    print(f"  Source  : {_console.dim(str(src_dir))}")
+    print(f"  Dest    : {_console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
     print()
 
     verb = "Would rename" if dry_run else "Renamed"
-    print(f"  {_fmt.green('✓')} {verb} {len(plan.actions)} image(s)")
+    _console.success(f"{verb} {len(plan.actions)} image(s)")
     if collisions:
-        print(f"  {_fmt.yellow('⚠')}  {collisions} filename collision(s) resolved with a numeric suffix")
-    print(_fmt.rule())
+        print(f"  {_console.yellow('⚠')}  {collisions} filename collision(s) resolved with a numeric suffix")
+    print(_console.rule())
 
 
 @data.command(
@@ -418,7 +418,7 @@ def dedup(src, dst, across_splits, dry_run):
     an image also drops its paired label file. SRC is never modified. Use
     'data hashify' first if you also want canonical filenames.
     """
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     src_dir = Path(src)
     dst_dir = Path(dst)
@@ -436,37 +436,37 @@ def dedup(src, dst, across_splits, dry_run):
 
     n_dupe_files = sum(len(v) - 1 for v in plan.duplicate_groups.values())
 
-    print(_fmt.rule())
-    print(f" {_fmt.bold('CVBench — data dedup')}")
-    print(_fmt.rule())
-    print(f"  Source  : {_fmt.dim(str(src_dir))}")
-    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print(_console.rule())
+    print(f" {_console.bold('CVBench — data dedup')}")
+    print(_console.rule())
+    print(f"  Source  : {_console.dim(str(src_dir))}")
+    print(f"  Dest    : {_console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
     print()
 
     if plan.duplicate_groups:
-        print(f" {_fmt.bold(f'{len(plan.duplicate_groups)} duplicate group(s) found:')}")
+        print(f" {_console.bold(f'{len(plan.duplicate_groups)} duplicate group(s) found:')}")
         for h, paths in plan.duplicate_groups.items():
             kept, dupes = paths[0], paths[1:]
-            print(f"   {_fmt.dim(h[:8])}  {_fmt.green(str(kept))} (kept)")
+            print(f"   {_console.dim(h[:8])}  {_console.green(str(kept))} (kept)")
             for p in dupes:
-                print(f"   {' ' * 8}  {_fmt.yellow(str(p))} (dropped)")
+                print(f"   {' ' * 8}  {_console.yellow(str(p))} (dropped)")
     else:
-        print(f" {_fmt.green('✓')} No duplicates found.")
+        _console.success("No duplicates found.")
 
     if across_splits:
         print()
         if plan.cross_split_leaks:
-            print(f" {_fmt.yellow(f'⚠️  {len(plan.cross_split_leaks)} duplicate group(s) leak across splits:')}")
+            _console.warning(f"{len(plan.cross_split_leaks)} duplicate group(s) leak across splits:")
             for h, paths in plan.cross_split_leaks.items():
-                print(f"   {_fmt.dim(h[:8])}  {', '.join(str(p) for p in paths)}")
+                print(f"   {_console.dim(h[:8])}  {', '.join(str(p) for p in paths)}")
         else:
-            print(f" {_fmt.green('✓')} No cross-split leakage detected.")
+            _console.success("No cross-split leakage detected.")
 
     print()
     verb = "Would keep" if dry_run else "Kept"
-    suffix = f"  {_fmt.dim(f'({n_dupe_files} duplicate(s) dropped)')}" if n_dupe_files else ""
-    print(f"  {_fmt.green('✓')} {verb} {len(plan.keep)} image(s){suffix}")
-    print(_fmt.rule())
+    suffix = f"  {_console.dim(f'({n_dupe_files} duplicate(s) dropped)')}" if n_dupe_files else ""
+    _console.success(f"{verb} {len(plan.keep)} image(s){suffix}")
+    print(_console.rule())
 
 
 @data.command(
@@ -506,7 +506,7 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
     with no boxes are split the same proportional, seeded way as every
     other group. SRC is never modified.
     """
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     src_dir = Path(src)
     dst_dir = Path(dst)
@@ -531,17 +531,17 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
     except ValueError as e:
         raise click.ClickException(str(e))
 
-    print(_fmt.rule())
-    print(f" {_fmt.bold('CVBench — data split')}")
-    print(_fmt.rule())
-    print(f"  Source  : {_fmt.dim(str(src_dir))}  ({_fmt.dim('yolo' if plan.is_yolo else 'classification')})")
-    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print(_console.rule())
+    print(f" {_console.bold('CVBench — data split')}")
+    print(_console.rule())
+    print(f"  Source  : {_console.dim(str(src_dir))}  ({_console.dim('yolo' if plan.is_yolo else 'classification')})")
+    print(f"  Dest    : {_console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
     print(f"  Ratios  : train={train_ratio}  val={val_ratio}  test={test_ratio}  seed={seed}")
     print()
 
     classes = sorted({c for counts in plan.counts.values() for c in counts})
     max_cls = max((len(c) for c in classes), default=5)
-    print(_fmt.dim(f"   {'Class':<{max_cls}}  {'Train':>7}  {'Val':>7}  {'Test':>7}"))
+    print(_console.dim(f"   {'Class':<{max_cls}}  {'Train':>7}  {'Val':>7}  {'Test':>7}"))
     for cls in classes:
         row = [plan.counts.get(s, {}).get(cls, 0) for s in ("train", "val", "test")]
         print(f"   {cls:<{max_cls}}  {row[0]:>7}  {row[1]:>7}  {row[2]:>7}")
@@ -549,8 +549,8 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
     print()
     verb = "Would write" if dry_run else "Wrote"
     total = len(plan.actions)
-    print(f"  {_fmt.green('✓')} {verb} {total} image(s) across {len(plan.splits_written)} split(s)")
-    print(_fmt.rule())
+    _console.success(f"{verb} {total} image(s) across {len(plan.splits_written)} split(s)")
+    print(_console.rule())
 
 
 @data.command(
@@ -576,7 +576,7 @@ def flatten(src, dst, dry_run):
     + labels/*), with no train/val/test structure. Use 'data split'
     afterward to re-partition. SRC is never modified.
     """
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     src_dir = Path(src)
     dst_dir = Path(dst)
@@ -595,22 +595,22 @@ def flatten(src, dst, dry_run):
     except ValueError as e:
         raise click.ClickException(str(e))
 
-    print(_fmt.rule())
-    print(f" {_fmt.bold('CVBench — data flatten')}")
-    print(_fmt.rule())
-    print(f"  Source  : {_fmt.dim(str(src_dir))}  ({_fmt.dim('yolo' if plan.is_yolo else 'classification')})")
-    print(f"  Dest    : {_fmt.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print(_console.rule())
+    print(f" {_console.bold('CVBench — data flatten')}")
+    print(_console.rule())
+    print(f"  Source  : {_console.dim(str(src_dir))}  ({_console.dim('yolo' if plan.is_yolo else 'classification')})")
+    print(f"  Dest    : {_console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
     print()
 
     classes = sorted(plan.counts)
     max_cls = max((len(c) for c in classes), default=5)
-    print(_fmt.dim(f"   {'Class':<{max_cls}}  {'Count':>7}"))
+    print(_console.dim(f"   {'Class':<{max_cls}}  {'Count':>7}"))
     for cls in classes:
         print(f"   {cls:<{max_cls}}  {plan.counts[cls]:>7}")
 
     print()
     verb = "Would write" if dry_run else "Wrote"
-    print(f"  {_fmt.green('✓')} {verb} {len(plan.actions)} image(s)")
-    print(_fmt.rule())
+    _console.success(f"{verb} {len(plan.actions)} image(s)")
+    print(_console.rule())
 
 

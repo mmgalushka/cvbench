@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from cvbench.core.config import load_config, save_config
 from cvbench.core.runs import resolve_run_dir
-from cvbench.core import _fmt
+from cvbench.core import _console
 from cvbench.services._runtime import print_device_banner
 from cvbench.tasks import resolve_task
 
@@ -44,7 +44,7 @@ def run_evaluation(
     test_ds = task.build_eval_dataset(cfg, spec)
 
     n_test = task.count_images(cfg.data.test_dir)
-    print(_fmt.dim(f" Found {n_test} files for evaluation ({len(spec.class_names)} classes)."))
+    print(_console.dim(f" Found {n_test} files for evaluation ({len(spec.class_names)} classes)."))
 
     model = task.load_model(f"{run_dir}/best.keras")
 

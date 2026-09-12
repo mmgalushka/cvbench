@@ -1,7 +1,7 @@
 import click
 
 from cvbench.cli import _help
-from cvbench.core import _fmt
+from cvbench.core import _console
 
 
 @_help.command(
@@ -46,9 +46,9 @@ def predict(experiment, input_path, fmt):
     from cvbench.services.prediction import run_experiment_prediction
 
     if fmt == "plan":
-        print(_fmt.rule(thick=True))
+        print(_console.rule(thick=True))
         print(f" CVBench — predict  [plan]")
-        print(_fmt.rule(thick=True))
+        print(_console.rule(thick=True))
         _print_plan_predict(experiment or "")
         return
 
@@ -65,33 +65,33 @@ def predict(experiment, input_path, fmt):
     exp_name = result["experiment"]
 
     fmt_label = f"[{fmt}]"
-    print(_fmt.rule(thick=True))
+    print(_console.rule(thick=True))
     print(f" CVBench — predict  {exp_name}  {fmt_label}")
-    print(_fmt.rule(thick=True))
+    print(_console.rule(thick=True))
 
     formats_run = result["formats_run"]
     formats_skipped = result["formats_skipped"]
 
     print()
     if not formats_run:
-        print(_fmt.yellow(" No models available to run inference."))
+        print(_console.yellow(" No models available to run inference."))
     elif fmt == "all":
         _print_all_formats(formats_run)
     else:
         _print_single_format(formats_run[0]["results"])
     print()
 
-    print(_fmt.rule())
+    print(_console.rule())
     n = sum(len(f["results"]) for f in formats_run[:1])
     print(f" {n} image{'s' if n != 1 else ''}")
     if formats_skipped:
         print()
         for s in formats_skipped:
-            print(f" {_fmt.dim('skipped:')} {s['format']:<8}  {s['reason']}")
+            print(f" {_console.dim('skipped:')} {s['format']:<8}  {s['reason']}")
     if fmt == "all":
         print()
         print(
-            _fmt.dim(
+            _console.dim(
                 " plan: Jetson only — for more information use: predict --format plan"
             )
         )
@@ -110,7 +110,7 @@ def _print_all_formats(formats_run: list[dict]) -> None:
 
     header = f" {'image':<38}" + "".join(f"  {n:<{col_w}}" for n in fmt_names)
     print(header)
-    print(_fmt.dim(" " + "─" * (len(header) - 1)))
+    print(_console.dim(" " + "─" * (len(header) - 1)))
 
     ref_results = {
         r["filename"]: r["class_name"] for r in formats_run[0]["results"]
@@ -141,7 +141,7 @@ def _print_all_formats(formats_run: list[dict]) -> None:
 def _print_plan_predict(run_name: str) -> None:
     print()
     print(
-        _fmt.blue(
+        _console.blue(
             " .plan inference runs on Jetson only — the engine is compiled for a specific GPU."
         )
     )
@@ -150,7 +150,7 @@ def _print_plan_predict(run_name: str) -> None:
     print()
     print(f"   runs export {run_name} --format plan")
     print()
-    print(_fmt.rule())
+    print(_console.rule())
     print(
         " Once you have model.plan on the Jetson, save the script below as infer.py,"
     )
@@ -160,7 +160,7 @@ def _print_plan_predict(run_name: str) -> None:
     print("   ./infer.py model.plan image.jpg")
     print("   ./infer.py model.plan images/")
     print()
-    print(_fmt.rule())
+    print(_console.rule())
     print()
     print("   #!/usr/bin/env python3")
     print('   """TensorRT inference — single image or folder."""')

@@ -66,14 +66,14 @@ def run_training(
     Builds config, datasets, model, and delegates to core trainer.
     Returns the experiment directory path.
     """
-    from cvbench.core import _fmt
+    from cvbench.core import _console
 
     print_device_banner("training")
 
     if seed is not None:
         import keras
         keras.utils.set_random_seed(seed)
-        print(_fmt.dim(f" Seed: {seed} (reproducible run)"))
+        print(_console.dim(f" Seed: {seed} (reproducible run)"))
 
     cfg = build_config(
         data_dir=data_dir,
