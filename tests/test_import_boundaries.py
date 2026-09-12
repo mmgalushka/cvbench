@@ -34,6 +34,23 @@ def test_datasets_package_does_not_import_tensorflow():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_cli_package_never_imports_tensorflow_at_module_scope():
+    # `commands` enumerates every CLI module to build the overview; if any of
+    # them pulled TensorFlow at import time, the overview (and every --help)
+    # would take seconds to start. Run in a subprocess for a true cold import.
+    code = (
+        "import sys, importlib\n"
+        "from cvbench.cli.overview import ENTRY_POINTS\n"
+        "import cvbench.cli.overview\n"
+        "for _, spec in ENTRY_POINTS:\n"
+        "    importlib.import_module(spec.split(':')[0])\n"
+        "bad = sorted(m for m in sys.modules if m.split('.')[0] == 'tensorflow')\n"
+        "assert not bad, bad\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def _imported_top_level_modules(py_file: Path) -> set[str]:
     tree = ast.parse(py_file.read_text(), filename=str(py_file))
     modules = set()

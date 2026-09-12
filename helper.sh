@@ -17,83 +17,54 @@ action_usage(){
     echo -e " \\____|  \\_/  |____/ \\___|_| |_|\\___|_| |_|";
     echo -e "Computer Vision Training Sandbox"
     echo -e ""
-    echo -e "${BOLD}Setup Commands:${NC}"
-    echo -e "  ${CMD}init${NC}                         create .venv and install all dependencies;"
+    echo -e "${BOLD}Dev commands (./helper.sh <name>):${NC}"
+    echo -e "  ${CMD}init${NC}                 create .venv and install all dependencies"
+    echo -e "  ${CMD}test${OPT} [-m mark] [-c]${NC}  run the test suite (-c adds a coverage summary)"
+    echo -e "  ${CMD}release${OPT} [--dry-run]${NC}  preview the next version bump (CI does the real one)"
+    echo -e "  ${CMD}docs${NC}                 regenerate the CLI reference block in README.md"
     echo -e ""
-    echo -e "${BOLD}Data Commands:${NC}"
-    echo -e "  ${CMD}data generate${OPT} [out_dir] [opts]${NC}  generate synthetic shapes dataset;"
-    echo -e "    ${OPT}--format <name>${NC}                  classification | yolo (default: classification);"
-    echo -e "    ${OPT}--train/--val/--test <N>${NC}         images per class per split (per split for yolo);"
-    echo -e "    ${OPT}--image-size <N>${NC}                 image size in pixels (default: 64);"
-    echo -e "    ${OPT}--max-objects <N>${NC}                max shapes per image, yolo only (default: 3);"
-    echo -e "    ${OPT}--overwrite${NC}                      replace existing output directory;"
-    echo -e "  ${CMD}data explore${OPT} <data_dir> [opts]${NC}  analyze per-class brightness distribution;"
-    echo -e "    ${OPT}--split <name>${NC}                   split to analyse (default: train);"
-    echo -e "    ${OPT}--threshold <N>${NC}                  bias warning threshold in 0-255 scale (default: 20);"
-    echo -e "  ${CMD}data upsample${OPT} <src_dir> <dst_dir>${NC}  upsample a class folder to a target count;"
-    echo -e "    ${OPT}--augmentation <file>${NC}            augmentation YAML spec file (required);"
-    echo -e "    ${OPT}--target <N>${NC}                     target number of images in output folder (required);"
-    echo -e "  ${CMD}data clean${OPT} <src> <dst>${NC}  copy a dataset, dropping OS/editor junk;"
-    echo -e "    ${OPT}--dry-run${NC}                        preview without writing dst;"
-    echo -e "  ${CMD}data hashify${OPT} <src> <dst>${NC}  copy a dataset, renaming images to content hashes;"
-    echo -e "    ${OPT}--dry-run${NC}                        preview without writing dst;"
-    echo -e "  ${CMD}data dedup${OPT} <src> <dst>${NC}  copy a dataset, dropping exact-duplicate images;"
-    echo -e "    ${OPT}--across-splits${NC}                  flag duplicates spanning more than one split;"
-    echo -e "    ${OPT}--dry-run${NC}                        preview without writing dst;"
-    echo -e "  ${CMD}data split${OPT} <src> <dst>${NC}  copy a flat dataset into train/val/test, stratified;"
-    echo -e "    ${OPT}--train/--val/--test <F>${NC}         split ratios (default: 0.8/0.1/0.1);"
-    echo -e "    ${OPT}--seed <N>${NC}                       random seed (default: 42);"
-    echo -e "    ${OPT}--dry-run${NC}                        preview without writing dst;"
-    echo -e "  ${CMD}data flatten${OPT} <src> <dst>${NC}  pool an already-split dataset back to flat;"
-    echo -e "    ${OPT}--dry-run${NC}                        preview without writing dst;"
+    echo -e "  ${CMD}data|train|evaluate|predict|runs|augmentations|serve${NC}  pass through to the CLI"
     echo -e ""
-    echo -e "${BOLD}Training Commands:${NC}"
-    echo -e "  ${CMD}train${OPT} <data_dir> [opts]${NC}      run training;"
-    echo -e "    ${OPT}--output <dir>${NC}             experiment output directory;"
-    echo -e "    ${OPT}--from <exp_dir>${NC}           load config from existing experiment;"
-    echo -e "    ${OPT}--backbone <name>${NC}          backbone name (efficientnet_b0..b5, resnet_18, resnet_50;"
-    echo -e "                                     default: efficientnet_b0 for classification, resnet_18 for detection);"
-    echo -e "    ${OPT}--epochs <N>${NC}               number of training epochs;"
-    echo -e "    ${OPT}--lr <float>${NC}               learning rate;"
-    echo -e "    ${OPT}--optimizer <type[:params]>${NC}  optimizer: adam (default) | sgd | adam:weight_decay=1e-4 | sgd:weight_decay=1e-4,momentum=0.9;"
-    echo -e "    ${OPT}--lr-scheduler <params>${NC}    LR scheduler: patience=5 | patience=5,factor=0.5,min=1e-7;"
-    echo -e "    ${OPT}--batch-size <N>${NC}           batch size;"
-    echo -e "    ${OPT}--augmentation <file>${NC}      augmentation YAML file;"
-    echo -e "    ${OPT}--fine-tune-from-layer <N>${NC}  unfreeze backbone from layer N (0=frozen, -1=all);"
-    echo -e "    ${OPT}--loss <type[:params]>${NC}      loss function: crossentropy (default) | focal | focal:gamma=2.0 | focal:gamma=2.0,label_smoothing=0.1;"
-    echo -e "    ${OPT}--val-split <float>${NC}        fraction of train used for val when no val/ dir exists (default: 0.2);"
-    echo -e "    ${OPT}--resume <checkpoint>${NC}      resume from a checkpoint; use with --from to continue two-phase training (--epochs N means end at epoch N, not N more epochs);"
-    echo -e "  ${CMD}evaluate${OPT} <experiment> [opts]${NC}  evaluate a trained model (bare name or full path);"
-    echo -e "    ${OPT}--split val|test${NC}           dataset split to evaluate on;"
-    echo -e "    ${OPT}--output-dir <path>${NC}        where to write eval outputs;"
-    echo -e "  ${CMD}predict${OPT} <experiment> <image-or-folder> [opts]${NC}  run inference on image(s);"
-    echo -e "    ${OPT}--format <fmt>${NC}             keras (default) | onnx | tflite | plan | all;"
-    echo -e ""
-    echo -e "${BOLD}Augmentation Commands:${NC}"
-    echo -e "  ${CMD}augmentations list${NC}           list all available transforms with defaults;"
-    echo -e "  ${CMD}augmentations example${OPT} [preset] [--output file]${NC}"
-    echo -e "    ${OPT}preset${NC}                     light | standard | heavy | reference;"
-    echo -e ""
-    echo -e "${BOLD}Experiment Commands:${NC}"
-    echo -e "  ${CMD}runs list${OPT} [dir] [--sort val_accuracy|date|backbone]${NC}"
-    echo -e "  ${CMD}runs compare${OPT} <experiment_a> <experiment_b>${NC}"
-    echo -e "  ${CMD}runs best${OPT} [dir] [--metric val_accuracy|val_loss|test_accuracy]${NC}"
-    echo -e "  ${CMD}runs rename${OPT} <experiment> <new-name>${NC}"
-    echo -e "  ${CMD}runs export${OPT} <experiment> --format tflite|onnx|plan|hailo [--quantize none|float16|int8] [--output dir] [--calib-total N] [--calib-strategy stratified|proportional|equal|diverse]${NC}"
-    echo -e "  ${CMD}runs delete${OPT} <experiment> [--export <subfolder>] [--yes]${NC}"
-    echo -e ""
-    echo -e "${BOLD}WebUI Commands:${NC}"
-    echo -e "  ${CMD}serve${OPT} [opts]${NC}                launch the CVBench WebUI;"
-    echo -e "    ${OPT}--host <host>${NC}              bind host (default: 127.0.0.1);"
-    echo -e "    ${OPT}--port <N>${NC}                 bind port (default: 8000);"
-    echo -e ""
-    echo -e "${BOLD}Test Commands:${NC}"
-    echo -e "  ${CMD}test${OPT} [opts]${NC}                 run test suite;"
-    echo -e "    ${OPT}-m <mark>${NC}                 run tests matching a mark (e.g. -m 'not tf');"
-    echo -e "    ${OPT}-c${NC}                        generate code coverage summary;"
-    echo -e ""
-    echo -e "${BOLD}Release Commands:${NC}"
-    echo -e "  ${CMD}release${OPT} [--dry-run]${NC}          preview next version bump (CI handles the actual bump);"
+    if [ -x .venv/bin/commands ]; then
+        .venv/bin/commands
+    else
+        echo -e "Run ${CMD}./helper.sh init${NC} first, then ${CMD}./helper.sh <command> --help${NC}"
+        echo -e "or ${CMD}commands${NC} inside the container for the full command list."
+    fi
+}
+
+action_docs(){
+    action_activate
+    python - <<'EOF'
+import re, pathlib
+from cvbench.cli.overview import render_markdown, render_quickstart_markdown
+
+readme = pathlib.Path("README.md")
+text = readme.read_text()
+new = text
+changed = []
+missing = []
+for marker, block in (
+    ("QUICKSTART", render_quickstart_markdown()),
+    ("CLI REFERENCE", render_markdown()),
+):
+    pattern = rf"(<!-- BEGIN {marker} -->\n).*?(\n<!-- END {marker} -->)"
+    if not re.search(pattern, new, flags=re.DOTALL):
+        missing.append(marker)
+        continue
+    updated = re.sub(pattern, lambda m: m.group(1) + block + m.group(2), new, flags=re.DOTALL)
+    if updated != new:
+        changed.append(marker)
+    new = updated
+
+if missing:
+    print(f"markers <!-- BEGIN/END {'/'.join(missing)} --> not found in README.md")
+if changed:
+    readme.write_text(new)
+    print(f"README.md regenerated: {', '.join(changed)}.")
+elif not missing:
+    print("README.md already up to date.")
+EOF
 }
 
 action_init(){
@@ -153,7 +124,7 @@ action_augmentations(){
 
 action_serve(){
     action_activate
-    python -c "from cvbench.web.app import main; main()" "$@"
+    serve "$@"
 }
 
 action_test(){
@@ -212,6 +183,9 @@ case $1 in
         ;;
     release)
         action_release ${@:2}
+        ;;
+    docs)
+        action_docs
         ;;
     *)
         action_usage

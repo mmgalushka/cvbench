@@ -4,6 +4,8 @@ import sys
 import click
 import yaml
 
+from cvbench.cli import _help
+
 
 # ---------------------------------------------------------------------------
 # Keras transform catalogue (name → default params)
@@ -257,18 +259,30 @@ def _reference_yaml() -> str:
 # CLI
 # ---------------------------------------------------------------------------
 
-@click.group()
+@_help.group(
+    examples=[
+        ("augmentations list", "see every transform and its default parameters"),
+        ("augmentations example standard --output workspace/aug.yaml",
+         "write a ready-to-edit augmentation spec"),
+    ],
+)
 def augmentations():
     """Discover and generate augmentation configurations."""
 
 
-@augmentations.command("list")
+@augmentations.command(
+    "list",
+    short_help="List every transform with its default parameters.",
+    examples=[("augmentations list", "Print the full transform catalogue")],
+    see_also=[("augmentations example reference", "a commented lookup sheet of all of them")],
+)
 def list_transforms():
     """List all available transforms with their default parameters."""
-    w = 55
-    print("━" * w)
-    print(" Available transforms")
-    print("━" * w)
+    from cvbench.core import _fmt
+
+    print(_fmt.rule(thick=True))
+    print(f" {_fmt.bold('Available transforms')}")
+    print(_fmt.rule(thick=True))
     print(" Keras layers:")
     for name, defaults in _KERAS_TRANSFORMS:
         params_str = _fmt_params(defaults)
@@ -278,10 +292,19 @@ def list_transforms():
     for name, defaults in _aug_function_defaults():
         params_str = _fmt_params(defaults)
         print(f"   {name:<26}  {params_str}")
-    print("━" * w)
+    print(_fmt.rule(thick=True))
 
 
-@augmentations.command("example")
+@augmentations.command(
+    "example",
+    short_help="Generate a preset augmentation config (light/standard/heavy/reference).",
+    examples=[
+        ("augmentations example", "List the presets with a one-line description of each"),
+        ("augmentations example standard", "Print the 'standard' preset to stdout"),
+        ("augmentations example heavy --output workspace/aug.yaml", "Save a preset to a file"),
+    ],
+    see_also=[("train data/ --augmentation workspace/aug.yaml", "train with the spec you saved")],
+)
 @click.argument("preset", required=False,
                 type=click.Choice(["light", "standard", "heavy", "reference"]))
 @click.option("--output", "output_file", default=None, type=click.Path(),
@@ -292,16 +315,17 @@ def example(preset, output_file):
     Available presets: light, standard, heavy, reference.
     Run without a preset name to see descriptions.
     """
+    from cvbench.core import _fmt
+
     if preset is None:
-        w = 55
-        print("━" * w)
-        print(" Augmentation presets")
-        print("━" * w)
+        print(_fmt.rule(thick=True))
+        print(f" {_fmt.bold('Augmentation presets')}")
+        print(_fmt.rule(thick=True))
         for name, data in _PRESETS.items():
             print(f"   {name:<12}  {data['description']}")
         print(f"   {'reference':<12}  All transforms commented out — a lookup sheet.")
-        print("━" * w)
-        print(f" Usage: augmentations example <preset> [--output FILE]")
+        print(_fmt.rule(thick=True))
+        print(" Usage: augmentations example <preset> [--output FILE]")
         return
 
     content = _preset_to_yaml(preset)

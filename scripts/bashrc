@@ -14,68 +14,11 @@ echo -e "| |___  \\ V / | |_) |  __/ | | | (__| | | |"
 echo -e " \\____|  \\_/  |____/ \\___|_| |_|\\___|_| |_|"
 echo    "Computer Vision Training Sandbox"
 echo
-echo    "  Type 'commands' for a full list of available commands."
-echo
-echo -e "  \033[1mSession shortcuts (tmux):\033[0m"
-echo    "    tm -n <name>   new session"
-echo    "    tm -c <name>   connect / attach"
-echo    "    tm -d <name>   delete session"
-echo    "    tm -l          list sessions"
+echo    "  Type 'commands' to see everything you can do here."
 echo
 
-# ── commands — full CLI reference ─────────────────────────────────────────
-commands() {
-    local BOLD="\033[1;39m"
-    local CMD="\033[1;36m"
-    local OPT="\033[0;36m"
-    local NC="\033[m"
-
-    echo
-    echo -e "${BOLD}Data Commands:${NC}"
-    echo -e "  ${CMD}generate${OPT} [output] [opts]${NC}          generate synthetic shapes dataset;"
-    echo -e "    ${OPT}output${NC}                            destination dir (default: data/synthetic);"
-    echo -e "    ${OPT}--train/--val/--test <N>${NC}          images per class per split;"
-    echo -e "    ${OPT}--image-size <N>${NC}                  image size in pixels (default: 64);"
-    echo -e "    ${OPT}--overwrite${NC}                       replace existing output directory;"
-    echo
-    echo -e "${BOLD}Training Commands:${NC}"
-    echo -e "  ${CMD}train${OPT} <data_dir> [opts]${NC}            run training;"
-    echo -e "    ${OPT}--output <dir>${NC}                    experiment output directory;"
-    echo -e "    ${OPT}--from <exp_dir>${NC}                  load config from existing experiment;"
-    echo -e "    ${OPT}--backbone <name>${NC}                 backbone (default: efficientnet_b0);"
-    echo -e "    ${OPT}--epochs <N>${NC}                      number of training epochs;"
-    echo -e "    ${OPT}--lr <float>${NC}                      learning rate;"
-    echo -e "    ${OPT}--batch-size <N>${NC}                  batch size;"
-    echo -e "    ${OPT}--augmentation <file>${NC}             augmentation YAML file;"
-    echo -e "    ${OPT}--resume <checkpoint>${NC}             resume from a checkpoint;"
-    echo -e "  ${CMD}evaluate${OPT} <run_dir> [opts]${NC}          evaluate a trained model;"
-    echo -e "    ${OPT}--split val|test${NC}                  dataset split to evaluate on;"
-    echo -e "    ${OPT}--output-dir <path>${NC}               where to write eval outputs;"
-    echo -e "  ${CMD}predict${OPT} [opts]${NC}                     run inference on image(s);"
-    echo -e "    ${OPT}--checkpoint <path>${NC}               path to .keras checkpoint;"
-    echo -e "    ${OPT}--input <path>${NC}                    image file or folder;"
-    echo
-    echo -e "${BOLD}Augmentation Commands:${NC}"
-    echo -e "  ${CMD}augmentations list${NC}                  list all available transforms with defaults;"
-    echo -e "  ${CMD}augmentations example${OPT} [preset] [--output file]${NC}"
-    echo -e "    ${OPT}preset${NC}                            light | standard | heavy | reference;"
-    echo
-    echo -e "${BOLD}Experiment Commands:${NC}"
-    echo -e "  ${CMD}runs list${OPT}    [dir] [--sort val_accuracy|date|backbone]${NC}"
-    echo -e "  ${CMD}runs compare${OPT} <run_a_dir> <run_b_dir>${NC}"
-    echo -e "  ${CMD}runs best${OPT}    [dir] [--metric val_accuracy|val_loss|test_accuracy]${NC}"
-    echo
-    echo -e "${BOLD}Monitoring:${NC}"
-    echo -e "  ${CMD}tensorboard${OPT} --logdir experiments/ --host 0.0.0.0 --port 6006${NC}"
-    echo -e "  ${OPT}→ http://<server-ip>:6006${NC}"
-    echo
-    echo -e "${BOLD}Session (tmux):${NC}"
-    echo -e "  ${CMD}tm -n${OPT} <name>${NC}   new session"
-    echo -e "  ${CMD}tm -c${OPT} <name>${NC}   connect / attach"
-    echo -e "  ${CMD}tm -d${OPT} <name>${NC}   delete session"
-    echo -e "  ${CMD}tm -l${NC}          list sessions"
-    echo
-}
+# The `commands` overview is generated from the CLI itself — see
+# cvbench.cli.overview. It is installed as a console script by `pip install`.
 
 # ── tm — tmux session manager ─────────────────────────────────────────────
 tm() {

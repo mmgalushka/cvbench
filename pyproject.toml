@@ -51,7 +51,8 @@ predict      = "cvbench.cli.predict:predict"
 runs         = "cvbench.cli.runs:runs"
 data          = "cvbench.cli.data:data"
 augmentations = "cvbench.cli.augmentations:augmentations"
-serve         = "cvbench.web.app:main"
+serve         = "cvbench.cli.serve:serve"
+commands      = "cvbench.cli.overview:commands"
 
 [tool.setuptools.packages.find]
 where = ["src"]

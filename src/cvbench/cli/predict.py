@@ -1,9 +1,24 @@
 import click
 
+from cvbench.cli import _help
 from cvbench.core import _fmt
 
 
-@click.command()
+@_help.command(
+    examples=[
+        ("predict cls_effnet_b0_2026_01_21 photo.jpg",
+         "Classify one image with the trained Keras model"),
+        ("predict cls_effnet_b0_2026_01_21 images/ --format tflite",
+         "Run a folder through the exported TFLite model"),
+        ("predict cls_effnet_b0_2026_01_21 images/ --format all",
+         "Compare every exported format side by side to spot conversion drift"),
+        ("predict --format plan",
+         "Print the Jetson inference script (no run or images needed)"),
+    ],
+    see_also=[
+        ("runs export <run> --format tflite", "create the tflite/onnx model first"),
+    ],
+)
 @click.argument("experiment", required=False, default=None)
 @click.argument(
     "input_path", metavar="INPUT", type=click.Path(exists=True), required=False
@@ -77,7 +92,7 @@ def predict(experiment, input_path, fmt):
         print()
         print(
             _fmt.dim(
-                f" plan: Jetson only — for more information use: cvbench predict --format plan"
+                " plan: Jetson only — for more information use: predict --format plan"
             )
         )
 
@@ -133,7 +148,7 @@ def _print_plan_predict(run_name: str) -> None:
     print()
     print(f" To get full deployment instructions run:")
     print()
-    print(f"   cvbench runs export {run_name} --format plan")
+    print(f"   runs export {run_name} --format plan")
     print()
     print(_fmt.rule())
     print(

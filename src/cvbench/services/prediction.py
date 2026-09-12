@@ -175,7 +175,7 @@ def run_experiment_prediction(
         if path is None:
             formats_skipped.append({
                 "format": f,
-                "reason": f"not exported — run: cvbench runs export {run_dir.name} --format {f}",
+                "reason": f"not exported — run: runs export {run_dir.name} --format {f}",
             })
             continue
         try:

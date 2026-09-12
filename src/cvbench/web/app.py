@@ -50,7 +50,7 @@ Running (once web extras are installed)
 ---------------------------------------
     pip install cvbench[web]
     serve                             # http://localhost:8000
-    serve --host 0.0.0.0 --port 8080
+    serve --host 0.0.0.0 --port 8080  # see: serve --help
 """
 
 from pathlib import Path
@@ -84,28 +84,7 @@ def create_app():
 
 
 def main():
-    """CLI entry point: cvbench-web."""
-    import argparse
+    """Backwards-compatible shim — the ``serve`` command now lives in cvbench.cli.serve."""
+    from cvbench.cli.serve import serve
 
-    try:
-        import uvicorn
-    except ImportError as exc:
-        raise SystemExit(
-            "WebUI dependencies are not installed. Run: pip install cvbench[web]"
-        ) from exc
-
-    import os
-
-    parser = argparse.ArgumentParser(description="CVBench WebUI server")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", default=8000, type=int)
-    args = parser.parse_args()
-
-    cvbench_url = os.environ.get("CVBENCH_URL")
-    if cvbench_url:
-        print(f"CVBench WebUI → {cvbench_url}")
-    else:
-        print(f"CVBench WebUI → http://{args.host}:{args.port}")
-        print("  Set CVBENCH_URL to override (e.g. when accessing from another machine)")
-
-    uvicorn.run("cvbench.web.app:create_app", factory=True, host=args.host, port=args.port)
+    serve()

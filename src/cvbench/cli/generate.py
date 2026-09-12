@@ -1,7 +1,7 @@
-"""``cvbench data generate`` — synthetic geometric shapes dataset generator.
+"""``data generate`` — synthetic geometric shapes dataset generator.
 
 Produces a 4-class grayscale image dataset (circle, square, triangle, star)
-ready to drop into the cvbench data/ folder and train immediately. The actual
+ready to drop into a data/ folder and train immediately. The actual
 geometry and file-writing logic live in ``cvbench.datasets`` — this module is
 Click plumbing only.
 
@@ -19,11 +19,25 @@ from pathlib import Path
 
 import click
 
+from cvbench.cli import _help
 from cvbench.datasets.shapes import CLASSES
 from cvbench.datasets.synth import FORMATS, generate_split, generate_yolo_split, write_data_yaml
 
 
-@click.command()
+@_help.command(
+    examples=[
+        ("data generate",
+         "4-class classification dataset in data/synthetic/ (200/50/50 per class)"),
+        ("data generate data/shapes --train 500 --image-size 96",
+         "Bigger dataset at a custom path and image size"),
+        ("data generate data/det --format yolo --max-objects 5",
+         "YOLO-format detection dataset with up to 5 objects per image"),
+    ],
+    see_also=[
+        ("train data/synthetic --epochs 5", "train a model on it"),
+        ("data explore data/synthetic", "check class balance and brightness"),
+    ],
+)
 @click.argument("output", default="data/synthetic")
 @click.option("--format", "fmt", type=click.Choice(FORMATS), default="classification",
               show_default=True,
@@ -57,15 +71,16 @@ def generate(output, fmt, image_size, n_train, n_val, n_test, max_objects, seed,
                 f"Output directory '{out}' already exists. Use --overwrite to replace it."
             )
 
+    from cvbench.core import _fmt
+
     rng = random.Random(seed)
     is_yolo = fmt == "yolo"
     per_split = 1 if is_yolo else len(CLASSES)
     total = (n_train + n_val + n_test) * per_split
 
-    w = 55
-    print("━" * w)
-    print(" CVBench — generate synthetic dataset")
-    print("━" * w)
+    print(_fmt.rule(thick=True))
+    print(f" {_fmt.bold('CVBench — data generate')}")
+    print(_fmt.rule(thick=True))
     print(f" Format     : {fmt}")
     print(f" Classes    : {', '.join(CLASSES)}")
     print(f" Image size : {image_size}×{image_size}  grayscale")
@@ -79,7 +94,7 @@ def generate(output, fmt, image_size, n_train, n_val, n_test, max_objects, seed,
         print(f" Val        : {n_val}  per class  ({n_val  * len(CLASSES)} total)")
         print(f" Test       : {n_test}  per class  ({n_test * len(CLASSES)} total)")
     print(f" Output     : {out}/")
-    print("━" * w)
+    print(_fmt.rule(thick=True))
 
     written_splits = []
     for split, n in [("train", n_train), ("val", n_val), ("test", n_test)]:
@@ -98,6 +113,6 @@ def generate(output, fmt, image_size, n_train, n_val, n_test, max_objects, seed,
         write_data_yaml(out, written_splits)
         print(f" Wrote {out / 'data.yaml'}")
 
-    print("━" * w)
+    print(_fmt.rule(thick=True))
     print(f" {total} images written to {out}/")
-    print("━" * w)
+    print(_fmt.rule(thick=True))
