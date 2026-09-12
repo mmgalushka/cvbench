@@ -1,5 +1,11 @@
 # CVBench
 
+[![CI](https://github.com/mmgalushka/cvbench/actions/workflows/ci.yaml/badge.svg)](https://github.com/mmgalushka/cvbench/actions/workflows/ci.yaml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
+[![Docker Pulls](https://img.shields.io/docker/pulls/mmgalushka/cvbench.svg)](https://hub.docker.com/r/mmgalushka/cvbench)
+[![GitHub release](https://img.shields.io/github/v/release/mmgalushka/cvbench)](https://github.com/mmgalushka/cvbench/releases)
+
 GPU-enabled computer vision training sandbox. Keras + TensorFlow + JupyterLab in one container.
 
 ## Prerequisites
