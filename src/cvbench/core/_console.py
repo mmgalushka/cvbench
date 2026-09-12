@@ -22,7 +22,7 @@ import re
 import shutil
 import sys
 from collections.abc import Iterable, Sequence
-from typing import Any
+from typing import Any, Literal
 
 from rich import box
 from rich.console import Console
@@ -36,7 +36,11 @@ def _color_enabled() -> bool:
     return sys.stdout.isatty()
 
 
-def _make_console(*, color_system: str = "standard", **kwargs: Any) -> Console:
+def _make_console(
+    *,
+    color_system: Literal["auto", "standard", "256", "truecolor", "windows"] = "standard",
+    **kwargs: Any,
+) -> Console:
     """A fresh Console reflecting the *current* NO_COLOR/TTY state.
 
     Built fresh per call (cheap) rather than cached at import time, so
@@ -136,7 +140,7 @@ def info(msg: str) -> None:
 
 
 def table(
-    columns: Sequence[str | tuple[str, str]],
+    columns: Sequence[str | tuple[str, Literal["left", "center", "right"]]],
     rows: Iterable[Iterable[Any]],
     *,
     title: str | None = None,

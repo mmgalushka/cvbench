@@ -61,7 +61,7 @@ def aug_net(
     stripe: str      = "none",
     num_stripes: int = 4,
     stripe_fill: float = 50.0,
-    seed: int        = None,
+    seed: int | None = None,
 ) -> np.ndarray:
     """Overlay a diagonal fishing-net line pattern on a grayscale spectrogram.
 

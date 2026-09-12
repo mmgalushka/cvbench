@@ -1,11 +1,13 @@
 import random
+from collections.abc import Callable
+from typing import Any
 
 import keras
 import numpy as np
 
 from cvbench.core.config import OneOfConfig
 
-_KERAS_MAP = {
+_KERAS_MAP: dict[str, tuple[type, dict[str, Any]]] = {
     "keras_flip":        (keras.layers.RandomFlip,        {"mode": "horizontal"}),
     "keras_rotation":    (keras.layers.RandomRotation,    {"factor": 0.1}),
     "keras_zoom":        (keras.layers.RandomZoom,        {"height_factor": 0.1}),
@@ -17,7 +19,7 @@ _KERAS_MAP = {
 }
 
 
-def build_aug_pipeline(transforms: list) -> callable:
+def build_aug_pipeline(transforms: list) -> Callable:
     """
     Build an augmentation pipeline from a list of TransformConfig / OneOfConfig objects.
 
@@ -121,7 +123,7 @@ def build_custom_aug_fn(transforms: list):
     return apply
 
 
-def _resolve(name: str, params: dict) -> callable:
+def _resolve(name: str, params: dict) -> Callable:
     if name in _KERAS_MAP:
         cls, defaults = _KERAS_MAP[name]
         merged = {**defaults, **params}

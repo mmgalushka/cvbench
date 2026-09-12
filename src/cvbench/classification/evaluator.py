@@ -80,15 +80,15 @@ def evaluate(
     n_batches = test_ds.cardinality().numpy()
     total = int(n_batches) if n_batches > 0 else None
 
-    y_true, y_pred, all_preds = [], [], []
+    y_true_list, y_pred_list, all_preds = [], [], []
     for images, labels in tqdm.tqdm(test_ds, total=total, desc=" Evaluating", unit="batch"):
         preds = model.predict(images, verbose=0)
         all_preds.append(preds)
-        y_pred.extend(np.argmax(preds, axis=1))
-        y_true.extend(np.argmax(labels.numpy(), axis=1))
+        y_pred_list.extend(np.argmax(preds, axis=1))
+        y_true_list.extend(np.argmax(labels.numpy(), axis=1))
 
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
+    y_true = np.array(y_true_list)
+    y_pred = np.array(y_pred_list)
     all_preds_np = np.concatenate(all_preds, axis=0)
 
     n = len(y_true)

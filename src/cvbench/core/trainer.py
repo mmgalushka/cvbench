@@ -161,6 +161,8 @@ def train(
     callbacks.append(_GracefulStop())
 
     # Steps per epoch (needed because train_ds uses repeat())
+    if num_train_samples is None:
+        raise ValueError("train() requires num_train_samples (train_ds uses repeat())")
     import math
     steps_per_epoch = math.ceil(num_train_samples / cfg.data.batch_size)
 

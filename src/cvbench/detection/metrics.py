@@ -27,6 +27,8 @@ rather than the headline.
 """
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 Box = tuple[float, float, float, float]  # normalized top-left (x, y, w, h)
@@ -465,7 +467,7 @@ def detection_class_breakdown(
     def _name(cid: int) -> str:
         return class_names[cid] if 0 <= cid < len(class_names) else str(cid)
 
-    rows = {
+    rows: dict[str, dict[str, Any]] = {
         n: {k: 0 for k in ("instances", *_GT_OUTCOMES)} | {"confused_as": {}}
         for n in class_names
     }
@@ -578,14 +580,15 @@ def compute_detection_metrics(
     ap75_by_class, _ = _per_class_ap(ground_truths, predictions, class_names, 0.75)
 
     prf = _per_class_from_confusion(cm, class_names)
-    per_class = {
-        name: {
-            "ap": round(ap50_by_class[name], 4) if ap50_by_class[name] is not None else None,
-            "ap75": round(ap75_by_class[name], 4) if ap75_by_class[name] is not None else None,
+    per_class = {}
+    for name in class_names:
+        ap50 = ap50_by_class[name]
+        ap75 = ap75_by_class[name]
+        per_class[name] = {
+            "ap": round(ap50, 4) if ap50 is not None else None,
+            "ap75": round(ap75, 4) if ap75 is not None else None,
             **prf[name],
         }
-        for name in class_names
-    }
 
     counts = {
         "tp": int(cm[:n, :n].sum()),

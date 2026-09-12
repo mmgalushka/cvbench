@@ -32,7 +32,7 @@ def _parse_optimizer(value: str | None) -> OptimizerConfig | None:
         return None
     if ":" not in value:
         opt_type = value.strip()
-        params = {}
+        params: dict[str, str] = {}
     else:
         opt_type, params_str = value.split(":", 1)
         params = {}

@@ -163,7 +163,7 @@ def _colorize(cam: np.ndarray, size: int) -> np.ndarray:
 
     cam_uint8 = (cam * 255).astype(np.uint8)
     cam_img = Image.fromarray(cam_uint8, mode="L").resize(
-        (size, size), Image.BILINEAR
+        (size, size), Image.Resampling.BILINEAR
     )
     cam_arr = np.array(cam_img, dtype=np.float32) / 255.0  # [0,1]
 

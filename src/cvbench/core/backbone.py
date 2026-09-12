@@ -6,6 +6,8 @@ in the task package (e.g. ``cvbench.classification.model``,
 """
 from __future__ import annotations
 
+from typing import Any
+
 import keras
 import keras_hub
 
@@ -68,7 +70,7 @@ def _load_backbone(cfg: CVBenchConfig, name: str | None = None) -> keras.Model:
             f"Valid options: {', '.join(_BACKBONE_PRESETS)}"
         )
     backbone_cls, preset = entry
-    kwargs = {"load_weights": cfg.model.weights != "none"}
+    kwargs: dict[str, Any] = {"load_weights": cfg.model.weights != "none"}
     if name is not None:
         kwargs["name"] = name
     backbone = backbone_cls.from_preset(preset, **kwargs)

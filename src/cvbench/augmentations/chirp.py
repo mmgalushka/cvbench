@@ -24,7 +24,7 @@ def aug_chirp_artifacts(
     cluster_spread: float = 15.0,
     justification: str = "random",
     num_anchors: int = 1,
-    seed: int = None,
+    seed: int | None = None,
 ) -> np.ndarray:
     """Overlay horizontal chirp artifacts onto a spectrogram image using screen blending."""
     if justification not in (*_JUSTIFY_MODES, "random"):

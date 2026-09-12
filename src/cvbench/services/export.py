@@ -134,7 +134,7 @@ def _print_plan_instructions(run_name: str, onnx_exists: bool) -> None:
 
 def _collect_images(directory: Path) -> list[Path]:
     exts = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.JPG", "*.JPEG", "*.PNG")
-    files = []
+    files: list[Path] = []
     for ext in exts:
         files.extend(directory.rglob(ext))
     return files
@@ -182,7 +182,7 @@ def _build_calibration_set(
             if n_clusters < len(files):
                 feats = []
                 for p in files:
-                    img = Image.open(str(p)).convert("L").resize((8, 8), Image.LANCZOS)
+                    img = Image.open(str(p)).convert("L").resize((8, 8), Image.Resampling.LANCZOS)
                     feats.append(np.array(img, dtype=np.float32).flatten() / 255.0)
                 feats_np = np.stack(feats)
                 labels = MiniBatchKMeans(
@@ -203,26 +203,26 @@ def _build_calibration_set(
     elif strategy == "diverse":
         from sklearn.cluster import MiniBatchKMeans
 
-        all_files: list[Path] = []
+        flat_files: list[Path] = []
         for files in per_class.values():
-            all_files.extend(files)
+            flat_files.extend(files)
 
         # Extract compact feature: 8×8 grayscale thumbnail, flattened and normalised.
         features = []
-        for p in all_files:
-            img = Image.open(str(p)).convert("L").resize((8, 8), Image.LANCZOS)
+        for p in flat_files:
+            img = Image.open(str(p)).convert("L").resize((8, 8), Image.Resampling.LANCZOS)
             features.append(np.array(img, dtype=np.float32).flatten() / 255.0)
         features_np = np.stack(features)
 
-        N_CLUSTERS = min(32, len(all_files))
+        N_CLUSTERS = min(32, len(flat_files))
         kmeans = MiniBatchKMeans(n_clusters=N_CLUSTERS, random_state=42, n_init=3)
         labels = kmeans.fit_predict(features_np)
 
-        clusters: list[list[Path]] = [[] for _ in range(N_CLUSTERS)]
-        for path, label in zip(all_files, labels, strict=True):
-            clusters[label].append(path)
+        buckets: list[list[Path]] = [[] for _ in range(N_CLUSTERS)]
+        for path, label in zip(flat_files, labels, strict=True):
+            buckets[label].append(path)
 
-        non_empty = [c for c in clusters if c]
+        non_empty = [c for c in buckets if c]
         per_cluster_quota = max(1, round(total / len(non_empty)))
         for cluster in non_empty:
             take = min(per_cluster_quota, len(cluster))

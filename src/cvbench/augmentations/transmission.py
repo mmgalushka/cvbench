@@ -10,7 +10,7 @@ def aug_rf_transmission(
     ripple: float = 0.05,
     drift_speed: float = 0.02,
     noise_floor: float = 0.08,
-    seed: int = None,
+    seed: int | None = None,
 ) -> np.ndarray:
     """
     Inject a synthetic RF transmission into the spectrogram image.

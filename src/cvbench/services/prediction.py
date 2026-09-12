@@ -339,10 +339,10 @@ def _build_detection_result(preds, cfg) -> dict:
 
 
 def _build_result(probs: np.ndarray, class_names: list[str]) -> dict:
-    top_k = sorted(
-        [{"class_name": class_names[i], "confidence": float(probs[i])} for i in range(len(probs))],
-        key=lambda x: -x["confidence"],
-    )
+    entries: list[dict[str, str | float]] = [
+        {"class_name": class_names[i], "confidence": float(probs[i])} for i in range(len(probs))
+    ]
+    top_k = sorted(entries, key=lambda x: x["confidence"], reverse=True)
     return {
         "class_name": top_k[0]["class_name"],
         "class_index": int(np.argmax(probs)),

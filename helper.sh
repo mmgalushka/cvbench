@@ -21,6 +21,7 @@ action_usage(){
     echo -e "  ${CMD}init${NC}                 create .venv and install all dependencies"
     echo -e "  ${CMD}test${OPT} [-m mark] [-c]${NC}  run the test suite (-c adds a coverage summary)"
     echo -e "  ${CMD}lint${OPT} [--fix]${NC}       run ruff over the codebase (--fix applies safe fixes)"
+    echo -e "  ${CMD}mypy${NC}                 run mypy type checks over src/"
     echo -e "  ${CMD}release${OPT} [--dry-run]${NC}  preview the next version bump (CI does the real one)"
     echo -e "  ${CMD}docs${NC}                 regenerate the CLI reference block in README.md"
     echo -e ""
@@ -146,6 +147,11 @@ action_lint(){
     ruff check . "$@"
 }
 
+action_mypy(){
+    action_activate
+    mypy src "$@"
+}
+
 action_release(){
     action_activate
     if [[ "$1" == "--dry-run" ]]; then
@@ -189,6 +195,9 @@ case $1 in
         ;;
     lint)
         action_lint ${@:2}
+        ;;
+    mypy)
+        action_mypy ${@:2}
         ;;
     release)
         action_release ${@:2}
