@@ -54,8 +54,8 @@ def test_hashify_names_are_16_hex_chars(cls_root, tmp_path):
 
 
 def test_hashify_collision_gets_numeric_suffix(tmp_path):
-    from PIL import Image
     import numpy as np
+    from PIL import Image
 
     src = tmp_path / "src" / "dog"
     src.mkdir(parents=True)
@@ -104,7 +104,7 @@ def test_hashify_src_untouched(cls_root, tmp_path):
 
 def test_hash_array_matches_content_hash_prefix(cls_root):
     img = next(cls_root.rglob("*.jpg"))
-    from PIL import Image
     import numpy as np
+    from PIL import Image
     full = hashify_mod.hash_array(np.array(Image.open(img).convert("RGB")))
     assert hashify_mod.content_hash(img) == full[:16]

@@ -98,7 +98,7 @@ def decode_batch(
     batch = np.asarray(preds[0]).shape[0]
     per_image: list[list[dict]] = [[] for _ in range(batch)]
 
-    for p, scale_anchors, _stride in zip(preds, anchors, strides):
+    for p, scale_anchors, _stride in zip(preds, anchors, strides, strict=True):
         p = np.asarray(p)
         cx, cy, w, h, score, class_id = _decode_scale(p, scale_anchors, num_classes)
 

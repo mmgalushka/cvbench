@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from cvbench.core.runs import resolve_run_dir
 from cvbench.core.config import load_config
+from cvbench.core.runs import resolve_run_dir
 
 router = APIRouter()
 
@@ -22,7 +22,7 @@ def gradcam(name: str, body: GradCamRequest):
     try:
         run_dir = resolve_run_dir(name)
     except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found")
+        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
 
     cfg = load_config(run_dir)
 
@@ -32,7 +32,7 @@ def gradcam(name: str, body: GradCamRequest):
     try:
         img_path.relative_to(test_dir)
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Access denied") from None
 
     if not img_path.exists():
         raise HTTPException(status_code=404, detail=f"Image not found: {body.image_path}")
@@ -50,7 +50,7 @@ def gradcam(name: str, body: GradCamRequest):
             class_index=body.class_index,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return JSONResponse({"heatmap_b64": heatmap_b64})
 

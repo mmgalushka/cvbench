@@ -120,7 +120,7 @@ def evaluate(
     # Confusion matrix
     n_cls = len(class_names)
     cm = np.zeros((n_cls, n_cls), dtype=int)
-    for t, p in zip(y_true, y_pred):
+    for t, p in zip(y_true, y_pred, strict=True):
         cm[t, p] += 1
 
     # Samples per confusion matrix cell

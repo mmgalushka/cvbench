@@ -16,7 +16,8 @@ it here.
 
 try:
     from fastapi import APIRouter
-    from cvbench.web.api import runs, explain, prediction, export, datasets
+
+    from cvbench.web.api import datasets, explain, export, prediction, runs
 
     router = APIRouter()
     router.include_router(runs.router,        tags=["runs"])

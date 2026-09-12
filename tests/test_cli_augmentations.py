@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -189,13 +190,13 @@ def test_edit_writes_back_editor_output():
 def test_edit_no_changes_leaves_file_untouched():
     with _checked(["keras_flip"]):
         _run(["generate", "--name", "untouched"])
-    before = open("workspace/augmentations/untouched.yaml").read()
+    before = Path("workspace/augmentations/untouched.yaml").read_text()
 
     with mock.patch.object(aug_mod.click, "edit", return_value=None):
         result = _run(["edit", "untouched"])
     assert result.exit_code == 0
     assert "No changes made" in result.output
-    assert open("workspace/augmentations/untouched.yaml").read() == before
+    assert Path("workspace/augmentations/untouched.yaml").read_text() == before
 
 
 def test_edit_missing_name_reports_friendly_error():

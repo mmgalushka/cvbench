@@ -4,7 +4,6 @@ import pytest
 from cvbench.core.augmentations_store import (
     list_saved_augmentations,
     resolve_aug_file,
-    save_augmentation_config,
     validate_aug_name,
 )
 from cvbench.core.config import load_aug_file

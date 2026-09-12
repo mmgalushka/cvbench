@@ -1,7 +1,6 @@
 """Exports API — list, trigger, download, and delete model exports."""
 
 import asyncio
-import io
 import json
 import os
 import shutil
@@ -10,7 +9,7 @@ import threading
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from cvbench.core.runs import resolve_run_dir
@@ -57,7 +56,7 @@ def list_exports(name: str):
     try:
         run_dir = Path(resolve_run_dir(name))
     except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found")
+        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
     return _scan_exports(run_dir)
 
 
@@ -73,16 +72,22 @@ async def create_export(name: str, req: ExportRequest):
     if req.format not in _VALID_FORMATS:
         raise HTTPException(status_code=400, detail=f"Invalid format. Choose from: {', '.join(sorted(_VALID_FORMATS))}")
     if req.format != "hailo" and req.quantize not in _VALID_QUANTIZE:
-        raise HTTPException(status_code=400, detail=f"Invalid quantize. Choose from: {', '.join(sorted(_VALID_QUANTIZE))}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid quantize. Choose from: {', '.join(sorted(_VALID_QUANTIZE))}",
+        )
     if req.calib_total < 1:
         raise HTTPException(status_code=400, detail="calib_total must be at least 1")
     if req.calib_strategy not in {"stratified", "proportional", "equal", "diverse"}:
-        raise HTTPException(status_code=400, detail="calib_strategy must be 'stratified', 'proportional', 'equal', or 'diverse'")
+        raise HTTPException(
+            status_code=400,
+            detail="calib_strategy must be 'stratified', 'proportional', 'equal', or 'diverse'",
+        )
 
     try:
         run_dir = Path(resolve_run_dir(name))
     except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found")
+        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
 
     if not (run_dir / "best.keras").exists():
         raise HTTPException(status_code=400, detail="No trained checkpoint found (best.keras missing)")
@@ -99,7 +104,7 @@ async def create_export(name: str, req: ExportRequest):
             ),
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
     return _scan_exports(run_dir)
 
@@ -109,10 +114,9 @@ def _stream_tar_gz(files: list[tuple[Path, str]], chunk_size: int = 65536):
     read_fd, write_fd = os.pipe()
 
     def _build():
-        with open(write_fd, "wb") as wf:
-            with tarfile.open(fileobj=wf, mode="w:gz") as tar:
-                for path, arcname in files:
-                    tar.add(path, arcname=arcname)
+        with open(write_fd, "wb") as wf, tarfile.open(fileobj=wf, mode="w:gz") as tar:
+            for path, arcname in files:
+                tar.add(path, arcname=arcname)
 
     t = threading.Thread(target=_build, daemon=True)
     t.start()
@@ -129,14 +133,14 @@ def download_export(name: str, subfolder: str, filename: str):
     try:
         run_dir = Path(resolve_run_dir(name))
     except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found")
+        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
 
     export_base = (run_dir / "export").resolve()
     export_dir = (export_base / subfolder).resolve()
     try:
         export_dir.relative_to(export_base)
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Access denied") from None
 
     if not export_dir.is_dir():
         raise HTTPException(status_code=404, detail="Export not found")
@@ -175,14 +179,14 @@ def delete_export(name: str, subfolder: str):
     try:
         run_dir = Path(resolve_run_dir(name))
     except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found")
+        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
 
     export_base = (run_dir / "export").resolve()
     export_dir = (export_base / subfolder).resolve()
     try:
         export_dir.relative_to(export_base)
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Access denied") from None
 
     if not export_dir.is_dir():
         raise HTTPException(status_code=404, detail="Export not found")

@@ -1,7 +1,7 @@
 """WebUI single-image inference — task-aware result envelope."""
-import pytest
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 pytestmark = pytest.mark.tf

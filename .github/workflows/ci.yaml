@@ -21,5 +21,8 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev,web]"
 
+      - name: Lint
+        run: ruff check .
+
       - name: Run tests
         run: pytest -m "not tf"

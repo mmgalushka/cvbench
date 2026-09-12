@@ -41,8 +41,8 @@ def compute_gradcam(checkpoint: str, image_path: str, class_index: int) -> str:
     Returns:
         Base64-encoded PNG string (no data-URI prefix).
     """
-    import tensorflow as tf
     import keras
+    import tensorflow as tf
     from PIL import Image as PILImage
 
     model = keras.saving.load_model(checkpoint)

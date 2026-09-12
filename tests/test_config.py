@@ -1,11 +1,9 @@
 import os
-from pathlib import Path
 
 import pytest
 import yaml
 
 from cvbench.core.config import (
-    CVBenchConfig,
     build_config,
     load_config,
     save_config,

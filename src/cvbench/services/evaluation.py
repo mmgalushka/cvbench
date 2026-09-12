@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from cvbench.core import _console
 from cvbench.core.config import load_config, save_config
 from cvbench.core.runs import resolve_run_dir
-from cvbench.core import _console
 from cvbench.services._runtime import print_device_banner
 from cvbench.tasks import resolve_task
 

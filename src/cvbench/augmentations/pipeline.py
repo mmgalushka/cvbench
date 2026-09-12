@@ -1,7 +1,7 @@
 import random
 
-import numpy as np
 import keras
+import numpy as np
 
 from cvbench.core.config import OneOfConfig
 
@@ -85,7 +85,7 @@ def build_keras_aug_fn(transforms: list):
         for layer, prob in keras_steps:
             x = tf.cond(
                 tf.random.uniform(()) < prob,
-                true_fn=lambda x=x: layer(x, training=True),
+                true_fn=lambda x=x, layer=layer: layer(x, training=True),
                 false_fn=lambda x=x: x,
             )
         return x
@@ -169,5 +169,6 @@ def _resolve(name: str, params: dict) -> callable:
 
         return custom_fn
 
-    known = list(_KERAS_MAP) + [n for n in dir(__import__("cvbench.augmentations", fromlist=["cvbench"])) if n.startswith("aug_")]
+    aug_module = __import__("cvbench.augmentations", fromlist=["cvbench"])
+    known = list(_KERAS_MAP) + [n for n in dir(aug_module) if n.startswith("aug_")]
     raise ValueError(f"Unknown transform '{name}'. Known: {known}")

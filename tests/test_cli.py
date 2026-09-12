@@ -1,13 +1,11 @@
 """CLI tests using click's CliRunner — no Docker, no real training."""
 from pathlib import Path
 
-import pytest
 from click.testing import CliRunner
 
 from cvbench.cli.runs import runs
 from cvbench.cli.serve import serve
 from cvbench.core.config import build_config, save_config
-
 
 # ---------------------------------------------------------------------------
 # Helpers

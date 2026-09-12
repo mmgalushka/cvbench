@@ -47,7 +47,7 @@ def predict(experiment, input_path, fmt):
 
     if fmt == "plan":
         print(_console.rule(thick=True))
-        print(f" CVBench — predict  [plan]")
+        print(" CVBench — predict  [plan]")
         print(_console.rule(thick=True))
         _print_plan_predict(experiment or "")
         return
@@ -60,7 +60,7 @@ def predict(experiment, input_path, fmt):
     try:
         result = run_experiment_prediction(experiment, input_path, fmt)
     except (ValueError, FileNotFoundError) as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     exp_name = result["experiment"]
 
@@ -146,7 +146,7 @@ def _print_plan_predict(run_name: str) -> None:
         )
     )
     print()
-    print(f" To get full deployment instructions run:")
+    print(" To get full deployment instructions run:")
     print()
     print(f"   runs export {run_name} --format plan")
     print()

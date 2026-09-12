@@ -5,15 +5,15 @@ import click
 
 from cvbench.cli import _help
 from cvbench.core import _console
+from cvbench.core.config import load_config, update_run_status
 from cvbench.core.runs import (
-    scan_experiments,
+    EXPERIMENTS_DIR,
+    assert_name_available,
     best_experiment,
     resolve_run_dir,
+    scan_experiments,
     validate_run_name,
-    assert_name_available,
-    EXPERIMENTS_DIR,
 )
-from cvbench.core.config import load_config, update_run_status
 
 # NOTE: cvbench.services.export is imported inside export() — it pulls in
 # TensorFlow, and importing it at module scope would make every `runs …`
@@ -98,16 +98,17 @@ def compare(experiment_a, experiment_b):
     run_a = resolve_run_dir(experiment_a)
     run_b = resolve_run_dir(experiment_b)
     try:
-        a_cfg = load_config(run_a)
+        load_config(run_a)
     except FileNotFoundError:
-        raise click.ClickException(f"No config.yaml in: {run_a}")
+        raise click.ClickException(f"No config.yaml in: {run_a}") from None
     try:
-        b_cfg = load_config(run_b)
+        load_config(run_b)
     except FileNotFoundError:
-        raise click.ClickException(f"No config.yaml in: {run_b}")
+        raise click.ClickException(f"No config.yaml in: {run_b}") from None
+
+    from pathlib import Path
 
     from cvbench.core.runs import _read_entry
-    from pathlib import Path
 
     a = _read_entry(Path(run_a))
     b = _read_entry(Path(run_b))
@@ -161,7 +162,7 @@ def rename(experiment, new_name):
     try:
         run_dir = Path(resolve_run_dir(experiment))
     except Exception as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     cfg = load_config(str(run_dir))
     if cfg.run.status == "running":
@@ -171,7 +172,7 @@ def rename(experiment, new_name):
         validate_run_name(new_name)
         assert_name_available(new_name, current_dir=run_dir)
     except ValueError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     new_dir = run_dir.parent / new_name
     os.rename(run_dir, new_dir)
@@ -225,10 +226,15 @@ def rename(experiment, new_name):
     default="stratified",
     type=click.Choice(["stratified", "proportional", "equal", "diverse"]),
     show_default=True,
-    help="How to distribute calibration samples: stratified (equal per class + k-means within each class, recommended), proportional (by class size), equal (same per class), diverse (k-means across all images).",
+    help=(
+        "How to distribute calibration samples: stratified (equal per class + k-means within"
+        " each class, recommended), proportional (by class size), equal (same per class),"
+        " diverse (k-means across all images)."
+    ),
 )
 def export(experiment, fmt, quantize, output_dir, calib_total, calib_strategy):
-    """Export the best checkpoint of EXPERIMENT to TFLite, ONNX, or Hailo package, or print Jetson deployment instructions (plan).
+    """Export the best checkpoint of EXPERIMENT to TFLite, ONNX, or Hailo package,
+    or print Jetson deployment instructions (plan).
 
     EXPERIMENT is a run name or full path to a run directory.
     """
@@ -240,9 +246,9 @@ def export(experiment, fmt, quantize, output_dir, calib_total, calib_strategy):
             calib_total=calib_total, calib_strategy=calib_strategy,
         )
     except FileNotFoundError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
     except RuntimeError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
 
 @runs.command(
@@ -274,7 +280,7 @@ def delete(experiment, export_subfolder, yes):
     try:
         run_dir = Path(resolve_run_dir(experiment))
     except Exception as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     if export_subfolder:
         export_base = run_dir / "export"
@@ -282,7 +288,7 @@ def delete(experiment, export_subfolder, yes):
         try:
             target.relative_to(export_base.resolve())
         except ValueError:
-            raise click.ClickException("Invalid export subfolder.")
+            raise click.ClickException("Invalid export subfolder.") from None
         if not target.is_dir():
             raise click.ClickException(
                 f"Export '{export_subfolder}' not found in {run_dir.name}."

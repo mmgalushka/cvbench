@@ -474,7 +474,7 @@ def detection_class_breakdown(
 
     for m in image_matches:
         gt_out, pred_out = _classify_outcomes(m, loc_floor)
-        for g, o in zip(m["gt"], gt_out):
+        for g, o in zip(m["gt"], gt_out, strict=True):
             row = rows.setdefault(
                 _name(g["class_id"]),
                 {k: 0 for k in ("instances", *_GT_OUTCOMES)} | {"confused_as": {}},
@@ -484,7 +484,7 @@ def detection_class_breakdown(
             if o["outcome"] == "confused":
                 as_name = _name(o["as_class"])
                 row["confused_as"][as_name] = row["confused_as"].get(as_name, 0) + 1
-        for p, o in zip(m["pred"], pred_out):
+        for p, o in zip(m["pred"], pred_out, strict=True):
             if o["outcome"] in extra:
                 name = _name(p["class_id"])
                 extra[o["outcome"]][name] = extra[o["outcome"]].get(name, 0) + 1
@@ -689,7 +689,7 @@ def build_detection_samples(
 
         gt_boxes, pred_boxes = [], []
 
-        for p, o in zip(preds, pred_out):
+        for p, o in zip(preds, pred_out, strict=True):
             if p["matched_gt"] is None:
                 counts["fp"] += 1
                 cells.add((_BACKGROUND, _name(p["class_id"])))
@@ -712,7 +712,7 @@ def build_detection_samples(
             if o["outcome"] in ("spurious", "duplicate"):
                 tags.add(f"{_name(p['class_id'])}:{o['outcome']}")
 
-        for g, o in zip(gts, gt_out):
+        for g, o in zip(gts, gt_out, strict=True):
             tags.add(f"{_name(g['class_id'])}:{o['outcome']}")
             if g["matched_pred"] is None:
                 counts["fn"] += 1

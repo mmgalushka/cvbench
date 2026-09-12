@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Form, HTTPException, UploadFile, File
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from cvbench.augmentations.registry import get_schema
@@ -30,9 +30,9 @@ async def predict_single(
         from cvbench.services.prediction import predict_image
         result = predict_image(run, image_bytes)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse(result)
 
 
@@ -50,15 +50,15 @@ async def predict_augmented(
     try:
         aug_list = json.loads(augmentations)
     except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="augmentations must be valid JSON")
+        raise HTTPException(status_code=400, detail="augmentations must be valid JSON") from None
 
     try:
         from cvbench.services.prediction import predict_augmented as _predict_augmented
         result = _predict_augmented(run, image_bytes, aug_list)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse(result)
 
 
@@ -74,9 +74,10 @@ async def predict_xai(
     try:
         run_dir = resolve_run_dir(run)
     except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{run}' not found")
+        raise HTTPException(status_code=404, detail=f"Run '{run}' not found") from None
 
     from pathlib import Path
+
     from cvbench.web.api.explain import _find_checkpoint
 
     checkpoint = _find_checkpoint(Path(run_dir))
@@ -87,6 +88,6 @@ async def predict_xai(
         from cvbench.services.gradcam import compute_gradcam_from_bytes
         heatmap_b64 = compute_gradcam_from_bytes(str(checkpoint), image_bytes, class_index)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return JSONResponse({"heatmap_b64": heatmap_b64})
