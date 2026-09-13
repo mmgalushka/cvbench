@@ -33,11 +33,19 @@
 !scripts/**/
 !scripts/**/*
 
+# Except docs site (mkdocs build output in site/ stays ignored)
+!docs/
+!docs/**/
+!docs/**/*.md
+!docs/**/*.css
+!docs/**/*.html
+
 # Except project root files
 !helper.sh
 !Dockerfile
 !docker-compose.yml
 !pyproject.toml
+!mkdocs.yml
 !LICENSE
 !README.md
 !CONTRIBUTING.md
