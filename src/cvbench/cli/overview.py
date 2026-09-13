@@ -136,11 +136,11 @@ def render() -> str:
     out.append("")
     for name, cmd in top:
         out.append(dl_row(3, name, _short_help(cmd), cmd_col, colour=_console.green))
-    for name, grp, subs in groups:
+    for _name, grp, subs in groups:
         out.append("")
-        out.append(dl_row(3, name, _short_help(grp), cmd_col))
+        out.append(f"   {_console.dim(_short_help(grp))}")
         for sub_path, sub in subs:
-            out.append(dl_row(5, sub_path, _short_help(sub), cmd_col - 2))
+            out.append(dl_row(3, sub_path, _short_help(sub), cmd_col))
     out.append("")
     out.append(rule)
     for i, (title, rows) in enumerate(EXTRAS):
@@ -168,11 +168,11 @@ def render_markdown() -> str:
     width = max(len(p) for p, _ in iter_commands()) + 2
     for name, cmd in top:
         lines.append(f"{name:<{width}}{_short_help(cmd)}")
-    for name, grp, subs in groups:
+    for _name, grp, subs in groups:
         lines.append("")
-        lines.append(f"{name:<{width}}{_short_help(grp)}")
+        lines.append(f"   {_short_help(grp)}")
         for sub_path, sub in subs:
-            lines.append(f"{sub_path:<{width}}{_short_help(sub)}")
+            lines.append(f"   {sub_path:<{width}}{_short_help(sub)}")
     lines.append("```")
     lines.append("")
     lines.append("Every command has worked examples in its `--help`. In the container, run "
