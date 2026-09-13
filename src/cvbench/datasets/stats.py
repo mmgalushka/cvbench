@@ -7,6 +7,39 @@ from __future__ import annotations
 from pathlib import Path
 
 from cvbench.core import _console
+from cvbench.datasets import layout
+
+
+def get_dataset_overview(data_dir: str | Path) -> dict[str, dict[str, int]]:
+    """Per-split image/class counts for DATA_DIR (classification or YOLO layout).
+
+    Returns ``{split: {"images": n, "classes": n}}`` for each split present.
+    Splits with no matching subdirectory are omitted.
+    """
+    root = Path(data_dir)
+    overview: dict[str, dict[str, int]] = {}
+
+    if layout.is_yolo_dataset(root):
+        n_classes = len(layout.yolo_class_names(root))
+        for split_name in layout.SPLIT_NAMES:
+            split_dir = root / layout.IMAGES_DIRNAME / split_name
+            if split_dir.is_dir():
+                overview[split_name] = {
+                    "images": len(layout.list_images(split_dir)),
+                    "classes": n_classes,
+                }
+        return overview
+
+    for split_name in layout.SPLIT_NAMES:
+        split_dir = root / split_name
+        if not split_dir.is_dir():
+            continue
+        n_classes = sum(1 for p in split_dir.iterdir() if p.is_dir())
+        overview[split_name] = {
+            "images": len(layout.list_images(split_dir)),
+            "classes": n_classes,
+        }
+    return overview
 
 
 def get_class_distribution(train_dir: str) -> dict[str, int]:
