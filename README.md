@@ -255,6 +255,7 @@ serve           Start the CVBench WebUI server.
    runs export     Export a run to TFLite / ONNX / Hailo, or print Jetson steps.
    runs list       List experiment runs (default: experiments/).
    runs rename     Rename a run directory and update its config.
+   runs show       Show full details for a single run.
 ```
 
 Every command has worked examples in its `--help`. In the container, run `commands` for the full picture (CLI plus the tmux session helpers).
