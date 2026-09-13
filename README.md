@@ -1,6 +1,7 @@
 # CVBench
 
 [![CI](https://github.com/mmgalushka/cvbench/actions/workflows/ci.yaml/badge.svg)](https://github.com/mmgalushka/cvbench/actions/workflows/ci.yaml)
+[![codecov](https://codecov.io/gh/mmgalushka/cvbench/graph/badge.svg?token=2tAfSTBylU)](https://codecov.io/gh/mmgalushka/cvbench)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/mmgalushka/cvbench.svg)](https://hub.docker.com/r/mmgalushka/cvbench)
