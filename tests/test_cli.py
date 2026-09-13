@@ -111,6 +111,63 @@ def test_runs_show_with_exports_and_eval(tmp_path):
     assert "Confusion matrix" in result.output
 
 
+def test_runs_show_classification_report_dispatches_to_dedicated_renderer(tmp_path):
+    """A real classification report (with a "task" key) prints Top-3 accuracy."""
+    import json
+
+    exp_a = _write_exp(tmp_path, "exp_a")
+    report = {
+        "task": "classification",
+        "n_images": 100,
+        "overall_accuracy": 0.9123,
+        "top3_accuracy": 0.98,
+        "per_class": {
+            "cat": {"precision": 0.9, "recall": 0.8, "f1": 0.85, "support": 50},
+        },
+        "confusion_matrix": {"classes": ["cat"], "matrix": [[50]]},
+    }
+    (exp_a / "eval_report.json").write_text(json.dumps(report))
+
+    runner = CliRunner()
+    result = runner.invoke(runs, ["show", str(exp_a)])
+    assert result.exit_code == 0
+    assert "Top-3 accuracy" in result.output
+    assert "98.0%" in result.output
+
+
+def test_runs_show_detection_report_dispatches_to_dedicated_renderer(tmp_path):
+    """A real detection report (with a "task" key) prints localization + per-class AP."""
+    import json
+
+    exp_a = _write_exp(tmp_path, "exp_a")
+    report = {
+        "task": "detection",
+        "n_images": 20,
+        "detection": {
+            "map50": 0.75,
+            "conf_threshold": 0.25,
+            "iou_threshold": 0.5,
+            "counts": {"tp": 30, "fp": 5, "fn": 3},
+            "localization": {
+                "mean_iou": 0.82, "ap50": 0.75, "ap75": 0.6,
+                "recall_sweep": {"0.5": 0.9, "0.75": 0.7, "0.9": 0.4},
+            },
+            "confusion_matrix": {"classes": ["cat", "background"], "matrix": [[15, 1], [1, 0]]},
+        },
+        "per_class": {
+            "cat": {"ap": 0.7, "ap75": 0.55, "precision": 0.85, "recall": 0.8, "f1": 0.82, "support": 15},
+        },
+    }
+    (exp_a / "eval_report.json").write_text(json.dumps(report))
+
+    runner = CliRunner()
+    result = runner.invoke(runs, ["show", str(exp_a)])
+    assert result.exit_code == 0
+    assert "Localization" in result.output
+    assert "AP@50" in result.output and "AP@75" in result.output
+    assert "0.5500" in result.output  # cat's per-class AP@75
+
+
 def test_runs_show_no_config(tmp_path):
     empty_dir = tmp_path / "empty"
     empty_dir.mkdir()
