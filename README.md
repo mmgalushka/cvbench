@@ -225,31 +225,31 @@ evaluate        Evaluate a trained model on the held-out test split.
 predict         Run inference on INPUT using a trained EXPERIMENT.
 serve           Start the CVBench WebUI server.
 
-data            Generate, inspect and reshape datasets.
-data clean      Copy a dataset, dropping OS/editor junk files.
-data dedup      Copy a dataset, dropping exact-duplicate images.
-data explore    Report per-class brightness and class balance.
-data flatten    Pool an already-split dataset back into one flat folder.
-data generate   Generate a synthetic geometric shapes dataset for pipeline testing.
-data hashify    Copy a dataset, renaming images to content hashes.
-data split      Split a flat dataset into train/val/test, stratified by class.
-data upsample   Grow a class folder to TARGET images via augmentation.
+   Generate, inspect and reshape datasets.
+   data clean      Copy a dataset, dropping OS/editor junk files.
+   data dedup      Copy a dataset, dropping exact-duplicate images.
+   data explore    Report per-class brightness and class balance.
+   data flatten    Pool an already-split dataset back into one flat folder.
+   data generate   Generate a synthetic geometric shapes dataset for pipeline testing.
+   data hashify    Copy a dataset, renaming images to content hashes.
+   data split      Split a flat dataset into train/val/test, stratified by class.
+   data upsample   Grow a class folder to TARGET images via augmentation.
 
-aug             Discover, generate, and manage augmentation configurations.
-aug delete      Delete a saved augmentation config.
-aug edit        Open a saved augmentation config in your editor.
-aug generate    Interactively build and save a new augmentation config.
-aug list        List saved augmentation configs.
-aug show        Print a saved augmentation config.
-aug transforms  List every available transform with its default parameters.
+   Discover, generate, and manage augmentation configurations.
+   aug delete      Delete a saved augmentation config.
+   aug edit        Open a saved augmentation config in your editor.
+   aug generate    Interactively build and save a new augmentation config.
+   aug list        List saved augmentation configs.
+   aug show        Print a saved augmentation config.
+   aug transforms  List every available transform with its default parameters.
 
-runs            Manage and inspect experiment runs.
-runs best       Show the single best run by a metric.
-runs compare    Compare two runs side by side.
-runs delete     Delete a run, or just one of its exports.
-runs export     Export a run to TFLite / ONNX / Hailo, or print Jetson steps.
-runs list       List experiment runs (default: experiments/).
-runs rename     Rename a run directory and update its config.
+   Manage and inspect experiment runs.
+   runs best       Show the single best run by a metric.
+   runs compare    Compare two runs side by side.
+   runs delete     Delete a run, or just one of its exports.
+   runs export     Export a run to TFLite / ONNX / Hailo, or print Jetson steps.
+   runs list       List experiment runs (default: experiments/).
+   runs rename     Rename a run directory and update its config.
 ```
 
 Every command has worked examples in its `--help`. In the container, run `commands` for the full picture (CLI plus the tmux session helpers).
