@@ -236,6 +236,7 @@ serve           Start the CVBench WebUI server.
    data flatten    Pool an already-split dataset back into one flat folder.
    data generate   Generate a synthetic geometric shapes dataset for pipeline testing.
    data hashify    Copy a dataset, renaming images to content hashes.
+   data list       List datasets (default: data/).
    data split      Split a flat dataset into train/val/test, stratified by class.
    data upsample   Grow a class folder to TARGET images via augmentation.
 

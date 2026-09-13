@@ -10,12 +10,14 @@ import numpy as np
 
 from cvbench.cli import _help
 from cvbench.cli.generate import generate
+from cvbench.core.data_store import DATA_DIR, DATA_REG
 from cvbench.datasets import clean as clean_mod
 from cvbench.datasets import dedup as dedup_mod
 from cvbench.datasets import flatten as flatten_mod
 from cvbench.datasets import hashify as hashify_mod
+from cvbench.datasets import layout as layout_mod
 from cvbench.datasets import split as split_mod
-from cvbench.datasets.stats import get_class_distribution, print_class_distribution
+from cvbench.datasets.stats import get_class_distribution, get_dataset_overview, print_class_distribution
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
 _TOKEN_LEN = 16
@@ -42,6 +44,41 @@ def data():
 
 
 data.add_command(generate, name="generate")
+
+
+@data.command(
+    "list",
+    short_help="List datasets (default: data/).",
+    examples=[
+        ("data list", "every dataset under data/"),
+    ],
+    see_also=[("data explore <dataset>", "check class balance and brightness bias")],
+)
+@click.argument("data_dir", default=DATA_DIR)
+def list_data(data_dir):
+    """List datasets in DATA_DIR (default: data/)."""
+    from cvbench.core import _console
+
+    DATA_REG.base_dir = data_dir
+    names = DATA_REG.list_entries()
+    if not names:
+        print(f" No datasets found in '{data_dir}'.")
+        return
+
+    rows = []
+    for name in names:
+        ds_dir = Path(data_dir) / name
+        task = layout_mod.detect_task_name(ds_dir)
+        task_short = "det" if task == "detection" else "cls"
+        overview = get_dataset_overview(ds_dir)
+        counts = {s: overview.get(s, {}).get("images", 0) for s in layout_mod.SPLIT_NAMES}
+        n_classes = next((v["classes"] for v in overview.values()), 0)
+        rows.append((name, task_short, counts["train"], counts["val"], counts["test"], n_classes))
+
+    _console.table(
+        ["Dataset", "Task", ("Train", "right"), ("Val", "right"), ("Test", "right"), ("Classes", "right")],
+        rows,
+    )
 
 
 def _mean_brightness(path: Path) -> float:
