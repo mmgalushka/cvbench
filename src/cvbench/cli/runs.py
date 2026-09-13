@@ -6,7 +6,7 @@ import click
 from cvbench.cli import _help
 from cvbench.core import _console
 from cvbench.core.config import load_config, update_run_status
-from cvbench.core.runs import (
+from cvbench.core.exp_store import (
     EXPERIMENTS_DIR,
     assert_name_available,
     best_experiment,
@@ -108,7 +108,7 @@ def compare(experiment_a, experiment_b):
 
     from pathlib import Path
 
-    from cvbench.core.runs import _read_entry
+    from cvbench.core.exp_store import _read_entry
 
     a = _read_entry(Path(run_a))
     b = _read_entry(Path(run_b))

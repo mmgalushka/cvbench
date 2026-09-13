@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from cvbench.augmentations.registry import get_schema
-from cvbench.core.runs import resolve_run_dir
+from cvbench.core.exp_store import resolve_run_dir
 
 router = APIRouter()
 

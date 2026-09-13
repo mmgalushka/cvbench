@@ -144,7 +144,7 @@ def evaluate(
             "confusion_matrix": confusion_matrix,
         },
         # Legacy top-level mirrors for readers written before the envelope
-        # existed (core/runs.py, web/api/runs.py fall back to these).
+        # existed (core/exp_store.py, web/api/runs.py fall back to these).
         overall_accuracy=round(overall_acc, 4),
         top3_accuracy=rounded_top3,
         confusion_matrix=confusion_matrix,

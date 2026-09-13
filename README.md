@@ -195,6 +195,10 @@ train data --epochs 20 --backbone efficientnet_b0
 # Ctrl+B D to detach — training continues after you close the terminal
 ```
 
+`DATA_DIR` accepts a full path (`data/my_dataset`) or a bare dataset name
+(`my_dataset`), the same convention `runs`/`evaluate` use for run names: a
+bare name is resolved under `data/`, and a literal path is used as-is.
+
 ---
 
 ## Quickstart

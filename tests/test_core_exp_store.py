@@ -2,13 +2,64 @@ import json
 from datetime import date
 from pathlib import Path
 
+import click
+import pytest
+
 from cvbench.core.config import build_config, save_config
-from cvbench.core.runs import (
+from cvbench.core.exp_store import (
+    assert_name_available,
     best_experiment,
     make_run_name,
     make_unique_dir,
+    resolve_run_dir,
     scan_experiments,
+    validate_run_name,
 )
+
+# ---------------------------------------------------------------------------
+# Name resolution (thin wrappers around core.registry.Registry)
+# ---------------------------------------------------------------------------
+
+def test_validate_run_name_rejects_unsafe_names():
+    with pytest.raises(ValueError):
+        validate_run_name("../etc/passwd")
+    assert validate_run_name("my-run_1") == "my-run_1"
+
+
+def test_resolve_run_dir_literal_path(tmp_path):
+    d = tmp_path / "some_run"
+    d.mkdir()
+    assert resolve_run_dir(str(d)) == str(d)
+
+
+def test_resolve_run_dir_bare_name(tmp_path, monkeypatch):
+    import cvbench.core.exp_store as store
+    monkeypatch.setattr(store, "EXPERIMENTS_DIR", str(tmp_path))
+    (tmp_path / "my_run").mkdir()
+    assert resolve_run_dir("my_run") == str(tmp_path / "my_run")
+
+
+def test_resolve_run_dir_not_found_raises_bad_parameter(tmp_path, monkeypatch):
+    import cvbench.core.exp_store as store
+    monkeypatch.setattr(store, "EXPERIMENTS_DIR", str(tmp_path))
+    with pytest.raises(click.BadParameter):
+        resolve_run_dir("nope")
+
+
+def test_assert_name_available_ok_for_unique_name(tmp_path, monkeypatch):
+    import cvbench.core.exp_store as store
+    monkeypatch.setattr(store, "EXPERIMENTS_DIR", str(tmp_path))
+    (tmp_path / "existing").mkdir()
+    assert_name_available("new_run")  # no-op, must not raise
+
+
+def test_assert_name_available_raises_on_conflict(tmp_path, monkeypatch):
+    import cvbench.core.exp_store as store
+    monkeypatch.setattr(store, "EXPERIMENTS_DIR", str(tmp_path))
+    (tmp_path / "taken").mkdir()
+    with pytest.raises(ValueError, match="taken"):
+        assert_name_available("taken")
+
 
 # ---------------------------------------------------------------------------
 # Run name generation

@@ -11,7 +11,7 @@ import keras
 
 from cvbench.core import _console
 from cvbench.core.config import load_config
-from cvbench.core.runs import resolve_run_dir
+from cvbench.core.exp_store import resolve_run_dir
 
 _TFLITE_QUANTIZE_SUFFIX = {"none": "", "float16": "_float16", "int8": "_int8"}
 

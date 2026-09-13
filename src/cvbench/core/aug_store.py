@@ -1,5 +1,5 @@
 """Manage saved augmentation configs under a directory, the same way
-`core/runs.py` manages experiment directories under `experiments/`.
+`core/exp_store.py` manages experiment directories under `experiments/`.
 
 A saved config is a YAML file with an optional `meta:` block (creation date)
 plus the `transforms:` list that `core/config.py::load_aug_file` already
@@ -11,17 +11,24 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-import click
 import yaml
 
-from cvbench.core._names import validate_slug
+from cvbench.core.registry import Registry
 
 AUGMENTATIONS_DIR = "workspace/augmentations"
+
+AUG_REG = Registry(
+    AUGMENTATIONS_DIR,
+    not_found_label="Augmentation config",
+    entity_name="augmentation config",
+    param_hint="--augmentation",
+    ext=".yaml",
+)
 
 
 def validate_aug_name(name: str) -> str:
     """Raise ValueError if name is not safe to use as a saved-config filename."""
-    return validate_slug(name, what="Name")
+    return AUG_REG.validate_name(name, what="Name")
 
 
 def resolve_aug_file(name_or_path: str) -> str:
@@ -30,23 +37,8 @@ def resolve_aug_file(name_or_path: str) -> str:
     Accepts a full/relative path, a bare saved name (AUGMENTATIONS_DIR/<name>.yaml),
     or a bare saved name that already includes the extension.
     """
-    p = Path(name_or_path)
-    if p.is_file():
-        return str(p)
-
-    base = Path(AUGMENTATIONS_DIR) / name_or_path
-    if base.is_file():
-        return str(base)
-
-    with_ext = base.with_suffix(".yaml")
-    if with_ext.is_file():
-        return str(with_ext)
-
-    raise click.BadParameter(
-        f"Augmentation config not found: '{name_or_path}' "
-        f"(also tried '{with_ext}')",
-        param_hint="--augmentation",
-    )
+    AUG_REG.base_dir = AUGMENTATIONS_DIR
+    return AUG_REG.resolve(name_or_path)
 
 
 def write_augmentation_text(name: str, content: str, directory: str | None = None) -> Path:

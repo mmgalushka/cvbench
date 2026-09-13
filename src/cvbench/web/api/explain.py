@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from cvbench.core.config import load_config
-from cvbench.core.runs import resolve_run_dir
+from cvbench.core.exp_store import resolve_run_dir
 
 router = APIRouter()
 

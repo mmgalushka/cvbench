@@ -174,7 +174,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
 
     from cvbench.augmentations.pipeline import build_aug_pipeline
     from cvbench.core import _console
-    from cvbench.core.augmentations_store import resolve_aug_file
+    from cvbench.core.aug_store import resolve_aug_file
     from cvbench.core.config import load_aug_file
 
     src = Path(src_dir)
