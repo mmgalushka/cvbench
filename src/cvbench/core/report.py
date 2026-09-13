@@ -3,7 +3,7 @@
 Every task's evaluator builds its own report dict by calling
 ``report_envelope()``, then ``write_report()`` to serialize it. Keeping both
 here — rather than duplicated per task — is what lets a generic reader
-(``core/runs.py``, ``web/api/runs.py``) pull a run's primary score without
+(``core/exp_store.py``, ``web/api/runs.py``) pull a run's primary score without
 knowing which task produced it: ``overall``, ``per_class`` and ``samples``
 are the only keys a generic consumer may read. Everything task-specific goes
 in a block named after the task (``report["classification"]``,

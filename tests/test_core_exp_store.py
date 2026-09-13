@@ -3,7 +3,7 @@ from datetime import date
 from pathlib import Path
 
 from cvbench.core.config import build_config, save_config
-from cvbench.core.runs import (
+from cvbench.core.exp_store import (
     best_experiment,
     make_run_name,
     make_unique_dir,

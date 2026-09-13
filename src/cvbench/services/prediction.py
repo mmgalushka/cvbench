@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from cvbench.core.config import load_config
-from cvbench.core.runs import resolve_run_dir
+from cvbench.core.exp_store import resolve_run_dir
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp"}
 

@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from cvbench.core.config import TransformConfig, load_config, update_run_status
-from cvbench.core.runs import (
+from cvbench.core.exp_store import (
     EXPERIMENTS_DIR,
     assert_name_available,
     resolve_run_dir,

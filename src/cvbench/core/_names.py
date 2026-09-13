@@ -1,8 +1,8 @@
 """Shared filesystem-safe name validation.
 
 Used wherever a user-supplied string becomes a directory or file name —
-experiment run names (`core/runs.py`) and saved augmentation config names
-(`core/augmentations_store.py`) share the exact same safety rules.
+every `core/registry.py::Registry` instance (experiment, augmentation, data,
+and workspace names) shares the exact same safety rules.
 """
 import re
 

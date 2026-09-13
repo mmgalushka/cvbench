@@ -76,7 +76,7 @@ def test_train_then_evaluate_produces_a_valid_envelope(yolo_project):
 
 
 def test_scan_experiments_surfaces_the_detection_run(yolo_project):
-    from cvbench.core.runs import scan_experiments
+    from cvbench.core.exp_store import scan_experiments
     from cvbench.services.evaluation import run_evaluation
     from cvbench.services.training import run_training
 

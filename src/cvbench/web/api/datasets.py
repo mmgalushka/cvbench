@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from cvbench.core.config import load_config
-from cvbench.core.runs import EXPERIMENTS_DIR, resolve_run_dir, scan_experiments
+from cvbench.core.exp_store import EXPERIMENTS_DIR, resolve_run_dir, scan_experiments
 from cvbench.datasets import layout as dataset_layout
 
 router = APIRouter()

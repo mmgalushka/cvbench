@@ -102,7 +102,7 @@ def _parse_loss(value: str | None) -> LossConfig | None:
         ("runs export <run> --format tflite", "package it for a device"),
     ],
 )
-@click.argument("data_dir", type=click.Path(exists=True))
+@click.argument("data_dir")
 @click.option("--output", "output_dir", default=None,
               help="Experiment output directory (default: experiments/<auto-name>/).")
 @click.option("--from", "from_dir", default=None, type=click.Path(exists=True),
@@ -142,11 +142,16 @@ def train(
 ):
     """Train a model on DATA_DIR.
 
-    DATA_DIR must contain train/, val/, and test/ subdirectories.
+    DATA_DIR must contain train/, val/, and test/ subdirectories. It can be a
+    full path (data/my_dataset) or a bare dataset name (my_dataset), resolved
+    under data/.
     All parameters have sensible defaults and can be overridden individually.
     """
-    from cvbench.core.augmentations_store import resolve_aug_file
+    from cvbench.core.aug_store import resolve_aug_file
+    from cvbench.core.data_store import resolve_data_dir
     from cvbench.services.training import run_training  # deferred: pulls in TensorFlow
+
+    data_dir = resolve_data_dir(data_dir)
 
     if aug_file:
         aug_file = resolve_aug_file(aug_file)

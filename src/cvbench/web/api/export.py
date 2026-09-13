@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from cvbench.core.runs import resolve_run_dir
+from cvbench.core.exp_store import resolve_run_dir
 
 router = APIRouter()
 

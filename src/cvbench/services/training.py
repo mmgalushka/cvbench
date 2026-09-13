@@ -14,7 +14,7 @@ from cvbench.core.config import (
     save_config,
     update_run_status,
 )
-from cvbench.core.runs import EXPERIMENTS_DIR, make_run_name, make_unique_dir
+from cvbench.core.exp_store import EXPERIMENTS_DIR, make_run_name, make_unique_dir
 from cvbench.datasets.layout import detect_task_name
 from cvbench.services._runtime import print_device_banner
 from cvbench.tasks import get_task

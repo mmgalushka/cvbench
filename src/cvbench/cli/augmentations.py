@@ -9,7 +9,7 @@ import yaml
 
 from cvbench.augmentations.registry import _RANGES
 from cvbench.cli import _help
-from cvbench.core.augmentations_store import (
+from cvbench.core.aug_store import (
     AUGMENTATIONS_DIR,
     list_saved_augmentations,
     resolve_aug_file,

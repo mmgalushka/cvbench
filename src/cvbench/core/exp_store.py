@@ -1,33 +1,38 @@
+"""Manage experiment directories under `experiments/`.
+
+Name resolution (bare name vs. literal path, availability checks) is
+delegated to a shared `Registry` (see `core/registry.py`); this module also
+carries run-name generation and the filesystem experiment index used by
+`runs list` / `runs best` and the WebUI.
+"""
 from __future__ import annotations
 
 import json
 from datetime import date
 from pathlib import Path
 
-import click
-
-from cvbench.core._names import validate_slug
 from cvbench.core.config import CVBenchConfig, load_config
+from cvbench.core.registry import Registry
 
 EXPERIMENTS_DIR = "experiments"
+
+EXP_REG = Registry(
+    EXPERIMENTS_DIR,
+    not_found_label="Run directory",
+    entity_name="experiment",
+    param_hint="EXPERIMENT",
+)
 
 
 def validate_run_name(name: str) -> str:
     """Raise ValueError if name is not safe to use as an experiment directory name."""
-    return validate_slug(name, what="Name")
+    return EXP_REG.validate_name(name, what="Name")
 
 
 def assert_name_available(new_name: str, current_dir: Path | None = None) -> None:
     """Raise ValueError if new_name conflicts with an existing experiment directory."""
-    experiments = Path(EXPERIMENTS_DIR)
-    new_lower = new_name.lower()
-    for existing in experiments.iterdir():
-        if not existing.is_dir():
-            continue
-        if current_dir and existing.resolve() == current_dir.resolve():
-            continue
-        if existing.name.lower() == new_lower:
-            raise ValueError(f"An experiment named '{existing.name}' already exists.")
+    EXP_REG.base_dir = EXPERIMENTS_DIR
+    EXP_REG.assert_available(new_name, current_dir=current_dir)
 
 
 def resolve_run_dir(name: str) -> str:
@@ -36,16 +41,8 @@ def resolve_run_dir(name: str) -> str:
     Accepts a full path (experiments/my_run) or a bare run name (my_run).
     If the given value does not exist as-is, looks under EXPERIMENTS_DIR.
     """
-    p = Path(name)
-    if p.exists():
-        return str(p)
-    candidate = Path(EXPERIMENTS_DIR) / name
-    if candidate.exists():
-        return str(candidate)
-    raise click.BadParameter(
-        f"Run directory not found: '{name}' (also tried '{candidate}')",
-        param_hint="EXPERIMENT",
-    )
+    EXP_REG.base_dir = EXPERIMENTS_DIR
+    return EXP_REG.resolve(name)
 
 
 # ---------------------------------------------------------------------------
@@ -77,14 +74,7 @@ def make_run_name(cfg: CVBenchConfig) -> str:
 
 def make_unique_dir(parent: str, name: str) -> Path:
     """Return parent/name, appending _2, _3, etc. if the path already exists."""
-    p = Path(parent)
-    candidate = p / name
-    if not candidate.exists():
-        return candidate
-    n = 2
-    while (p / f"{name}_{n}").exists():
-        n += 1
-    return p / f"{name}_{n}"
+    return Registry(parent).unique_path(name)
 
 
 # ---------------------------------------------------------------------------
