@@ -17,6 +17,7 @@ from cvbench.core.exp_store import (
     scan_experiments,
     validate_run_name,
 )
+from cvbench.core.report_print import print_classification_body, print_detection_body
 
 # NOTE: cvbench.services.export is imported inside export() — it pulls in
 # TensorFlow, and importing it at module scope would make every `runs …`
@@ -210,24 +211,32 @@ def show(experiment):
     if eval_path.exists():
         with open(eval_path) as f:
             report = json.load(f)
-        overall = report.get("overall", {})
-        print(f"   {overall.get('label', 'Overall')}: {overall.get('value')}")
-        per_class = report.get("per_class", {})
-        if per_class:
-            rows = [
-                (cls, m.get("precision", "—"), m.get("recall", "—"), m.get("f1", "—"), m.get("support", "—"))
-                for cls, m in per_class.items()
-            ]
-            _console.table(
-                ["Class", ("Precision", "right"), ("Recall", "right"), ("F1", "right"), ("Support", "right")],
-                rows,
-            )
-        confusion_matrix = report.get("confusion_matrix")
-        if confusion_matrix:
-            print()
-            print_confusion_matrix(
-                np.array(confusion_matrix["matrix"]), confusion_matrix["classes"]
-            )
+        task = report.get("task")
+        if task == "classification":
+            print_classification_body(report)
+        elif task == "detection":
+            print_detection_body(report)
+        else:
+            # Unknown/legacy report shape — fall back to the generic
+            # overall/per-class/confusion-matrix rendering.
+            overall = report.get("overall", {})
+            print(f"   {overall.get('label', 'Overall')}: {overall.get('value')}")
+            per_class = report.get("per_class", {})
+            if per_class:
+                rows = [
+                    (cls, m.get("precision", "—"), m.get("recall", "—"), m.get("f1", "—"), m.get("support", "—"))
+                    for cls, m in per_class.items()
+                ]
+                _console.table(
+                    ["Class", ("Precision", "right"), ("Recall", "right"), ("F1", "right"), ("Support", "right")],
+                    rows,
+                )
+            confusion_matrix = report.get("confusion_matrix")
+            if confusion_matrix:
+                print()
+                print_confusion_matrix(
+                    np.array(confusion_matrix["matrix"]), confusion_matrix["classes"]
+                )
     else:
         print(_console.dim("   No eval_report.json found. Run: evaluate " + run_dir.name))
     print(_console.rule())

@@ -7,8 +7,8 @@ import numpy as np
 import tqdm
 
 from cvbench.core import _console
-from cvbench.core._confusion import print_confusion_matrix
 from cvbench.core.report import report_envelope, write_report
+from cvbench.core.report_print import print_classification_body as print_body
 
 _MAX_SAMPLES_PER_CELL = 20
 
@@ -152,36 +152,16 @@ def evaluate(
 
     write_report(report, out_dir)
 
-    _print_report(report, class_names, run_dir, out_dir, cm)
+    _print_report(report, run_dir, out_dir)
     return report
 
 
-def _print_report(report: dict, class_names: list[str], run_dir: str, out_dir: Path,
-                  cm: np.ndarray | None = None):
+def _print_report(report: dict, run_dir: str, out_dir: Path) -> None:
     run_name = Path(run_dir).name
-    n_images = report["n_images"]
-    overall_acc = f"{report['overall_accuracy'] * 100:.1f}%"
     print(_console.rule())
     print(f" {_console.bold('CVBench — evaluate')}  {_console.dim('|')}  {_console.dim('run: ' + run_name)}")
     print(_console.rule())
-    print(_console.dim(" Split             : test"))
-    print(_console.dim(f" Images evaluated  : {n_images}"))
-    print(f" {_console.bold('Overall accuracy')}  : {_console.bold(overall_acc)}")
-    if report["top3_accuracy"] is not None:
-        top3_acc = f"{report['top3_accuracy'] * 100:.1f}%"
-        print(f" {_console.bold('Top-3 accuracy')}    : {_console.bold(top3_acc)}")
-    print()
-    print(f" {_console.bold('Per-class breakdown:')}")
-    _console.table(
-        ["class", ("P", "right"), ("R", "right"), ("F1", "right"), ("support", "right")],
-        [
-            (cls, f"{m['precision']:.4f}", f"{m['recall']:.4f}", f"{m['f1']:.4f}", f"{m['support']} samples")
-            for cls, m in report["per_class"].items()
-        ],
-    )
-    print()
-    if cm is not None:
-        print_confusion_matrix(cm, class_names)
+    print_body(report)
     print(f" {_console.bold('Saved:')}")
     print(f"   {_console.dim(str(out_dir / 'eval_report.json'))}")
     print(_console.rule())
