@@ -20,8 +20,7 @@ action_usage(){
     echo -e "${BOLD}Dev commands (./helper.sh <name>):${NC}"
     echo -e "  ${CMD}init${NC}                 create .venv and install all dependencies"
     echo -e "  ${CMD}test${OPT} [-m mark] [-c]${NC}  run the test suite (-c adds a coverage summary)"
-    echo -e "  ${CMD}lint${OPT} [--fix]${NC}       run ruff over the codebase (--fix applies safe fixes)"
-    echo -e "  ${CMD}mypy${NC}                 run mypy type checks over src/"
+    echo -e "  ${CMD}prep${OPT} [--fix]${NC}       run lint and mypy exactly like CI (--fix applies safe ruff fixes)"
     echo -e "  ${CMD}release${OPT} [--dry-run]${NC}  preview the next version bump (CI does the real one)"
     echo -e "  ${CMD}docs${NC}                 regenerate the CLI reference block in README.md"
     echo -e ""
@@ -142,14 +141,16 @@ action_test(){
     pytest "${OPTS[@]}"
 }
 
-action_lint(){
+action_prep(){
     action_activate
-    ruff check . "$@"
-}
-
-action_mypy(){
-    action_activate
-    mypy src "$@"
+    RUFF_OPTS=()
+    if [[ "$1" == "--fix" ]]; then
+        RUFF_OPTS+=(--fix)
+    fi
+    echo "== Lint =="
+    ruff check . "${RUFF_OPTS[@]}" || return $?
+    echo "== Type check =="
+    mypy src || return $?
 }
 
 action_release(){
@@ -193,11 +194,8 @@ case $1 in
     test)
         action_test ${@:2}
         ;;
-    lint)
-        action_lint ${@:2}
-        ;;
-    mypy)
-        action_mypy ${@:2}
+    prep)
+        action_prep ${@:2}
         ;;
     release)
         action_release ${@:2}
@@ -210,4 +208,4 @@ case $1 in
         ;;
 esac
 
-exit 0
+exit $?
