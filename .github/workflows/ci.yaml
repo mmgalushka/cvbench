@@ -28,4 +28,9 @@ jobs:
         run: mypy src
 
       - name: Run tests
-        run: pytest -m "not tf"
+        run: pytest -m "not tf" --cov --cov-report=xml
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
