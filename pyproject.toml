@@ -47,6 +47,9 @@ dev = [
     "ruff==0.14.4",
     "mypy==2.3.1",
 ]
+docs = [
+    "mkdocs-material==9.7.7",
+]
 
 [project.scripts]
 train    = "cvbench.cli.train:train"

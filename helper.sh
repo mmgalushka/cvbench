@@ -23,6 +23,7 @@ action_usage(){
     echo -e "  ${CMD}prep${OPT} [--fix]${NC}       run lint and mypy exactly like CI (--fix applies safe ruff fixes)"
     echo -e "  ${CMD}release${OPT} [--dry-run]${NC}  preview the next version bump (CI does the real one)"
     echo -e "  ${CMD}docs${NC}                 regenerate the CLI reference block in README.md"
+    echo -e "  ${CMD}site${OPT} serve|build${NC}   serve or build the MkDocs documentation site"
     echo -e ""
     echo -e "  ${CMD}data|train|evaluate|predict|runs|aug|serve${NC}  pass through to the CLI"
     echo -e ""
@@ -68,6 +69,23 @@ elif not missing:
 EOF
 }
 
+action_site(){
+    action_activate
+    export NO_MKDOCS_2_WARNING=1
+    case "$1" in
+        serve)
+            mkdocs serve
+            ;;
+        build)
+            mkdocs build --strict
+            ;;
+        *)
+            echo "Usage: ./helper.sh site serve|build"
+            exit 1
+            ;;
+    esac
+}
+
 action_init(){
     if [ -d .venv ]; then
         rm -rf .venv
@@ -79,9 +97,9 @@ action_init(){
 
     if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
         echo "Apple Silicon detected — installing tensorflow-metal for GPU acceleration"
-        pip install -e ".[dev,web,export,gpu-mac]"
+        pip install -e ".[dev,web,export,docs,gpu-mac]"
     else
-        pip install -e ".[dev,web,export]"
+        pip install -e ".[dev,web,export,docs]"
     fi
 }
 
@@ -202,6 +220,9 @@ case $1 in
         ;;
     docs)
         action_docs
+        ;;
+    site)
+        action_site ${@:2}
         ;;
     *)
         action_usage
