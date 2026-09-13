@@ -60,6 +60,10 @@ class TestEachAugFunction:
     def test_salt_pepper(self, img):
         out = aug_salt_pepper(img, density=0.05, seed=0)
         assert out.shape == img.shape
+        if img.shape[-1] > 1:
+            # Salt/pepper pixels must flip all channels together, not
+            # produce colored dots (regression test for #47).
+            np.testing.assert_array_equal(out[..., 0], out[..., -1])
 
     def test_random_profile_h(self, img):
         out = aug_random_profile_h(img, n_changes=3, seed=0)
