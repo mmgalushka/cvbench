@@ -106,6 +106,14 @@ def test_assert_available_raises_on_case_insensitive_conflict(tmp_path):
         reg.assert_available("myrun")
 
 
+def test_assert_available_skips_non_directory_entries(tmp_path):
+    base = tmp_path / "base"
+    base.mkdir()
+    (base / "not_a_dir.txt").write_text("x")  # same stem as the name being checked
+    reg = Registry(str(base))
+    reg.assert_available("not_a_dir.txt")  # must not raise — files aren't entries
+
+
 def test_assert_available_skips_current_dir(tmp_path):
     base = tmp_path / "base"
     current = base / "my_run"
