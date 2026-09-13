@@ -74,6 +74,59 @@ def test_runs_best_no_metric(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# runs show
+# ---------------------------------------------------------------------------
+
+def test_runs_show(tmp_path):
+    exp_a = _write_exp(tmp_path, "exp_a", val_accuracy=0.9)
+    runner = CliRunner()
+    result = runner.invoke(runs, ["show", str(exp_a)])
+    assert result.exit_code == 0
+    assert "exp_a" in result.output
+    assert "val_accuracy" in result.output
+    assert "None" in result.output  # Exports section, no export/ dir yet
+
+
+def test_runs_show_with_exports_and_eval(tmp_path):
+    import json
+
+    exp_a = _write_exp(tmp_path, "exp_a")
+    (exp_a / "export" / "tflite").mkdir(parents=True)
+    report = {
+        "overall": {"label": "Overall Accuracy", "value": 0.87},
+        "per_class": {
+            "cat": {"precision": 0.9, "recall": 0.8, "f1": 0.85, "support": 10},
+            "dog": {"precision": 0.7, "recall": 0.6, "f1": 0.65, "support": 5},
+        },
+        "confusion_matrix": {"classes": ["cat", "dog"], "matrix": [[8, 2], [1, 4]]},
+    }
+    (exp_a / "eval_report.json").write_text(json.dumps(report))
+
+    runner = CliRunner()
+    result = runner.invoke(runs, ["show", str(exp_a)])
+    assert result.exit_code == 0
+    assert "tflite" in result.output
+    assert "Overall Accuracy" in result.output
+    assert "cat" in result.output
+    assert "Confusion matrix" in result.output
+
+
+def test_runs_show_no_config(tmp_path):
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    runner = CliRunner()
+    result = runner.invoke(runs, ["show", str(empty_dir)])
+    assert result.exit_code != 0
+    assert "config.yaml" in result.output
+
+
+def test_runs_show_not_found():
+    runner = CliRunner()
+    result = runner.invoke(runs, ["show", "no_such_run_xyz"])
+    assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
 # runs compare
 # ---------------------------------------------------------------------------
 
