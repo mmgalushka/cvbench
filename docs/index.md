@@ -51,14 +51,14 @@ environment.
     Export a trained model to TFLite, ONNX, or a Hailo HEF package, or get
     step-by-step Jetson deployment instructions — all from one command.
 
--   :material-history:{ .lg .middle } [**Track**](webui/overview.md)
+-   :material-history:{ .lg .middle } [**Explore**](tools/experiment-tracker.md)
 
     ---
 
     Every run is recorded automatically — browse, compare, and revisit past
     experiments at any time.
 
--   :material-notebook-outline:{ .lg .middle } [**Experiment**](#how-it-works)
+-   :material-notebook-outline:{ .lg .middle } [**Customize**](tools/jupyter-notebook.md)
 
     ---
 

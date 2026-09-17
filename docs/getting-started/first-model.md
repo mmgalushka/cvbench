@@ -14,6 +14,8 @@ docker exec -it cvbench bash
 tm new train
 ```
 
+See [Sessions (tmux)](../tools/tmux.md) for the full command set.
+
 ## 2. Generate a dataset
 
 For a first run, skip finding a real dataset and generate a synthetic one —
@@ -90,8 +92,7 @@ serve --host 0.0.0.0 --port 8000
 Browse everything you just did in the WebUI at `http://<server-ip>:8000` —
 training curves, the evaluation report with its interactive confusion
 matrix, side-by-side run comparison, and one-click export. See
-[Browsing Runs & Datasets](../webui/overview.md) and
-[Interactive Confusion Matrix](../webui/confusion-matrix.md).
+[Experiment Tracker](../tools/experiment-tracker.md).
 
 ## What's next
 

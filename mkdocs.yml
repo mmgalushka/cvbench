@@ -25,9 +25,10 @@ nav:
   - Evaluation & Prediction:
       - Evaluating a Run: evaluation/evaluate.md
       - Running Predictions: evaluation/predict.md
-  - WebUI:
-      - Browsing Runs & Datasets: webui/overview.md
-      - Interactive Confusion Matrix: webui/confusion-matrix.md
+  - Tools:
+      - Sessions (tmux): tools/tmux.md
+      - Experiment Tracker: tools/experiment-tracker.md
+      - JupyterLab: tools/jupyter-notebook.md
   - Deployment & Export:
       - Export Formats (TFLite/ONNX): deployment/export.md
       - Hailo HEF Export: deployment/hailo.md

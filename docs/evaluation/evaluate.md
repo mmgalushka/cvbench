@@ -31,9 +31,8 @@ The report shape depends on the run's task:
 - **Detection** — a per-class outcome table (matched / mislocated / confused
   / missed) plus AP/precision/recall/F1 and a class-confusion matrix.
 
-See [Interactive Confusion Matrix](../webui/confusion-matrix.md) for how the
-WebUI presents these results, and `runs show <run>` for the terminal
-equivalent.
+See [Experiment Tracker](../tools/experiment-tracker.md) for how the WebUI
+presents these results, and `runs show <run>` for the terminal equivalent.
 
 Next: [Running Predictions](predict.md), or package the run for a device with
 [Export Formats](../deployment/export.md).

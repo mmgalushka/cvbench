@@ -63,6 +63,6 @@ data/synthetic_yolo/
     The WebUI **Datasets** page reads both layouts: it labels each dataset's
     format and, for YOLO, draws the bounding boxes over every thumbnail
     (*Show boxes* toggles the overlay, the class filter keeps only images
-    containing a given class). See [Browsing Runs & Datasets](../webui/overview.md).
+    containing a given class). See [Experiment Tracker](../tools/experiment-tracker.md).
 
 Next: point `train` at either dataset — see [Training Basics](../training/basics.md).
