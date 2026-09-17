@@ -9,8 +9,30 @@ docs_dir: docs
 
 nav:
   - Home: index.md
-  - Quickstart: quickstart.md
-  - CLI reference: cli-reference.md
+  - Getting Started:
+      - Quickstart: getting-started/quickstart.md
+      - Installation & Volumes: getting-started/installation.md
+      - Your First Model: getting-started/first-model.md
+  - Data:
+      - Generating Synthetic Data: data/synthetic.md
+      - Preparing Real Datasets: data/prepare.md
+      - Augmentation: data/augmentation.md
+  - Training:
+      - Training Basics: training/basics.md
+      - Optimizer & Loss: training/optimizer-loss.md
+      - Learning Rate Scheduling: training/lr-scheduling.md
+      - Two-Phase Training: training/two-phase.md
+  - Evaluation & Prediction:
+      - Evaluating a Run: evaluation/evaluate.md
+      - Running Predictions: evaluation/predict.md
+  - WebUI:
+      - Browsing Runs & Datasets: webui/overview.md
+      - Interactive Confusion Matrix: webui/confusion-matrix.md
+  - Deployment & Export:
+      - Export Formats (TFLite/ONNX): deployment/export.md
+      - Hailo HEF Export: deployment/hailo.md
+      - Jetson Deployment: deployment/jetson.md
+  - CLI Reference: cli-reference.md
 
 theme:
   name: material
@@ -48,6 +70,7 @@ markdown_extensions:
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - mkdocs-click
 
 plugins:
   - search

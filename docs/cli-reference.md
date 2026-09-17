@@ -1,13 +1,73 @@
 # CLI reference
 
-The full, auto-generated CLI reference is coming in a follow-up (it will be
-generated from `cvbench.cli.overview.render_markdown()` — the same source that
-already keeps README.md's CLI block in sync with the Click command registry).
+Auto-generated from the CLI's own Click command definitions — every option,
+argument, and default shown here comes directly from the source in
+`src/cvbench/cli/`, so it can never drift out of sync with `--help`.
 
-In the meantime:
+Inside the container, run `commands` any time for the same picture, plus the
+tmux session helpers.
 
-- Run `./helper.sh docs` to regenerate the CLI reference block in
-  [README.md](https://github.com/mmgalushka/cvbench#cli-reference).
-- Inside the container, run `commands` for the full picture (CLI plus the tmux
-  session helpers).
-- Every command also documents itself: `<command> --help`.
+## train
+
+::: mkdocs-click
+    :module: cvbench.cli.train
+    :command: train
+    :prog_name: train
+    :depth: 1
+
+## evaluate
+
+::: mkdocs-click
+    :module: cvbench.cli.evaluate
+    :command: evaluate
+    :prog_name: evaluate
+    :depth: 1
+
+## predict
+
+::: mkdocs-click
+    :module: cvbench.cli.predict
+    :command: predict
+    :prog_name: predict
+    :depth: 1
+
+## serve
+
+::: mkdocs-click
+    :module: cvbench.cli.serve
+    :command: serve
+    :prog_name: serve
+    :depth: 1
+
+## data
+
+Generate, inspect and reshape datasets.
+
+::: mkdocs-click
+    :module: cvbench.cli.data
+    :command: data
+    :prog_name: data
+    :depth: 1
+    :list_subcommands: true
+
+## aug
+
+Discover, generate, and manage augmentation configurations.
+
+::: mkdocs-click
+    :module: cvbench.cli.augmentations
+    :command: augmentations
+    :prog_name: aug
+    :depth: 1
+    :list_subcommands: true
+
+## runs
+
+Manage and inspect experiment runs.
+
+::: mkdocs-click
+    :module: cvbench.cli.runs
+    :command: runs
+    :prog_name: runs
+    :depth: 1
+    :list_subcommands: true
