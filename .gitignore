@@ -39,6 +39,7 @@
 !docs/**/*.md
 !docs/**/*.css
 !docs/**/*.html
+!docs/**/*.svg
 
 # Except project root files
 !helper.sh

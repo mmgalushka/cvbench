@@ -20,32 +20,37 @@ cd ~/cvbench
 
 ## Option A — plain `docker run`
 
-**With GPU:**
+=== "GPU"
 
-```bash
-docker run -d \
-  --name cvbench \
-  --gpus all \
-  -p 0.0.0.0:8888:8888 \
-  -v ~/cvbench/data:/home/cvbench/data \
-  -v ~/cvbench/workspace:/home/cvbench/workspace \
-  -v ~/cvbench/experiments:/home/cvbench/experiments \
-  --restart unless-stopped \
-  mmgalushka/cvbench:latest
-```
+    ```bash
+    docker run -d \
+      --name cvbench \
+      --gpus all \
+      -p 0.0.0.0:8888:8888 \
+      -v ~/cvbench/data:/home/cvbench/data \
+      -v ~/cvbench/workspace:/home/cvbench/workspace \ # (1)!
+      -v ~/cvbench/experiments:/home/cvbench/experiments \
+      --restart unless-stopped \ # (2)!
+      mmgalushka/cvbench:latest
+    ```
 
-**CPU only** (drop `--gpus all`):
+    1. Bind-mounts your local `~/cvbench/workspace` directory into the container so notebooks and configs persist across restarts.
+    2. Automatically restarts the container after a reboot or crash, unless you stop it manually.
 
-```bash
-docker run -d \
-  --name cvbench \
-  -p 0.0.0.0:8888:8888 \
-  -v ~/cvbench/data:/home/cvbench/data \
-  -v ~/cvbench/workspace:/home/cvbench/workspace \
-  -v ~/cvbench/experiments:/home/cvbench/experiments \
-  --restart unless-stopped \
-  mmgalushka/cvbench:latest
-```
+=== "CPU only"
+
+    Drop `--gpus all`:
+
+    ```bash
+    docker run -d \
+      --name cvbench \
+      -p 0.0.0.0:8888:8888 \
+      -v ~/cvbench/data:/home/cvbench/data \
+      -v ~/cvbench/workspace:/home/cvbench/workspace \
+      -v ~/cvbench/experiments:/home/cvbench/experiments \
+      --restart unless-stopped \
+      mmgalushka/cvbench:latest
+    ```
 
 ---
 
@@ -53,50 +58,54 @@ docker run -d \
 
 Save the appropriate file as `~/cvbench/docker-compose.yml` and run `docker compose up -d`.
 
-**With GPU** (requires [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)):
+=== "GPU"
 
-```yaml
-services:
-  cvbench:
-    image: mmgalushka/cvbench:latest   # pin a release: mmgalushka/cvbench:0.2.0
-    container_name: cvbench
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    environment:
-      - CVBENCH_URL=http://<server-ip>:8000
-    ports:
-      - "0.0.0.0:8000:8000"
-      - "0.0.0.0:8888:8888"
-    volumes:
-      - ~/cvbench/data:/home/cvbench/data
-      - ~/cvbench/workspace:/home/cvbench/workspace
-      - ~/cvbench/experiments:/home/cvbench/experiments
-    restart: unless-stopped
-```
+    Requires [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html):
 
-**CPU only** (remove the GPU lines):
+    ```yaml
+    services:
+      cvbench:
+        image: mmgalushka/cvbench:latest   # pin a release: mmgalushka/cvbench:0.2.0
+        container_name: cvbench
+        deploy:
+          resources:
+            reservations:
+              devices:
+                - driver: nvidia
+                  count: all
+                  capabilities: [gpu]
+        environment:
+          - CVBENCH_URL=http://<server-ip>:8000
+        ports:
+          - "0.0.0.0:8000:8000"
+          - "0.0.0.0:8888:8888"
+        volumes:
+          - ~/cvbench/data:/home/cvbench/data
+          - ~/cvbench/workspace:/home/cvbench/workspace
+          - ~/cvbench/experiments:/home/cvbench/experiments
+        restart: unless-stopped
+    ```
 
-```yaml
-services:
-  cvbench:
-    image: mmgalushka/cvbench:latest
-    container_name: cvbench
-    environment:
-      - CVBENCH_URL=http://<server-ip>:8000
-    ports:
-      - "0.0.0.0:8000:8000"
-      - "0.0.0.0:8888:8888"
-    volumes:
-      - ~/cvbench/data:/home/cvbench/data
-      - ~/cvbench/workspace:/home/cvbench/workspace
-      - ~/cvbench/experiments:/home/cvbench/experiments
-    restart: unless-stopped
-```
+=== "CPU only"
+
+    Remove the GPU `deploy` block:
+
+    ```yaml
+    services:
+      cvbench:
+        image: mmgalushka/cvbench:latest
+        container_name: cvbench
+        environment:
+          - CVBENCH_URL=http://<server-ip>:8000
+        ports:
+          - "0.0.0.0:8000:8000"
+          - "0.0.0.0:8888:8888"
+        volumes:
+          - ~/cvbench/data:/home/cvbench/data
+          - ~/cvbench/workspace:/home/cvbench/workspace
+          - ~/cvbench/experiments:/home/cvbench/experiments
+        restart: unless-stopped
+    ```
 
 Replace `<server-ip>` with the actual IP or hostname of your Docker host.
 
