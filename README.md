@@ -1,4 +1,9 @@
-# CVBench
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mmgalushka/cvbench/main/docs/assets/images/logo-horizontal-dark.svg">
+  <img src="https://raw.githubusercontent.com/mmgalushka/cvbench/main/docs/assets/images/logo-horizontal-light.svg" alt="CVBench" width="380">
+</picture>
 
 [![CI](https://github.com/mmgalushka/cvbench/actions/workflows/ci.yaml/badge.svg)](https://github.com/mmgalushka/cvbench/actions/workflows/ci.yaml)
 [![codecov](https://codecov.io/gh/mmgalushka/cvbench/graph/badge.svg?token=2tAfSTBylU)](https://codecov.io/gh/mmgalushka/cvbench)
@@ -13,6 +18,8 @@ in one container — generate or bring your own data, train and evaluate
 classification/detection models, track experiments, and export to
 [TFLite](https://ai.google.dev/edge/litert)/[ONNX](https://onnx.ai/)/[Hailo](https://hailo.ai/)/[Jetson](https://developer.nvidia.com/embedded-computing),
 all from one CLI and WebUI.
+
+</div>
 
 ## 30-second quick start
 
