@@ -6,7 +6,10 @@ hide:
 
 <div class="hero" markdown>
 
-# CVBench
+![CVBench](assets/images/logo-horizontal-light.svg#only-light){ .hero-logo }
+![CVBench](assets/images/logo-horizontal-dark.svg#only-dark){ .hero-logo }
+
+# <span class="sr-only">CVBench</span>
 
 ### One GPU-enabled container bundling [Keras](https://keras.io/), [TensorFlow](https://www.tensorflow.org/), [JupyterLab](https://jupyterlab.readthedocs.io/), and a WebUI for computer vision work.
 
