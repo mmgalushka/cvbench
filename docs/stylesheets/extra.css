@@ -80,3 +80,22 @@
   background: linear-gradient(180deg, var(--md-default-bg-color) 0%, var(--md-code-bg-color) 100%);
   border-radius: 0.6rem;
 }
+
+/* Sidebar: section labels read as static headings; the current page stands out. */
+@media screen and (min-width: 76.25em) {
+  .md-nav--primary .md-nav__item--section > label.md-nav__link {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06rem;
+    text-transform: uppercase;
+    color: var(--md-default-fg-color--light);
+    opacity: 0.75;
+    cursor: default;
+    pointer-events: none;
+    margin-top: 0.9rem;
+  }
+}
+
+.md-nav--primary .md-nav__link--active:not(.md-nav__item--section > label) {
+  color: var(--md-accent-fg-color);
+}
