@@ -49,3 +49,15 @@ exports to. Start here when you want to go deeper than these pages do.
 | tmux | Long-running sessions (`tm`) | [tmux wiki](https://github.com/tmux/tmux/wiki) |
 | JupyterLab | Custom experiments | [jupyterlab.readthedocs.io](https://jupyterlab.readthedocs.io/) |
 | pandas, matplotlib | Analysis in notebooks | [pandas](https://pandas.pydata.org/), [matplotlib](https://matplotlib.org/) |
+
+## Image credits
+
+The cat and dog photos on the home page are CC0 (public domain dedication) images from
+[Wikimedia Commons](https://commons.wikimedia.org/): *Tabby cat with blue eyes*,
+*Small Cat Receiving Love*, *Playing time of our cat*, *Dog resting on the grass*,
+*Picography dog yawning 1*, and *Dog park, small dog mix*.
+
+*NVIDIA Jetson Nano Developer Kit* photo by
+[SparkFun Electronics](https://www.flickr.com/people/41898857@N04), via
+[Wikimedia Commons](https://commons.wikimedia.org/wiki/File:NVIDIA_Jetson_Nano_Developer_Kit_(40650425503).jpg),
+licensed [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/).

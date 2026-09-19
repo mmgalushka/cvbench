@@ -40,6 +40,8 @@
 !docs/**/*.css
 !docs/**/*.html
 !docs/**/*.svg
+!docs/**/*.jpg
+!docs/**/*.png
 
 # Except project root files
 !helper.sh
