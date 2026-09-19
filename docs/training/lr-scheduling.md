@@ -1,7 +1,7 @@
 # Learning Rate Scheduling
 
 By default the learning rate is fixed for the entire training run. Use
-`--lr-scheduler` to enable **ReduceLROnPlateau** — the LR is multiplied by
+`--lr-scheduler` to enable **[ReduceLROnPlateau](https://keras.io/api/callbacks/reduce_lr_on_plateau/)** — the LR is multiplied by
 `factor` whenever `val_loss` fails to improve for `patience` consecutive
 epochs.
 

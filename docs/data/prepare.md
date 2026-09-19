@@ -3,7 +3,8 @@
 The `data` command group has eight subcommands in total: `list` and `explore`
 for inspecting a dataset, `upsample` for correcting class imbalance (see
 [Augmentation](augmentation.md#upsampling-a-class-folder)), and five verbs for
-reshaping a dataset (classification or YOLO layout) without touching the
+reshaping a dataset (classification or
+[YOLO](https://docs.ultralytics.com/datasets/detect/) layout) without touching the
 source — clean, hashify, dedup, split, and flatten. Each of the five copies
 `SRC` to `DST` and leaves `SRC` untouched.
 
@@ -25,17 +26,18 @@ lighting bias or class imbalance before you train.
 |---|---|
 | `data explore --split` | Dataset split to analyse: `train` (default) / `val` / `test` |
 
-!!! tip "Five dataset-copy verbs"
-    | Command | What it does |
-    |---|---|
-    | `data clean` | Drop OS/editor junk files |
-    | `data hashify` | Rename images to content-hash filenames |
-    | `data dedup` | Drop exact-duplicate images |
-    | `data split` | Split a flat pool into train/val/test, stratified |
-    | `data flatten` | Pool an already-split dataset back into one flat folder |
+### The five dataset-copy verbs
 
-    All five share the same shape: `data <verb> SRC DST [options]`, and most
-    support `--dry-run` to preview the result before writing anything.
+| Command | What it does |
+|---|---|
+| `data clean` | Drop OS/editor junk files |
+| `data hashify` | Rename images to content-hash filenames |
+| `data dedup` | Drop exact-duplicate images |
+| `data split` | Split a flat pool into train/val/test, stratified |
+| `data flatten` | Pool an already-split dataset back into one flat folder |
+
+All five share the same shape: `data <verb> SRC DST [options]`, and most
+support `--dry-run` to preview the result before writing anything.
 
 ## Cleaning a dataset
 
@@ -100,7 +102,9 @@ data dedup data/my_data data/my_data_deduped --across-splits
 ## Splitting a dataset
 
 Use `data split` to copy a dataset (classification or YOLO layout) into
-train/val/test, stratified by class. `SRC` must be a flat pool
+train/val/test,
+[stratified](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html)
+by class (every split keeps the dataset's class proportions). `SRC` must be a flat pool
 (classification: `<class>/*`; YOLO: `images/*` + `labels/*`) — an
 already-split `SRC` is rejected; run `data flatten` first, then re-split the
 result. YOLO images can carry boxes of more than one class, so the

@@ -8,7 +8,7 @@ hide:
 
 # CVBench
 
-### One GPU-enabled container bundling Keras, TensorFlow, JupyterLab, and a WebUI for computer vision work.
+### One GPU-enabled container bundling [Keras](https://keras.io/), [TensorFlow](https://www.tensorflow.org/), [JupyterLab](https://jupyterlab.readthedocs.io/), and a WebUI for computer vision work.
 
 No more stitching together a training script, a notebook, an experiment
 tracker, and a deployment story by hand. CVBench packages all of it into one
@@ -48,7 +48,7 @@ environment.
 
     ---
 
-    Export a trained model to TFLite, ONNX, or a Hailo HEF package, or get
+    Export a trained model to [TFLite](https://ai.google.dev/edge/litert), [ONNX](https://onnx.ai/), or a [Hailo](https://hailo.ai/) HEF package, or get
     step-by-step Jetson deployment instructions — all from one command.
 
 -   :material-history:{ .lg .middle } [**Explore**](tools/experiment-tracker.md)

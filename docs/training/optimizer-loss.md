@@ -7,7 +7,7 @@ resuming a run.
 
 ## Optimizer
 
-By default training uses Adam. Use `--optimizer` to switch to SGD or to add
+By default training uses [Adam](https://keras.io/api/optimizers/adam/). Use `--optimizer` to switch to [SGD](https://keras.io/api/optimizers/sgd/) or to add
 weight decay (L2 regularization).
 
 ```bash
@@ -27,7 +27,8 @@ train data/ --optimizer sgd:weight_decay=1e-4,momentum=0.9
 
 ## Loss function
 
-By default training uses categorical cross-entropy. Use `--loss` to switch to
+By default training uses categorical
+[cross-entropy](https://keras.io/api/losses/probabilistic_losses/#categoricalcrossentropy-class). Use `--loss` to switch to
 focal loss or to enable label smoothing, which are particularly useful when
 you have false positive problems.
 
@@ -67,5 +68,12 @@ train data/ --loss focal:gamma=2.0,label_smoothing=0.1
     Both configs are saved to `config.yaml` and applied automatically when
     resuming a run — you don't need to repeat `--optimizer`/`--loss` on a
     `--resume` call.
+
+## Further reading
+
+- Keras [optimizers](https://keras.io/api/optimizers/) and
+  [losses](https://keras.io/api/losses/) — full parameter descriptions
+  (`label_smoothing` is a `CategoricalCrossentropy` argument)
+- [Technology References](../references.md)
 
 Next: [Learning Rate Scheduling](lr-scheduling.md).

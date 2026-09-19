@@ -2,7 +2,7 @@
 
 Training and other long-running commands keep running even after you close
 your terminal or lose your SSH connection — as long as you start them inside
-a `tm` session. `tm` is a small wrapper around `tmux` that ships in the
+a `tm` session. `tm` is a small wrapper around [`tmux`](https://github.com/tmux/tmux/wiki) that ships in the
 container.
 
 ```

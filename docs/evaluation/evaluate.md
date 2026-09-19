@@ -26,10 +26,18 @@ read to render results.
 
 The report shape depends on the run's task:
 
-- **Classification** — overall accuracy, per-class precision/recall/F1, and a
-  confusion matrix with clickable-in-the-WebUI misclassified samples.
+- **Classification** — overall accuracy, per-class
+  [precision/recall/F1](https://scikit-learn.org/stable/modules/model_evaluation.html#precision-recall-and-f-measures), and a
+  [confusion matrix](https://scikit-learn.org/stable/modules/model_evaluation.html#confusion-matrix) with clickable-in-the-WebUI misclassified samples.
 - **Detection** — a per-class outcome table (matched / mislocated / confused
-  / missed) plus AP/precision/recall/F1 and a class-confusion matrix.
+  / missed) plus AP/precision/recall/F1 and a class-confusion matrix. Ground
+  truth uses the [YOLO txt format](https://docs.ultralytics.com/datasets/detect/).
+
+!!! tip "Reading detection metrics"
+    A predicted box counts as a match when its overlap with a ground-truth box
+    (IoU, intersection over union) passes a threshold. AP (average precision)
+    summarizes the precision/recall trade-off across confidence thresholds for
+    one class.
 
 See [Experiment Tracker](../tools/experiment-tracker.md) for how the WebUI
 presents these results, and `runs show <run>` for the terminal equivalent.

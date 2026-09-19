@@ -1,5 +1,6 @@
 # Training Basics
 
+Training uses [Keras](https://keras.io/) on [TensorFlow](https://www.tensorflow.org/).
 From a JupyterLab terminal or SSH session:
 
 ```bash
@@ -14,7 +15,7 @@ train data --epochs 20 --backbone efficientnet_b0
 bare name is resolved under `data/`, and a literal path is used as-is.
 
 !!! tip
-    Use `tm new <name>` to start a tmux session before a long training run.
+    Use `tm new <name>` to start a [tmux](https://github.com/tmux/tmux/wiki) session before a long training run.
     Detach with `Ctrl+B D` and the run keeps going after you close the
     terminal or disconnect SSH.
 
@@ -24,8 +25,8 @@ bare name is resolved under `data/`, and a literal path is used as-is.
 |---|---|
 | `--output <dir>` | Experiment output directory (default: `experiments/<auto-name>/`) |
 | `--from <dir>` | Load config from an existing experiment as baseline |
-| `--backbone` | Backbone name (`efficientnet_b0`..`b5`, `resnet_18`, `resnet_50`). Detection defaults to `resnet_18` unless passed explicitly |
-| `--weights` | Backbone weight init: `imagenet` (pretrained, default) or `none` (random/scratch) |
+| `--backbone` | Backbone name (`efficientnet_b0`..`b5`, `resnet_18`, `resnet_50`; see [Keras Applications](https://keras.io/api/applications/)). Detection defaults to `resnet_18` unless passed explicitly |
+| `--weights` | Backbone weight init: `imagenet` (pretrained on [ImageNet](https://www.image-net.org/), default) or `none` (random/scratch) |
 | `--epochs N` | Number of training epochs (see the warning below) |
 | `--lr` | Learning rate |
 | `--batch-size` | Batch size |

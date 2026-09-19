@@ -36,6 +36,10 @@ data/synthetic/
 
 ## YOLO txt dataset
 
+This is the [YOLO detection format](https://docs.ultralytics.com/datasets/detect/):
+one image per label file, one `class_id x_center y_center width height` line
+per box, all coordinates normalized to 0–1.
+
 ```bash
 data generate data/synthetic_yolo --format yolo \
     --train 200 --val 50 --test 50 --image-size 160 --max-objects 4

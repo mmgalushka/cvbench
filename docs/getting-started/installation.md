@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Docker 24+
+- [Docker](https://docs.docker.com/engine/install/) 24+ (Option B also needs [Docker Compose](https://docs.docker.com/compose/))
 - **GPU (optional):** [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) — required only if you want GPU acceleration. The container runs on CPU without it.
 
 <!-- IMAGE PLACEHOLDER: architecture diagram — see design spec for generation prompt. Suggested alt text: "CVBench container architecture: CLI, WebUI, and JupyterLab modules with mounted data/workspace/experiments volumes" -->

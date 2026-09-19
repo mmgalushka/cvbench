@@ -6,7 +6,7 @@ you want to customize along the way.
 
 ## 1. Open a session and start a tmux session
 
-Training can take a while, so start it inside `tmux` — this way it keeps
+Training can take a while, so start it inside [`tmux`](https://github.com/tmux/tmux/wiki) — this way it keeps
 running even if you close your terminal or lose your SSH connection.
 
 ```bash
@@ -32,7 +32,7 @@ ready to bring your own images.
 
 !!! note "Classification or detection — CVBench supports both"
     `train` detects which task you're running automatically from `DATA_DIR`'s
-    layout: a dataset with `images/` and `labels/` subdirectories (YOLO-style
+    layout: a dataset with `images/` and `labels/` subdirectories ([YOLO-style](https://docs.ultralytics.com/datasets/detect/)
     boxes) is trained as **detection**; anything else (one subfolder per
     class) is trained as **classification**. No extra flag is needed — just
     point `train` at the right kind of dataset. See
@@ -43,6 +43,10 @@ ready to bring your own images.
 ```bash
 train data/synthetic --epochs 5 --backbone efficientnet_b0
 ```
+
+`efficientnet_b0` is a small pretrained image backbone from
+[Keras Applications](https://keras.io/api/applications/) — a good default for
+a smoke test.
 
 Training prints the run name when it finishes — you'll need it for every
 step that follows. Detach from tmux with `Ctrl+B D`; the run keeps going.

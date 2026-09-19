@@ -1,12 +1,18 @@
 # Hailo HEF Export
 
 [Hailo](https://hailo.ai/) makes low-power AI accelerator chips (e.g. the
-Hailo-8/Hailo-8L) used in edge and embedded devices; they run models compiled
-to Hailo's own `.hef` (Hailo Executable Format) binary, not TFLite or ONNX
+Hailo-8/[Hailo-8L](https://hailo.ai/products/hailo-accelerators/hailo-8l-ai-accelerator/)) used in edge and embedded devices; they run models
+compiled to Hailo's own `.hef` (Hailo Executable Format) binary, not
+[TFLite](https://ai.google.dev/edge/litert) or [ONNX](https://onnx.ai/)
 directly. Compiling to HEF requires Hailo's own SDK/Docker toolchain (the
-`hailo` CLI used below), which CVBench does not bundle — check Hailo's
-developer site/documentation for how to obtain and install it before the
-commands on this page will run.
+`hailo` CLI used below), which CVBench does not bundle — get it from the
+[Hailo Developer Zone](https://hailo.ai/developer-zone/) before the commands
+on this page will run.
+
+!!! info "Hailo Developer Zone account"
+    The Dataflow Compiler download and its user guide are behind a free
+    Developer Zone login. Register once, then follow Hailo's installation
+    guide for the Docker-based toolchain.
 
 ```bash
 runs export my_run --format hailo
@@ -31,7 +37,7 @@ dataset:
 
 | Strategy | Description |
 |---|---|
-| `stratified` (default) | Equal quota per class, then k-means clustering *within* each class to pick a diverse representative from every cluster — recommended |
+| `stratified` (default) | Equal quota per class, then [k-means](https://scikit-learn.org/stable/modules/clustering.html#k-means) clustering *within* each class to pick a diverse representative from every cluster — recommended |
 | `proportional` | Samples proportional to each class's size in the dataset |
 | `equal` | Same fixed number of images per class |
 | `diverse` | k-means clustering across *all* images regardless of class, then samples spread across clusters |
@@ -45,13 +51,21 @@ runs export my_run --format hailo --calib-total 512 --calib-strategy diverse
 | `--calib-total N` | `1024` | Target total images in the calibration set |
 | `--calib-strategy` | `stratified` | See table above |
 
+!!! tip "What calibration is for"
+    Hailo converts float32 weights and activations to low-bit integers
+    (post-training quantization). It runs the calibration images through the
+    model to measure the value ranges it needs to preserve, so a calibration
+    set that resembles your real inputs directly affects accuracy after
+    conversion.
+
 The final calibration array is shuffled before being written — sequential
 per-class ordering can bias Hailo's calibration algorithm, which processes
 images in mini-batches.
 
 ## `model.alls`
 
-The generated Model Script sets a default optimization level and per-layer
+The generated Model Script (`.alls`, Hailo's optimization script format —
+see the Dataflow Compiler user guide for every command) sets a default optimization level and per-layer
 precision hints:
 
 ```text
@@ -99,5 +113,16 @@ hailo compiler --hw-arch hailo8l model_optimized.har
     Hailo's post-training quantization fails to converge. If you hit
     conversion or SNR problems, try [Two-Phase Training](../training/two-phase.md)
     with a much lower fine-tuning learning rate before re-exporting.
+
+## Further reading
+
+- [Hailo Developer Zone](https://hailo.ai/developer-zone/) — Dataflow Compiler
+  download, user guide, and Model Script reference (free account required)
+- [Hailo Model Zoo](https://github.com/hailo-ai/hailo_model_zoo) — reference
+  models and compile recipes from Hailo
+- [Hailo-8L accelerator](https://hailo.ai/products/hailo-accelerators/hailo-8l-ai-accelerator/) — hardware overview
+- [TensorFlow Lite (LiteRT)](https://ai.google.dev/edge/litert) — the model
+  format Hailo's parser reads
+- [Technology References](../references.md) — every external tool CVBench uses
 
 Next: [Jetson Deployment](jetson.md).

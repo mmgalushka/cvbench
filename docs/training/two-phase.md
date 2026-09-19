@@ -1,6 +1,7 @@
 # Two-Phase Training (freeze → fine-tune)
 
-A common transfer-learning workflow is to first train with the backbone
+A common [transfer-learning](https://www.tensorflow.org/tutorials/images/transfer_learning)
+workflow is to first train with the backbone
 frozen, then unfreeze some layers and fine-tune at a lower learning rate.
 
 ```text
@@ -43,7 +44,7 @@ preserved in `training_log.csv`.
 ## Resuming after an interrupt
 
 If training is interrupted mid-run, CVBench saves an `interrupt_epochNNN.keras`
-checkpoint and prints the exact resume command:
+[`.keras`](https://keras.io/api/models/model_saving_apis/) checkpoint and prints the exact resume command:
 
 ```bash
 train data/ --from experiments/phase1 --resume experiments/phase1/interrupt_epoch023.keras --epochs 30
@@ -54,5 +55,17 @@ train data/ --from experiments/phase1 --resume experiments/phase1/interrupt_epoc
 | `--from <exp_dir>` | Load backbone, hyperparameters, and epoch count from a previous experiment |
 | `--resume <checkpoint>` | Load weights from a `.keras` checkpoint and continue training from the recorded epoch |
 | `--fine-tune-from-layer N` | Unfreeze backbone layers from index N onward (`-1` = unfreeze all) |
+
+!!! tip "Why a lower learning rate in phase 2?"
+    Pretrained backbone weights are already good. Large updates can wipe out
+    what they learned, so fine-tune with a learning rate roughly 10–100×
+    smaller than the one used for the head.
+
+## Further reading
+
+- [Transfer learning and fine-tuning](https://www.tensorflow.org/tutorials/images/transfer_learning)
+  (TensorFlow guide)
+- [Keras model saving](https://keras.io/api/models/model_saving_apis/)
+- [Technology References](../references.md)
 
 Next: [Evaluating a Run](../evaluation/evaluate.md).

@@ -7,10 +7,12 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/mmgalushka/cvbench.svg)](https://hub.docker.com/r/mmgalushka/cvbench)
 [![GitHub release](https://img.shields.io/github/v/release/mmgalushka/cvbench)](https://github.com/mmgalushka/cvbench/releases)
 
-GPU-enabled computer vision training sandbox. Keras + TensorFlow + JupyterLab
+GPU-enabled computer vision training sandbox. [Keras](https://keras.io/) +
+[TensorFlow](https://www.tensorflow.org/) + [JupyterLab](https://jupyterlab.readthedocs.io/)
 in one container — generate or bring your own data, train and evaluate
 classification/detection models, track experiments, and export to
-TFLite/ONNX/Hailo/Jetson, all from one CLI and WebUI.
+[TFLite](https://ai.google.dev/edge/litert)/[ONNX](https://onnx.ai/)/[Hailo](https://hailo.ai/)/[Jetson](https://developer.nvidia.com/embedded-computing),
+all from one CLI and WebUI.
 
 ## 30-second quick start
 

@@ -29,8 +29,10 @@ and augmentations.
 
 ### Evaluation
 
-Overall accuracy and a per-class precision/recall/F1 table, plus an
-interactive confusion matrix. For detection runs, a per-class outcome table
+Overall accuracy and a per-class
+[precision/recall/F1](https://scikit-learn.org/stable/modules/model_evaluation.html#precision-recall-and-f-measures)
+table, plus an interactive
+[confusion matrix](https://scikit-learn.org/stable/modules/model_evaluation.html#confusion-matrix). For detection runs, a per-class outcome table
 leads instead, with the confusion matrix rendered below it.
 
 #### Interactive confusion matrix — classification runs

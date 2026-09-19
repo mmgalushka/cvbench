@@ -20,15 +20,15 @@ predict --format plan
 
 | `--format` | Description |
 |---|---|
-| `keras` (default) | Run inference with the original Keras model |
-| `onnx` | Run inference with the exported ONNX model |
-| `tflite` | Run inference with the exported TFLite model |
+| `keras` (default) | Run inference with the original [Keras](https://keras.io/) model |
+| `onnx` | Run inference with the exported [ONNX](https://onnx.ai/) model (via [ONNX Runtime](https://onnxruntime.ai/)) |
+| `tflite` | Run inference with the exported [TFLite](https://ai.google.dev/edge/litert) model |
 | `all` | Run every available format side by side and flag where predictions disagree — useful for spotting conversion drift after export |
 | `plan` | Print the Jetson inference script and run instructions (no run or images needed) |
 
 The model for `onnx`/`tflite` must already be exported — see
 [Export Formats (TFLite/ONNX)](../deployment/export.md). `predict --format
-plan` doesn't run inference itself; it prints a ready-to-use TensorRT
+plan` doesn't run inference itself; it prints a ready-to-use [TensorRT](https://developer.nvidia.com/tensorrt)
 inference script for the Jetson, since `.plan` engines only run on the device
 they were compiled for.
 
