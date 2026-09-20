@@ -2,10 +2,9 @@
 resolves experiment directories under `experiments/`.
 
 Generic placeholder for future workspace-scoped items (notebooks, scratch
-dirs, ...) — not wired into any CLI command yet. `core/aug_store.py`'s
-`workspace/augmentations/` remains its own store with its own `Registry`
-rather than nesting under this one, since it is file-mode (`.yaml` configs)
-while this one is directory-mode.
+dirs, ...) — not wired into any CLI command yet. Augmentation configs are
+plain YAML files (written by `data aug`) that live in `workspace/` and are
+passed to `train` / `data upsample` by path; they have no store of their own.
 """
 from __future__ import annotations
 

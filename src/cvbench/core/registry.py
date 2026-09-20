@@ -1,6 +1,6 @@
-"""Generic name-to-path resolution shared by the experiment, augmentation,
-data, and workspace stores (`core/exp_store.py`, `core/aug_store.py`,
-`core/data_store.py`, `core/work_store.py`).
+"""Generic name-to-path resolution shared by the experiment, data, and
+workspace stores (`core/exp_store.py`, `core/data_store.py`,
+`core/work_store.py`).
 
 Each of those stores has the same shape: a base directory holding named
 entries, where a bare name (`my_run`) resolves to `base_dir/my_run` the same
@@ -25,7 +25,7 @@ class Registry:
     `base_dir`, e.g. `experiments/my_run`.
 
     File mode (`ext=".yaml"`): entries are files with that extension under
-    `base_dir`, e.g. `workspace/augmentations/standard.yaml`. A name that
+    `base_dir`, e.g. `configs/standard.yaml`. A name that
     already includes the extension is tried as-is before it's appended.
     """
 

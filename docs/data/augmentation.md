@@ -1,45 +1,31 @@
 # Augmentation
 
-Augmentation configs are named, saved artifacts managed under
-`workspace/augmentations/` — the same way `runs` manages `experiments/`.
-Once saved, a config is used by name with `train --augmentation` (applied
-live during training) or `data upsample --augmentation` (materialized to
-disk).
-
-## Discover what's available
-
-```bash
-aug transforms                    # every building-block transform + default params
-aug list                          # every config you've saved
-```
+An augmentation config is a single YAML file. Keep it in `workspace/`, edit it
+in any editor, and pass its path to `train --augmentation` (applied live
+during training) or `data upsample --augmentation` (materialized to disk).
 
 ## Generate a config
 
-`aug generate` shows a checklist of every available transform, each with a
-short description (space to toggle, arrow keys to move, enter to confirm),
-pre-checked with a preset's transforms if `--preset` is given, all unchecked
-otherwise:
+`data aug` writes a starting file; you edit it from there:
 
-```text
-$ aug generate --preset standard
-? Select transforms to include (space to toggle, enter to confirm):
- » ● keras_flip        Randomly flip the image.
-   ● keras_rotation    Randomly rotate the image.
-   ● keras_brightness  Randomly adjust brightness.
-   ● keras_contrast    Randomly adjust contrast.
-   ● aug_blur          Gaussian blur.
-   ○ aug_fog           Add a fog/haze effect.
-   ○ ...
-
-Save as [standard]: my_config
-  ✓ Saved → workspace/augmentations/my_config.yaml  (5 transform(s))
-  Open it in an editor to fine-tune any value.
-  Usage:  train data/ --augmentation my_config
+```bash
+data aug --preset light                       # → workspace/augmentation.yaml
+data aug --preset heavy -o workspace/heavy.yaml
+data aug                                      # reference sheet (see below)
 ```
 
-The saved file is ready to fine-tune — each transform gets a compact comment
-explaining what it does and what its parameters mean, so you can open it in
-any editor (VS Code, vim, ...) and tweak values without looking anything up:
+| Preset | Contents |
+|---|---|
+| `light` | Horizontal flip + tiny rotation. Safe for any dataset. |
+| `standard` | Flip, rotation, brightness/contrast, blur. A good general starting point. |
+| `heavy` | Standard plus zoom, fog and salt-and-pepper noise. Aggressive regularisation. |
+| `reference` (default) | Every available transform, commented out, with all parameters. Uncomment what you want. |
+
+`data aug` refuses to overwrite an existing file unless you pass `--force`.
+
+Each transform in a generated file carries a short comment explaining what it
+does and what its parameters mean, so you can tweak values without looking
+anything up:
 
 ```yaml
 transforms:
@@ -54,26 +40,30 @@ transforms:
     radius: 1.0  # range 0.5–15.0
 ```
 
+Then use it:
+
 ```bash
-aug show my_config                # print its YAML, syntax-highlighted
-aug edit my_config                # open it in $EDITOR to fine-tune a value
-train data/ --augmentation my_config --epochs 30
+train data/my_data --augmentation workspace/augmentation.yaml --epochs 30
 ```
 
 !!! note
-    `aug edit` opens the file in `$EDITOR`/`$VISUAL` (falling back to a
-    platform default) and writes back whatever you save — no validation, so a
-    typo just surfaces the next time you run `train`/`upsample` with it. GUI
-    editors need a "wait" flag to work here, e.g. `EDITOR="code --wait"` for
-    VS Code.
+    The file is not validated when it is written, so a typo surfaces the next
+    time you run `train` or `data upsample` with it.
 
-**`reference` preset** bypasses the wizard and saves a commented-out file
-showing every available transform (including range-sampling and `one_of`
-syntax) — open it in an editor and uncomment what you want:
+## The reference sheet
+
+`--preset reference` (the default) writes a fully commented file listing every
+available transform, plus the syntax for range sampling and mutually exclusive
+groups. Open it and uncomment the transforms you want:
 
 ```bash
-aug generate --preset reference --name aug_ref
+data aug --preset reference -o workspace/aug_ref.yaml
 ```
+
+Any numeric parameter can be written as a two-element list, e.g.
+`radius: [0.5, 2.0]`, to sample a fresh value per image. Wrap candidates in a
+`one_of` block so that at most one fires per image; `weight` sets their
+relative frequency.
 
 ## Upsampling a class folder
 
@@ -86,7 +76,7 @@ class if it is already well-represented).
 # Upsample the 'dog' class from however many originals it has to 1500 images.
 # The destination folder must be empty or non-existent.
 data upsample data/my_data/train/dog data/my_data_aug/train/dog \
-  --augmentation my_config \
+  --augmentation workspace/augmentation.yaml \
   --target 1500
 ```
 
@@ -99,7 +89,7 @@ data upsample data/my_data/train/dog data/my_data_aug/train/dog \
 
 | Option | Required | Description |
 |---|---|---|
-| `--augmentation NAME\|FILE` | ✓ | A saved `aug` config name, or a path to an augmentation YAML file (same format as `--augmentation` in `train`) |
+| `--augmentation FILE` | ✓ | Path to an augmentation YAML file (same format as `--augmentation` in `train`) |
 | `--target N` | ✓ | Total number of images the destination folder should contain |
 
 Next: reshape the rest of the dataset with [Preparing Real Datasets](prepare.md), or move on to [Training Basics](../training/basics.md).

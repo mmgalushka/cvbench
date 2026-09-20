@@ -50,17 +50,6 @@ Generate, inspect and reshape datasets.
     :depth: 1
     :list_subcommands: true
 
-## aug
-
-Discover, generate, and manage augmentation configurations.
-
-::: mkdocs-click
-    :module: cvbench.cli.augmentations
-    :command: augmentations
-    :prog_name: aug
-    :depth: 1
-    :list_subcommands: true
-
 ## runs
 
 Manage and inspect experiment runs.

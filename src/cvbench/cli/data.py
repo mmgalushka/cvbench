@@ -183,18 +183,64 @@ def explore(data_dir, split):
 
 
 @data.command(
+    "aug",
+    short_help="Write an augmentation config file to edit and reuse.",
+    examples=[
+        ("data aug --preset light", "Write workspace/augmentation.yaml from the 'light' preset"),
+        ("data aug", "Write the fully-commented reference sheet, then uncomment what you want"),
+        ("data aug --preset heavy -o workspace/heavy.yaml", "Write to a specific path"),
+    ],
+    see_also=[
+        ("train <dataset> --augmentation workspace/augmentation.yaml", "apply it live during training"),
+        ("data upsample", "materialise augmented images for one class folder"),
+    ],
+)
+@click.option("--preset", type=click.Choice(["light", "standard", "heavy", "reference"]),
+              default="reference", show_default=True,
+              help="Starting point. light/standard/heavy are ready-to-use configs; "
+                   "reference lists every transform, commented out, for you to edit.")
+@click.option("-o", "--output", "output", default="workspace/augmentation.yaml",
+              show_default=True, type=click.Path(dir_okay=False),
+              help="Where to write the config file.")
+@click.option("--force", is_flag=True, default=False, help="Overwrite the output file if it exists.")
+def aug(preset, output, force):
+    """Write an augmentation config file, then edit it in any editor.
+
+    The file is plain YAML: pass it to `train --augmentation FILE` (applied
+    live during training) or `data upsample --augmentation FILE` (written to
+    disk). Use --preset reference for a sheet of every available transform
+    with all parameters and range/one_of syntax explained.
+    """
+    from cvbench.cli._aug_template import _preset_transforms, _reference_yaml, _render_config_yaml
+    from cvbench.core import _console
+
+    path = Path(output)
+    if path.exists() and not force:
+        raise click.ClickException(f"'{path}' already exists — use --force to overwrite.")
+
+    content = _reference_yaml() if preset == "reference" else _render_config_yaml(_preset_transforms(preset))
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+    _console.success(f"Saved → {path}")
+    print("  Open it in an editor to fine-tune any value.")
+    print(f"  Usage:  train data/<dataset> --augmentation {path}")
+
+
+@data.command(
     "upsample",
     short_help="Grow a class folder to TARGET images via augmentation.",
     examples=[
         ("data upsample data/train/dog data_aug/train/dog --augmentation aug.yaml --target 1500",
          "Copy originals, then add augmented variants until the folder holds 1500 images"),
     ],
-    see_also=[("aug generate", "make an augmentation spec first")],
+    see_also=[("data aug", "make an augmentation config first")],
 )
 @click.argument("src_dir")
 @click.argument("dst_dir")
 @click.option("--augmentation", "aug_file", required=True,
-              help="Augmentation YAML spec file, or the name of a saved 'aug' config.")
+              type=click.Path(exists=True, dir_okay=False),
+              help="Augmentation YAML file (see 'data aug').")
 @click.option("--target", required=True, type=int,
               help="Target number of images in the output folder.")
 def upsample(src_dir, dst_dir, aug_file, target):
@@ -211,7 +257,6 @@ def upsample(src_dir, dst_dir, aug_file, target):
 
     from cvbench.augmentations.pipeline import build_aug_pipeline
     from cvbench.core import _console
-    from cvbench.core.aug_store import resolve_aug_file
     from cvbench.core.config import load_aug_file
 
     src = Path(src_dir)
@@ -242,7 +287,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
     else:
         dst.mkdir(parents=True)
 
-    aug_cfg = load_aug_file(resolve_aug_file(aug_file))
+    aug_cfg = load_aug_file(aug_file)
     pipeline = build_aug_pipeline(aug_cfg.transforms)
 
     used_tokens: set[str] = set()

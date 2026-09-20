@@ -33,7 +33,6 @@ RUN echo '# cleared by CVBench' > /etc/bash.bashrc
 # ── Home directory: volume mount points + shell config ────────────────────
 RUN mkdir -p \
       /home/cvbench/data \
-      /home/cvbench/augmentations \
       /home/cvbench/workspace \
       /home/cvbench/experiments \
  && chown -R cvbench:cvbench /home/cvbench
