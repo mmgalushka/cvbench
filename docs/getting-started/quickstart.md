@@ -3,6 +3,13 @@
 The fastest path from a running container to a trained, evaluated, served model.
 
 ```text
+commands ──▶ tm new ──▶ data generate ──▶ train ──▶ runs list ──▶ evaluate ──▶ serve
+```
+
+Five commands, top to bottom, and you have a trained model. Run these inside
+the container (`docker exec -it cvbench bash`):
+
+```text
 1  commands                           # show this screen again any time
 2  tm new <name>                      # start a tmux session so training survives closing your terminal
 3  data generate                      # make a 4-class synthetic dataset in data/synthetic/
@@ -15,10 +22,7 @@ The fastest path from a running container to a trained, evaluated, served model.
 Every command has worked examples in its `--help`. Inside the container, run
 `commands` any time for the full picture (CLI plus the tmux session helpers).
 
-For installing and starting the container itself, see the
-[README's Quick start section](https://github.com/mmgalushka/cvbench#quick-start).
-
-!!! note
-    This page is copied from the CLI-generated Quickstart block. A follow-up will
-    wire it (and the CLI reference) to generate live from `cvbench.cli.overview`
-    instead of being hand-copied.
+For installing and starting the container itself, see
+[Installation & Volumes](installation.md). For a guided, narrated walkthrough
+of the same path with explanations at each step, see
+[Your First Model](first-model.md).

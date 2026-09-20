@@ -49,6 +49,7 @@ dev = [
 ]
 docs = [
     "mkdocs-material==9.7.7",
+    "mkdocs-click==0.9.0",
 ]
 
 [project.scripts]
