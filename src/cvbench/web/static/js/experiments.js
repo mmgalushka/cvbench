@@ -30,12 +30,18 @@ async function showRunsList() {
   }
 }
 
+/* ── Type icons: one flask = a run, three flasks = a sweep ─────────────────── */
+
+const RUN_ICON = '<i class="fas fa-flask type-icon" role="img" title="Experiment" aria-label="Experiment"></i>';
+const SWEEP_ICON = `<svg class="type-icon" width="20" height="16" viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Sweep"><title>Sweep</title><path d="M12 3h6M13.5 3v6L9 19a1.5 1.5 0 0 0 1.4 2h9.2a1.5 1.5 0 0 0 1.4-2l-4.5-10V3"/><path d="M6 10h-3M4.5 10v3.5L2 19.5a1 1 0 0 0 1 1.5h3"/><path d="M24 10h3M25.5 10v3.5L28 19.5a1 1 0 0 1-1 1.5h-3"/></svg>`;
+const trialCount = n => n ? ` <small class="trial-count" title="${n} trial${n !== 1 ? 's' : ''}">×${n}</small>` : '';
+
 function buildSweepRow(sw) {
   const taskShort = sw.task === 'detection' ? 'det' : 'cls';
   const loss = sw.val_loss != null ? sw.val_loss.toFixed(4) : '—';
   return `
     <tr onclick="navigate('#/sweeps/${encodeURIComponent(sw.name)}')">
-      <td><strong>${escHtml(sw.name)}</strong> <span class="badge badge-sweep">sweep</span></td>
+      <td><span class="type-name">${SWEEP_ICON}<strong>${escHtml(sw.name)}</strong>${trialCount(sw.n_trials)}</span></td>
       <td><span class="badge badge-task-${sw.task || 'classification'}">${taskShort}</span></td>
       <td>—</td>
       <td>${sw.date || '—'}</td>
@@ -73,7 +79,7 @@ function buildRunsList(runs, sweeps = []) {
     const taskShort = r.task === 'detection' ? 'det' : 'cls';
     return `
     <tr onclick="navigate('#/runs/${encodeURIComponent(r.name)}')">
-      <td><strong>${r.name}</strong></td>
+      <td><span class="type-name">${RUN_ICON}<strong>${r.name}</strong></span></td>
       <td><span class="badge badge-task-${r.task || 'classification'}">${taskShort}</span></td>
       <td>${r.backbone}</td>
       <td>${r.date || '—'}</td>
@@ -146,7 +152,7 @@ function buildSweepDetail(sw) {
     <div class="page-header">
       <div>
         <a href="#/" class="back-link" onclick="setActive('nav-runs')">← Experiments</a>
-        <h2>${escHtml(sw.name)} <span class="badge badge-${status}">${status}</span> <span class="badge badge-sweep">sweep</span></h2>
+        <h2><span class="type-name">${SWEEP_ICON}<span>${escHtml(sw.name)}</span>${trialCount(sw.trials.length)}</span> <span class="badge badge-${status}">${status}</span></h2>
       </div>
       <div class="run-actions-menu" id="run-actions-menu">
         <button class="run-actions-trigger" onclick="toggleRunMenu(event)" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
@@ -229,7 +235,7 @@ function buildRunDetail(run) {
         ${run.sweep
           ? `<a href="#/sweeps/${encodeURIComponent(run.sweep)}" class="back-link">← ${escHtml(run.sweep)}</a>`
           : `<a href="#/" class="back-link" onclick="setActive('nav-runs')">← Experiments</a>`}
-        <h2>${run.name} <span class="badge badge-${run.status}">${run.status}</span>${detection ? ' <span class="badge badge-format">detection</span>' : ''}</h2>
+        <h2><span class="type-name">${RUN_ICON}<span>${run.name}</span></span> <span class="badge badge-${run.status}">${run.status}</span>${detection ? ' <span class="badge badge-format">detection</span>' : ''}</h2>
       </div>
       <div class="run-actions-menu" id="run-actions-menu">
         <button class="run-actions-trigger" onclick="toggleRunMenu(event)" title="More actions"><i class="fas fa-ellipsis-v"></i></button>

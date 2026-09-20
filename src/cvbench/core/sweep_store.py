@@ -333,7 +333,7 @@ def trial_config_values(trial_dir: str | Path, flags: list[str]) -> dict[str, An
 # ---------------------------------------------------------------------------
 
 def sweep_entry(sweep_dir: str | Path) -> dict[str, Any] | None:
-    """Summarize a sweep as one `runs list` entry (same keys as `scan_experiments` plus `is_sweep`).
+    """Summarize a sweep as one `runs list` entry (same keys as `scan_experiments` plus `is_sweep` and `n_trials`).
 
     `val_loss` / `epochs_run` come from the best trial (never the ranking metric) and are None
     when no trial has finished. Status is `running` while any trial runs, else `done`.
@@ -357,6 +357,7 @@ def sweep_entry(sweep_dir: str | Path) -> dict[str, Any] | None:
         "epochs_run": best_entry["epochs_run"] if best_entry else None,
         "date": manifest.date,
         "is_sweep": True,
+        "n_trials": len(rows),
     }
 
 
