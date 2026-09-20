@@ -5,7 +5,6 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 import click
 
 from cvbench.cli import _help
-from cvbench.core import _console
 from cvbench.core.sweep_store import summarize
 
 # NOTE: cvbench.services.evaluation is imported inside evaluate() — it pulls in

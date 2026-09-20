@@ -123,6 +123,41 @@ def print_trial_table(
         ))
 
 
+def _evaluate_on_val(trial_dir: str) -> None:
+    """Score a trained detection trial on its VAL split and record mAP@50 in config.yaml.
+
+    `run_evaluation` only ever scores the test split, and picking a hyper-parameter
+    by test score would leak the test set into model selection. So this reuses the
+    same task API on a spec whose `test_dir` points at the val split. The report is
+    written to a throw-away directory (not the trial's eval_report.json, which is
+    reserved for the real test evaluation) and only the headline score is stored,
+    in `run.test_accuracy` / `run.test_metric="map50"` — the fields
+    `sweep_store.summarize` reads for the map50 metric. Running `evaluate <trial>`
+    later overwrites them with the real test mAP@50.
+    """
+    import dataclasses
+    import tempfile
+
+    from cvbench.core.config import load_config, update_run_status
+    from cvbench.tasks import resolve_task
+
+    cfg = load_config(trial_dir)
+    task = resolve_task(cfg)
+    spec = task.resolve_layout(cfg)
+    if not spec.val_dir:
+        _console.warning("No val split for this dataset; mAP@50 unavailable.")
+        return
+    val_spec = dataclasses.replace(spec, test_dir=spec.val_dir)
+    val_ds = task.build_eval_dataset(cfg, val_spec)
+    model = task.load_model(f"{trial_dir}/best.keras")
+    with tempfile.TemporaryDirectory() as tmp:
+        report = task.evaluate(
+            model=model, eval_ds=val_ds, cfg=cfg, spec=val_spec, run_dir=trial_dir, output_dir=tmp,
+        )
+    metric, value = task.test_score(report)
+    update_run_status(trial_dir, test_accuracy=value, test_metric=metric)
+
+
 @_help.command(
     short_help="Grid-search training flags and report the best trial.",
     examples=[
