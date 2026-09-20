@@ -86,24 +86,13 @@ def _kwargs(values: dict[str, Any]) -> dict[str, Any]:
     return {_KWARG.get(f, f): v for f, v in values.items()}
 
 
-def _star_cells(numbers: list[str], best: list[bool]) -> list[str]:
-    """Numbers right-aligned to a common width, then one char: an orange star for the best, else blank.
-
-    The alignment is done here (the column is left-justified) because rich strips plain
-    trailing spaces from right-justified cells, which would push non-best numbers sideways.
-    """
-    width = max((len(n) for n in numbers), default=0)
-    star = "[orange1]★[/]" if _console._color_enabled() else "★"
-    return [f"{n.rjust(width)} {star if b else ' '}" for n, b in zip(numbers, best, strict=True)]
-
-
 def print_trial_table(
     rows: list[TrialRow], axes: list[str], metric: str | None, *, show_test: bool = False,
 ) -> None:
-    """Trial table. With `show_test`, add a test-score column and star the best of each score.
+    """Trial table with a ★ on the best trial. With `show_test`, add a test-score column, also starred.
 
     The val star is the sweep's pick; the test star is only an indicator (a trial
-    that hasn't been evaluated yet shows a dash).
+    that hasn't been evaluated yet shows a dash). A legend is printed under the table.
     """
     columns: list[Any] = [("#", "right"), "Trial", *axes]
     if metric is not None:
@@ -111,13 +100,12 @@ def print_trial_table(
             test_metric = next((r.test_metric for r in rows if r.test_metric), None)
             columns += [metric, f"test {test_metric}" if test_metric else "test"]
         else:
-            columns += [(metric, "right")]
+            columns += [metric]
         columns += ["Status"]
     vals = [("—" if r.value is None else f"{r.value:.4f}") for r in rows]
     tests = [("—" if r.test_value is None else f"{r.test_value:.4f}") for r in rows]
-    if show_test:
-        val_cells = _star_cells(vals, [r.is_best for r in rows])
-        test_cells = _star_cells(tests, [r.is_best_test for r in rows])
+    val_cells = _console.star_cells(vals, [r.is_best for r in rows])
+    test_cells = _console.star_cells(tests, [r.is_best_test for r in rows])
     body = []
     for i, r in enumerate(rows):
         cells: list[Any] = [r.index, r.dir, *(r.params[a] for a in axes)]
@@ -125,9 +113,14 @@ def print_trial_table(
             if show_test:
                 cells += [val_cells[i], test_cells[i], r.status]
             else:
-                cells += [vals[i], f"{r.status}  ◀ best" if r.is_best else r.status]
+                cells += [val_cells[i], r.status]
         body.append(cells)
     _console.table(columns, body)
+    if metric is not None and any(r.is_best for r in rows):
+        print(_console.dim(
+            " ★ = best on that score. The sweep's pick is the val ★; the test ★ is only an indicator."
+            if show_test else " ★ = the sweep's pick (best on the selection metric)."
+        ))
 
 
 @_help.command(

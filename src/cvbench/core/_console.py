@@ -162,6 +162,17 @@ def table(
     _make_console().print(t)
 
 
+def star_cells(numbers: list[str], marked: list[bool]) -> list[str]:
+    """Numbers right-aligned to a common width, then one char: an orange star if marked, else blank.
+
+    The alignment is done here (the column is left-justified) because rich strips plain
+    trailing spaces from right-justified cells, which would push unmarked numbers sideways.
+    """
+    width = max((len(n) for n in numbers), default=0)
+    star = "[orange1]★[/]" if _color_enabled() else "★"
+    return [f"{n.rjust(width)} {star if m else ' '}" for n, m in zip(numbers, marked, strict=True)]
+
+
 def syntax(code: str, lexer: str = "text", *, theme: str = "ansi_dark") -> None:
     """Print syntax-highlighted code, falling back to plain text under NO_COLOR/non-TTY."""
     if not _color_enabled():

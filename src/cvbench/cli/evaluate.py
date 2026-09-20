@@ -50,7 +50,6 @@ def evaluate(experiment, output_dir):
         manifest, rows = summarize(resolve_run_dir(experiment, allow_sweep=True))
         print()
         print_trial_table(rows, list(manifest.axes), manifest.metric, show_test=True)
-        print(_console.dim(" ★ = best on that score. The sweep's pick is the val ★; the test ★ is only an indicator."))
         return
 
     run_evaluation(experiment=experiment, output_dir=output_dir)
