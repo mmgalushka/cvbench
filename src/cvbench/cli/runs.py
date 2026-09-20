@@ -12,12 +12,16 @@ from cvbench.core.config import load_config, update_run_status
 from cvbench.core.exp_store import (
     EXPERIMENTS_DIR,
     assert_name_available,
+    assert_renamable,
     best_experiment,
+    is_sweep_dir,
+    resolve_experiments_dir,
     resolve_run_dir,
     scan_experiments,
     validate_run_name,
 )
 from cvbench.core.report_print import print_classification_body, print_detection_body
+from cvbench.core.sweep_store import scan_sweeps
 
 # NOTE: cvbench.services.export is imported inside export() — it pulls in
 # TensorFlow, and importing it at module scope would make every `runs …`
@@ -66,8 +70,18 @@ def runs():
     show_default=True,
 )
 def list_runs(experiments_dir, sort):
-    """List experiments in EXPERIMENTS_DIR (default: experiments/)."""
+    """List experiments in EXPERIMENTS_DIR (default: experiments/).
+
+    EXPERIMENTS_DIR may also be a sweep name to list that sweep's trials.
+    """
+    experiments_dir = resolve_experiments_dir(experiments_dir)
     entries = scan_experiments(experiments_dir, sort_by=sort)
+    sweeps = scan_sweeps(experiments_dir)
+    if sort == "date":
+        # scan_experiments sorts newest first; slot sweeps in by their own date.
+        entries = sorted(entries + sweeps, key=lambda r: r.get("date") or "", reverse=True)
+    else:
+        entries = entries + sweeps
     if not entries:
         print(f" No experiments found in '{experiments_dir}'.")
         return
@@ -77,11 +91,17 @@ def list_runs(experiments_dir, sort):
         loss = r.get("val_loss")
         loss_str = f"{loss:.4f}" if loss is not None else "—"
         task_short = "det" if r.get("task") == "detection" else "cls"
-        rows.append((_fit(r["name"], 40), task_short, r.get("status", "?"), loss_str, r.get("epochs_run", "?")))
+        if r.get("is_sweep"):
+            task_short += "·sweep"
+        epochs = r.get("epochs_run")
+        epochs_str = "—" if epochs is None else epochs
+        rows.append((_fit(r["name"], 40), task_short, r.get("status", "?"), loss_str, epochs_str))
     _console.table(
         ["Run", "Task", "Status", ("Val Loss", "right"), ("Epochs", "right")],
         rows,
     )
+    if sweeps:
+        print(_console.dim(" Sweeps: `runs list <sweep>` shows their trials."))
 
 
 @runs.command(
@@ -141,9 +161,38 @@ def compare(experiment_a, experiment_b):
     for f in fields:
         va = str(a.get(f, "—"))
         vb = str(b.get(f, "—"))
-        diff = " ◀" if va != vb else ""
+        diff = " ≠" if va != vb else ""
         print(f" {f:<22}  {va:<26}  {vb:<26}{diff}")
     print(tr)
+
+
+def _show_sweep(sweep_dir):
+    """`runs show` for a sweep: manifest intent plus the trial table (no per-run details)."""
+    from cvbench.cli.sweep import print_trial_table
+    from cvbench.core.sweep_store import SweepError, best_trial, summarize
+
+    try:
+        manifest, rows = summarize(sweep_dir)
+    except SweepError as e:
+        raise click.ClickException(str(e)) from e
+
+    print(_console.rule())
+    print(f" {_console.bold(f'CVBench — sweep {manifest.name}')}")
+    print(_console.rule())
+    for label, value in [
+        ("Date", manifest.date),
+        ("Data", manifest.data_dir),
+        ("Strategy", manifest.strategy),
+        ("Metric", f"{manifest.metric} ({manifest.direction})"),
+        ("Axes", ", ".join(f"{k}={','.join(v)}" for k, v in manifest.axes.items())),
+    ]:
+        print(f" {_console.dim(f'{label:<10}')} {value}")
+    print()
+    print_trial_table(rows, list(manifest.axes), manifest.metric, show_test=True)
+    best = best_trial(rows)
+    if best is not None:
+        print(f" Best: {_console.green(best.dir)} ({manifest.metric} = {best.value:.4f})")
+        print(_console.dim(f" Inspect a trial with: runs show {best.dir}"))
 
 
 @runs.command(
@@ -158,16 +207,21 @@ def compare(experiment_a, experiment_b):
 def show(experiment):
     """Show full config, metrics, exports, and eval results for EXPERIMENT.
 
-    EXPERIMENT is a run name or full path to a run directory.
+    EXPERIMENT is a run name or full path to a run directory. For a sweep, shows its
+    settings and trial table instead.
     """
     from pathlib import Path
 
     from cvbench.core.exp_store import _read_entry
 
     try:
-        run_dir = Path(resolve_run_dir(experiment))
+        run_dir = Path(resolve_run_dir(experiment, allow_sweep=True))
     except Exception as e:
         raise click.ClickException(str(e)) from e
+
+    if is_sweep_dir(run_dir):
+        _show_sweep(run_dir)
+        return
 
     try:
         load_config(str(run_dir))
@@ -260,8 +314,13 @@ def rename(experiment, new_name):
     from pathlib import Path
 
     try:
-        run_dir = Path(resolve_run_dir(experiment))
+        run_dir = Path(resolve_run_dir(experiment, allow_sweep=True))
     except Exception as e:
+        raise click.ClickException(str(e)) from e
+
+    try:
+        assert_renamable(run_dir)
+    except ValueError as e:
         raise click.ClickException(str(e)) from e
 
     cfg = load_config(str(run_dir))
@@ -378,7 +437,7 @@ def delete(experiment, export_subfolder, yes):
     from pathlib import Path
 
     try:
-        run_dir = Path(resolve_run_dir(experiment))
+        run_dir = Path(resolve_run_dir(experiment, allow_sweep=True))
     except Exception as e:
         raise click.ClickException(str(e)) from e
 
@@ -396,7 +455,11 @@ def delete(experiment, export_subfolder, yes):
         label = f"export '{export_subfolder}' from run '{run_dir.name}'"
     else:
         target = run_dir
-        label = f"run '{run_dir.name}' and all its contents"
+        if is_sweep_dir(run_dir):
+            n_trials = sum(1 for d in run_dir.iterdir() if d.is_dir())
+            label = f"sweep '{run_dir.name}' and its {n_trials} trial(s)"
+        else:
+            label = f"run '{run_dir.name}' and all its contents"
 
     if not yes:
         click.confirm(
@@ -424,6 +487,7 @@ def delete(experiment, export_subfolder, yes):
 )
 def best(experiments_dir, metric):
     """Show the best experiment in EXPERIMENTS_DIR by a given metric."""
+    experiments_dir = resolve_experiments_dir(experiments_dir)
     run = best_experiment(experiments_dir, metric)
     if run is None:
         print(

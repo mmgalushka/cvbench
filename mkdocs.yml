@@ -22,6 +22,7 @@ nav:
       - Optimizer & Loss: training/optimizer-loss.md
       - Learning Rate Scheduling: training/lr-scheduling.md
       - Two-Phase Training: training/two-phase.md
+      - Hyperparameter Sweeps: training/sweep.md
   - Evaluation & Prediction:
       - Evaluating a Run: evaluation/evaluate.md
       - Running Predictions: evaluation/predict.md

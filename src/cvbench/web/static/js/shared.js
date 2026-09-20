@@ -9,6 +9,8 @@ function route() {
     showRunsList();
   } else if (hash.startsWith('#/runs/')) {
     showRunDetail(decodeURIComponent(hash.slice(7)));
+  } else if (hash.startsWith('#/sweeps/')) {
+    showSweepDetail(decodeURIComponent(hash.slice(9)));
   } else if (hash === '#/inference') {
     showInference();
   } else if (hash === '#/datasets') {

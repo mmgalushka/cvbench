@@ -20,15 +20,41 @@ async function showRunsList() {
   const page = document.getElementById('page');
   page.innerHTML = '<p aria-busy="true">Loading experiments…</p>';
   try {
-    const runs = await api('/runs');
-    page.innerHTML = buildRunsList(runs);
+    const [runs, sweeps] = await Promise.all([
+      api('/runs'),
+      api('/sweeps').catch(() => []),  // degrade to runs only
+    ]);
+    page.innerHTML = buildRunsList(runs, sweeps);
   } catch (e) {
     page.innerHTML = `<p class="error-msg">Failed to load runs: ${e.message}</p>`;
   }
 }
 
-function buildRunsList(runs) {
-  if (runs.length === 0) {
+/* ── Type icons: one flask = a run, three flasks = a sweep ─────────────────── */
+
+const RUN_ICON = '<i class="fas fa-flask type-icon" role="img" title="Experiment" aria-label="Experiment"></i>';
+const SWEEP_ICON = `<svg class="type-icon" width="20" height="16" viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Sweep"><title>Sweep</title><path d="M12 3h6M13.5 3v6L9 19a1.5 1.5 0 0 0 1.4 2h9.2a1.5 1.5 0 0 0 1.4-2l-4.5-10V3"/><path d="M6 10h-3M4.5 10v3.5L2 19.5a1 1 0 0 0 1 1.5h3"/><path d="M24 10h3M25.5 10v3.5L28 19.5a1 1 0 0 1-1 1.5h-3"/></svg>`;
+const trialCount = n => n ? ` <small class="trial-count" title="${n} trial${n !== 1 ? 's' : ''}">×${n}</small>` : '';
+
+function buildSweepRow(sw) {
+  const taskShort = sw.task === 'detection' ? 'det' : 'cls';
+  const loss = sw.val_loss != null ? sw.val_loss.toFixed(4) : '—';
+  return `
+    <tr onclick="navigate('#/sweeps/${encodeURIComponent(sw.name)}')">
+      <td><span class="type-name">${SWEEP_ICON}<strong>${escHtml(sw.name)}</strong>${trialCount(sw.n_trials)}</span></td>
+      <td><span class="badge badge-task-${sw.task || 'classification'}">${taskShort}</span></td>
+      <td>—</td>
+      <td>${sw.date || '—'}</td>
+      <td><span class="badge badge-${sw.status}">${sw.status}</span></td>
+      <td>${loss} <small class="ds-metric-label">val loss</small></td>
+      <td>—</td>
+      <td>${sw.epochs_run ?? '—'}</td>
+    </tr>
+  `;
+}
+
+function buildRunsList(runs, sweeps = []) {
+  if (runs.length === 0 && sweeps.length === 0) {
     return `
       <div class="page-header"><h2>Experiments</h2></div>
       <article><p>No experiments found. Run <kbd>train</kbd> to create one.</p></article>
@@ -37,7 +63,13 @@ function buildRunsList(runs) {
 
   // "Test" column header/value adapt per row's own test_metric, since the
   // list can mix classification (accuracy) and detection (mAP@50) runs.
-  const rows = runs.map(r => {
+  const items = [
+    ...runs.map(r => ({ date: r.date || '', html: null, r })),
+    ...sweeps.map(sw => ({ date: sw.date || '', html: buildSweepRow(sw) })),
+  ].sort((a, b) => b.date.localeCompare(a.date));  // newest first, like `runs list`
+
+  const rows = items.map(({ html, r }) => {
+    if (html) return html;
     const testLabel = r.test_metric && r.test_metric !== 'accuracy'
       ? (r.test_metric === 'map50' ? 'mAP@50' : r.test_metric)
       : null;
@@ -47,7 +79,7 @@ function buildRunsList(runs) {
     const taskShort = r.task === 'detection' ? 'det' : 'cls';
     return `
     <tr onclick="navigate('#/runs/${encodeURIComponent(r.name)}')">
-      <td><strong>${r.name}</strong></td>
+      <td><span class="type-name">${RUN_ICON}<strong>${r.name}</strong></span></td>
       <td><span class="badge badge-task-${r.task || 'classification'}">${taskShort}</span></td>
       <td>${r.backbone}</td>
       <td>${r.date || '—'}</td>
@@ -60,13 +92,96 @@ function buildRunsList(runs) {
   }).join('');
 
   return `
-    <div class="page-header"><h2>Experiments <small style="font-size:0.85rem;font-weight:400;color:var(--muted-color)">${runs.length} run${runs.length !== 1 ? 's' : ''}</small></h2></div>
+    <div class="page-header"><h2>Experiments <small style="font-size:0.85rem;font-weight:400;color:var(--muted-color)">${runs.length} run${runs.length !== 1 ? 's' : ''}${sweeps.length ? ` · ${sweeps.length} sweep${sweeps.length !== 1 ? 's' : ''}` : ''}</small></h2></div>
     <div class="overflow-x">
       <table class="runs-table">
         <thead>
           <tr>
             <th>Name</th><th>Task</th><th>Backbone</th><th>Date</th><th>Status</th>
             <th>Val Acc</th><th>Test</th><th>Epochs</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ── Sweep detail ──────────────────────────────────────────────────────────── */
+
+async function showSweepDetail(name) {
+  setActive('nav-runs');
+  const page = document.getElementById('page');
+  page.innerHTML = '<p aria-busy="true">Loading sweep…</p>';
+  try {
+    const sweep = await api(`/sweeps/${encodeURIComponent(name)}`);
+    page.innerHTML = buildSweepDetail(sweep);
+  } catch (e) {
+    page.innerHTML = `<p class="error-msg">Sweep '${escHtml(name)}' not found: ${escHtml(e.message)}</p>`;
+  }
+}
+
+function sweepStatus(trials) {
+  if (trials.some(t => t.status === 'running')) return 'running';
+  return 'done';
+}
+
+function buildSweepDetail(sw) {
+  const axisNames = Object.keys(sw.axes);
+  const best = sw.trials.find(t => t.is_best);
+  const fmtVal = v => v != null ? v.toFixed(4) : '—';
+  const status = sweepStatus(sw.trials);
+  const testMetric = (sw.trials.find(t => t.test_metric) || {}).test_metric;
+  const testHeader = testMetric ? `test ${testMetric}` : 'test';
+
+  const rows = sw.trials.map(t => {
+    const openable = t.status !== 'missing';
+    const nameCell = openable
+      ? `<a href="#/runs/${encodeURIComponent(t.dir)}">${escHtml(t.dir)}</a>`
+      : escHtml(t.dir);
+    return `
+      <tr class="${t.is_best ? 'row-best' : ''}">
+        <td>${t.index}</td>
+        <td>${nameCell}${t.is_best ? ' <span class="badge badge-best">best</span>' : ''}</td>
+        ${axisNames.map(a => `<td>${escHtml(t.params[a] ?? '—')}</td>`).join('')}
+        <td>${fmtVal(t.value)}${t.is_best ? ' <span class="best-star">★</span>' : ''}</td>
+        <td title="${t.is_best_test ? 'Best test score (indicator only; the sweep picks on val)' : ''}">${fmtVal(t.test_value)}${t.is_best_test ? ' <span class="best-star">★</span>' : ''}</td>
+        <td><span class="badge badge-${t.status}">${t.status}</span></td>
+      </tr>`;
+  }).join('');
+
+  const n = sw.trials.length;
+  return `
+    <div class="page-header">
+      <div>
+        <a href="#/" class="back-link" onclick="setActive('nav-runs')">← Experiments</a>
+        <h2><span class="type-name">${SWEEP_ICON}<span>${escHtml(sw.name)}</span>${trialCount(sw.trials.length)}</span> <span class="badge badge-${status}">${status}</span></h2>
+      </div>
+      <div class="run-actions-menu" id="run-actions-menu">
+        <button class="run-actions-trigger" onclick="toggleRunMenu(event)" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
+        <ul class="run-actions-dropdown" id="run-actions-dropdown">
+          <li class="run-actions-item run-actions-item--danger" onclick="deleteRun('${escHtml(sw.name)}', ${n}); closeRunMenu()"><i class="fas fa-trash-alt"></i> Delete</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="metric-cards">
+      ${card('Trials', n)}
+      ${card('Metric', escHtml(sw.metric), sw.direction === 'min' ? 'lower is better' : 'higher is better')}
+      ${card('Best trial', best ? fmtVal(best.value) : '—', best ? escHtml(best.dir) : '')}
+      ${card('Strategy', escHtml(sw.strategy))}
+      ${card('Data', escHtml(sw.data_dir || '—'))}
+      ${card('Date', sw.date || '—')}
+    </div>
+
+    <p class="section-label">Axes: ${axisNames.map(a => `${escHtml(a)} = ${escHtml(sw.axes[a].join(', '))}`).join(' · ')}</p>
+    <div class="overflow-x">
+      <table class="runs-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Trial</th>
+            ${axisNames.map(a => `<th>${escHtml(a)}</th>`).join('')}
+            <th>${escHtml(sw.metric)}</th><th>${escHtml(testHeader)}</th><th>Status</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -120,14 +235,16 @@ function buildRunDetail(run) {
   return `
     <div class="page-header">
       <div>
-        <a href="#/" class="back-link" onclick="setActive('nav-runs')">← Experiments</a>
-        <h2>${run.name} <span class="badge badge-${run.status}">${run.status}</span>${detection ? ' <span class="badge badge-format">detection</span>' : ''}</h2>
+        ${run.sweep
+          ? `<a href="#/sweeps/${encodeURIComponent(run.sweep)}" class="back-link">← ${escHtml(run.sweep)}</a>`
+          : `<a href="#/" class="back-link" onclick="setActive('nav-runs')">← Experiments</a>`}
+        <h2><span class="type-name">${RUN_ICON}<span>${run.name}</span></span> <span class="badge badge-${run.status}">${run.status}</span>${detection ? ' <span class="badge badge-format">detection</span>' : ''}</h2>
       </div>
       <div class="run-actions-menu" id="run-actions-menu">
         <button class="run-actions-trigger" onclick="toggleRunMenu(event)" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
         <ul class="run-actions-dropdown" id="run-actions-dropdown">
-          <li class="run-actions-item" onclick="renameRun('${escHtml(run.name)}'); closeRunMenu()"><i class="fas fa-pencil-alt"></i> Rename</li>
-          <li class="run-actions-item run-actions-item--danger" onclick="deleteRun('${escHtml(run.name)}'); closeRunMenu()"><i class="fas fa-trash-alt"></i> Delete</li>
+          ${run.sweep ? '' : `<li class="run-actions-item" onclick="renameRun('${escHtml(run.name)}'); closeRunMenu()"><i class="fas fa-pencil-alt"></i> Rename</li>`}
+          <li class="run-actions-item run-actions-item--danger" onclick="deleteRun('${escHtml(run.name)}'${run.sweep ? `, 0, '${escHtml(run.sweep)}'` : ''}); closeRunMenu()"><i class="fas fa-trash-alt"></i> Delete</li>
         </ul>
       </div>
     </div>
@@ -1508,8 +1625,10 @@ async function renameRun(runName) {
   }
 }
 
-async function deleteRun(runName) {
-  if (!confirm(`Permanently delete run "${runName}" and all its contents? This cannot be undone.`)) return;
+// nTrials > 0 marks a sweep; parentSweep is set when deleting one of its trials.
+async function deleteRun(runName, nTrials = 0, parentSweep = null) {
+  const what = nTrials ? `sweep "${runName}" and its ${nTrials} trial(s)` : `run "${runName}" and all its contents`;
+  if (!confirm(`Permanently delete ${what}? This cannot be undone.`)) return;
   try {
     const res = await fetch(`/api/runs/${encodeURIComponent(runName)}`, { method: 'DELETE' });
     if (!res.ok) {
@@ -1517,7 +1636,7 @@ async function deleteRun(runName) {
       alert(`Failed to delete run: ${err.detail || res.statusText}`);
       return;
     }
-    navigate('#/');
+    navigate(parentSweep ? `#/sweeps/${encodeURIComponent(parentSweep)}` : '#/');
   } catch (e) {
     alert(`Failed to delete run: ${e.message}`);
   }

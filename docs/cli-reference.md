@@ -15,6 +15,17 @@ tmux session helpers.
     :prog_name: train
     :depth: 1
 
+## sweep
+
+Grid search over `train` flags. `sweep DATA_DIR [OPTIONS]` runs the sweep;
+see [Hyperparameter Sweeps](training/sweep.md) for the guide.
+
+::: mkdocs-click
+    :module: cvbench.cli.sweep
+    :command: sweep
+    :prog_name: sweep
+    :depth: 1
+
 ## evaluate
 
 ::: mkdocs-click

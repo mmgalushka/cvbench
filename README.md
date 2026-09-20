@@ -87,6 +87,7 @@ train          Train a model on DATA_DIR.
 evaluate       Evaluate a trained model on the held-out test split.
 predict        Run inference on INPUT using a trained EXPERIMENT.
 serve          Start the CVBench WebUI server.
+sweep          Grid-search training flags and report the best trial.
 
    Generate, inspect and reshape datasets.
    data aug       Write an augmentation config file to edit and reuse.
