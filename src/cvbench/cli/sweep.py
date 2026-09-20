@@ -86,7 +86,7 @@ def _kwargs(values: dict[str, Any]) -> dict[str, Any]:
     return {_KWARG.get(f, f): v for f, v in values.items()}
 
 
-def _table(rows: list[TrialRow], axes: list[str], metric: str | None) -> None:
+def print_trial_table(rows: list[TrialRow], axes: list[str], metric: str | None) -> None:
     columns: list[Any] = [("#", "right"), "Trial", *axes]
     if metric is not None:
         columns += [(metric, "right"), "Status"]
@@ -257,7 +257,7 @@ def sweep(data_dir, name, strategy, metric, from_dir, show, **flag_values):
     if fixed_raw:
         print(_console.dim(" fixed: " + ", ".join(f"{k}={v}" for k, v in fixed_raw.items())))
     if show:
-        _table(planned, axis_names, None)
+        print_trial_table(planned, axis_names, None)
         print(_console.dim(f" --show: nothing was trained. Total: {len(trials)} trials."))
         return
 
@@ -295,7 +295,7 @@ def _finish(sweep_dir: Path) -> None:
     print(f" {_console.bold(f'CVBench — sweep {manifest.name} results')}  "
           f"{_console.dim(f'{manifest.metric} ({manifest.direction})')}")
     print(_console.rule(79, "white"))
-    _table(rows, list(manifest.axes), manifest.metric)
+    print_trial_table(rows, list(manifest.axes), manifest.metric)
     best = best_trial(rows)
     n_failed = sum(1 for r in rows if r.status != "done")
     if n_failed:

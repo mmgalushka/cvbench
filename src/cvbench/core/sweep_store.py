@@ -25,9 +25,8 @@ from typing import Any
 import yaml
 
 from cvbench.core.config import CVBenchConfig, load_config
-from cvbench.core.exp_store import _read_entry, validate_run_name
+from cvbench.core.exp_store import SWEEP_MANIFEST, _read_entry, sweep_dirs, validate_run_name
 
-SWEEP_MANIFEST = "sweep.yaml"
 MANIFEST_VERSION = 1
 
 # `train` flags that may be swept (click parameter names of cli/train.py).
@@ -327,3 +326,40 @@ def trial_config_values(trial_dir: str | Path, flags: list[str]) -> dict[str, An
     except Exception:
         return {}
     return {f: _FLAG_READERS[f](cfg) for f in flags if f in _FLAG_READERS}
+
+
+# ---------------------------------------------------------------------------
+# Listing (one summary entry per sweep, for `runs list`)
+# ---------------------------------------------------------------------------
+
+def sweep_entry(sweep_dir: str | Path) -> dict[str, Any] | None:
+    """Summarize a sweep as one `runs list` entry (same keys as `scan_experiments` plus `is_sweep`).
+
+    `val_loss` / `epochs_run` come from the best trial (never the ranking metric) and are None
+    when no trial has finished. Status is `running` while any trial runs, else `done`.
+    Returns None if the manifest is missing or unreadable.
+    """
+    sweep = Path(sweep_dir)
+    try:
+        manifest, rows = summarize(sweep)
+    except SweepError:
+        return None
+    entries = [e for r in rows if (e := _read_entry(sweep / r.dir)) is not None]
+    best = best_trial(rows)
+    best_entry = _read_entry(sweep / best.dir) if best else None
+    task = entries[0]["task"] if entries else ("detection" if manifest.metric == "map50" else "classification")
+    return {
+        "name": manifest.name or sweep.name,
+        "dir": str(sweep),
+        "task": task,
+        "status": "running" if any(e["status"] == "running" for e in entries) else "done",
+        "val_loss": best_entry["val_loss"] if best_entry else None,
+        "epochs_run": best_entry["epochs_run"] if best_entry else None,
+        "date": manifest.date,
+        "is_sweep": True,
+    }
+
+
+def scan_sweeps(parent_dir: str) -> list[dict[str, Any]]:
+    """One `sweep_entry` per readable sweep directly under parent_dir."""
+    return [e for d in sweep_dirs(parent_dir) if (e := sweep_entry(d)) is not None]

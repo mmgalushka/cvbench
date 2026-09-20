@@ -105,8 +105,36 @@ Trial directories are regular experiments, so you can evaluate or predict with
 the best one as usual:
 
 ```bash
-evaluate experiments/shapes_lr_backbone/shapes_lr_backbone_003
+evaluate shapes_lr_backbone_003
 ```
+
+Trial names are unique, so a bare trial name works everywhere a run name does
+(`runs show`, `evaluate`, `predict`, `runs export`, ...).
+
+## In `runs list`
+
+A sweep appears in `runs list` as **one row**, tagged `cls·sweep` or
+`det·sweep` in the Task column. Val Loss and Epochs come from the best trial,
+and Status is `running` while any trial is still training. To see the trials,
+list the sweep directory:
+
+```bash
+runs list shapes_lr_backbone
+```
+
+How each `runs` command treats a sweep name:
+
+| Command | On a sweep |
+|---|---|
+| `runs list` | one summary row; `runs list <sweep>` lists its trials |
+| `runs show <sweep>` | the sweep's settings and trial table |
+| `runs best <sweep>` | the best trial by the chosen metric |
+| `runs delete <sweep>` | removes the whole sweep and its trials |
+| `runs rename`, `runs compare`, `runs export` | not supported: a clear message asks for a trial name |
+
+`evaluate` and `predict` likewise ask for a trial name. Trials themselves are
+ordinary runs for every command, except that `runs rename` refuses them
+(renaming would make the sweep report the trial as missing).
 
 ## Limits
 
@@ -114,5 +142,6 @@ evaluate experiments/shapes_lr_backbone/shapes_lr_backbone_003
 - **Sequential.** Trials do not run in parallel.
 - **No resume.** An interrupted sweep is not continued; start a new one with a
   new `--name`. A sweep name that is already in use is rejected.
-- **`runs` integration is pending.** `runs list` and `runs best` do not yet look
-  inside sweep directories, so use the sweep's own summary for now.
+- **`runs best` and the WebUI ignore trials.** `runs best` only considers
+  top-level runs (use `runs best experiments/<sweep>` for one sweep), and the
+  WebUI does not show sweeps yet.

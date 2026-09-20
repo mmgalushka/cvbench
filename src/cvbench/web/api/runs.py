@@ -14,6 +14,7 @@ from cvbench.core.config import TransformConfig, load_config, update_run_status
 from cvbench.core.exp_store import (
     EXPERIMENTS_DIR,
     assert_name_available,
+    assert_renamable,
     resolve_run_dir,
     scan_experiments,
     validate_run_name,
@@ -149,6 +150,11 @@ def rename_run(name: str, body: RenameRequest):
         run_dir = Path(resolve_run_dir(name))
     except Exception:
         raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
+
+    try:
+        assert_renamable(run_dir)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
     cfg = load_config(str(run_dir))
     if cfg.run.status == "running":

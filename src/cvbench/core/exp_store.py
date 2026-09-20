@@ -11,10 +11,13 @@ import json
 from datetime import date
 from pathlib import Path
 
+import click
+
 from cvbench.core.config import CVBenchConfig, load_config
 from cvbench.core.registry import Registry
 
 EXPERIMENTS_DIR = "experiments"
+SWEEP_MANIFEST = "sweep.yaml"
 
 EXP_REG = Registry(
     EXPERIMENTS_DIR,
@@ -29,20 +32,87 @@ def validate_run_name(name: str) -> str:
     return EXP_REG.validate_name(name, what="Name")
 
 
+def is_sweep_dir(path: Path | str) -> bool:
+    """True for a sweep directory: has a `sweep.yaml` manifest and is not itself an experiment."""
+    p = Path(path)
+    return (p / SWEEP_MANIFEST).is_file() and not (p / "config.yaml").exists()
+
+
+def sweep_dirs(parent_dir: str = EXPERIMENTS_DIR) -> list[Path]:
+    """Sweep directories directly under parent_dir, sorted by name."""
+    parent = Path(parent_dir)
+    if not parent.is_dir():
+        return []
+    return [d for d in sorted(parent.iterdir()) if d.is_dir() and is_sweep_dir(d)]
+
+
+def resolve_experiments_dir(name_or_path: str) -> str:
+    """Resolve a directory argument for `runs list` / `runs best`.
+
+    A literal path is used as-is; otherwise a bare name (e.g. a sweep) is looked up under
+    EXPERIMENTS_DIR. Falls back to the given value so callers report their own "not found".
+    """
+    if Path(name_or_path).is_dir():
+        return name_or_path
+    candidate = Path(EXPERIMENTS_DIR) / name_or_path
+    return str(candidate) if candidate.is_dir() else name_or_path
+
+
 def assert_name_available(new_name: str, current_dir: Path | None = None) -> None:
-    """Raise ValueError if new_name conflicts with an existing experiment directory."""
+    """Raise ValueError if new_name conflicts with an existing experiment or sweep trial directory."""
     EXP_REG.base_dir = EXPERIMENTS_DIR
     EXP_REG.assert_available(new_name, current_dir=current_dir)
+    # Trials are addressed by bare name too, so their names must stay unique across sweeps.
+    for sweep in sweep_dirs(EXPERIMENTS_DIR):
+        for trial in sweep.iterdir():
+            if not trial.is_dir() or trial.name.lower() != new_name.lower():
+                continue
+            if current_dir and trial.resolve() == current_dir.resolve():
+                continue
+            raise ValueError(f"A trial named '{trial.name}' already exists in sweep '{sweep.name}'.")
 
 
-def resolve_run_dir(name: str) -> str:
+def assert_renamable(run_dir: Path) -> None:
+    """Raise ValueError if run_dir is a sweep or a sweep trial (renaming would break the sweep)."""
+    if is_sweep_dir(run_dir):
+        raise ValueError(
+            f"'{run_dir.name}' is a sweep; renaming it would break its trial names. "
+            "Rename individual runs instead, or start a new sweep with --name."
+        )
+    if is_sweep_dir(run_dir.parent):
+        raise ValueError(
+            f"'{run_dir.name}' is a trial of sweep '{run_dir.parent.name}'; "
+            "renaming it would make the sweep report it as missing."
+        )
+
+
+def resolve_run_dir(name: str, *, allow_sweep: bool = False) -> str:
     """Resolve a run name or path to an existing directory.
 
     Accepts a full path (experiments/my_run) or a bare run name (my_run).
-    If the given value does not exist as-is, looks under EXPERIMENTS_DIR.
+    If the given value does not exist as-is, looks under EXPERIMENTS_DIR, then
+    inside sweep directories (a sweep trial is addressable by its bare name).
+
+    A sweep directory is not a single run (it has no config.yaml), so it is rejected with
+    a pointer to its trials unless the caller handles sweeps (`allow_sweep=True`).
     """
     EXP_REG.base_dir = EXPERIMENTS_DIR
-    return EXP_REG.resolve(name)
+    try:
+        resolved = EXP_REG.resolve(name)
+    except click.BadParameter:
+        for sweep in sweep_dirs(EXPERIMENTS_DIR):
+            trial = sweep / name
+            if (trial / "config.yaml").is_file():
+                return str(trial)
+        raise
+    if not allow_sweep and is_sweep_dir(resolved):
+        sweep_name = Path(resolved).name
+        raise click.BadParameter(
+            f"'{sweep_name}' is a sweep (a group of trials), not a single run. "
+            f"Use one of its trials instead; `runs list {sweep_name}` shows them.",
+            param_hint=EXP_REG.param_hint,
+        )
+    return resolved
 
 
 # ---------------------------------------------------------------------------
