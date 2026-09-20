@@ -63,7 +63,8 @@ def get_sweep(name: str):
         "axes": manifest.axes,
         "trials": [
             {"index": r.index, "dir": r.dir, "params": r.params,
-             "status": r.status, "value": r.value, "is_best": r.is_best}
+             "status": r.status, "value": r.value, "is_best": r.is_best,
+             "test_value": r.test_value, "test_metric": r.test_metric, "is_best_test": r.is_best_test}
             for r in rows
         ],
     }

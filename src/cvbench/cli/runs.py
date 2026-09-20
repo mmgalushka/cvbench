@@ -188,7 +188,8 @@ def _show_sweep(sweep_dir):
     ]:
         print(f" {_console.dim(f'{label:<10}')} {value}")
     print()
-    print_trial_table(rows, list(manifest.axes), manifest.metric)
+    print_trial_table(rows, list(manifest.axes), manifest.metric, show_test=True)
+    print(_console.dim(" ★ = best on that score. The sweep's pick is the val ★; the test ★ is only an indicator."))
     best = best_trial(rows)
     if best is not None:
         print(f" Best: {_console.green(best.dir)} ({manifest.metric} = {best.value:.4f})")

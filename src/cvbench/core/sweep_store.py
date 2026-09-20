@@ -17,6 +17,7 @@ This module is TensorFlow-free (see tests/test_import_boundaries.py).
 from __future__ import annotations
 
 import itertools
+import json
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -252,7 +253,20 @@ class TrialRow:
     params: dict[str, str]  # planned axis values
     status: str  # config.yaml run.status, "missing" or "unreadable"
     value: float | None  # selection-metric value
-    is_best: bool = False
+    is_best: bool = False  # best on the selection (val) metric — this is the sweep's pick
+    test_value: float | None = None  # from eval_report.json; None until the trial is evaluated
+    test_metric: str | None = None
+    is_best_test: bool = False  # indicator only; never used to choose the winner
+
+
+def _test_result(tdir: Path) -> tuple[str | None, float | None]:
+    """(metric, value) of the trial's test evaluation, read from eval_report.json."""
+    try:
+        overall = json.loads((tdir / "eval_report.json").read_text()).get("overall")
+        value = overall["value"]
+        return overall.get("metric"), float(value)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None, None
 
 
 def _metric_value(entry: dict[str, Any], metric: str) -> float | None:
@@ -261,6 +275,17 @@ def _metric_value(entry: dict[str, Any], metric: str) -> float | None:
     else:
         value = entry.get(metric)
     return float(value) if isinstance(value, (int, float)) else None
+
+
+def selection_metric_of_trial(trial_dir: str | Path) -> str | None:
+    """The metric its sweep ranks on, when `trial_dir` is a sweep trial; else None."""
+    parent = Path(trial_dir).resolve().parent
+    if not (parent / SWEEP_MANIFEST).is_file():
+        return None
+    try:
+        return read_manifest(parent).metric
+    except SweepError:
+        return None
 
 
 def best_trial(rows: list[TrialRow]) -> TrialRow | None:
@@ -283,13 +308,18 @@ def summarize(sweep_dir: str | Path) -> tuple[SweepManifest, list[TrialRow]]:
         if entry is None:
             rows.append(TrialRow(i, name, params, "unreadable", None))
             continue
-        rows.append(TrialRow(i, name, params, str(entry["status"]), _metric_value(entry, manifest.metric)))
+        test_metric, test_value = _test_result(tdir)
+        rows.append(TrialRow(i, name, params, str(entry["status"]), _metric_value(entry, manifest.metric),
+                             test_value=test_value, test_metric=test_metric))
 
     candidates = [r for r in rows if r.status == "done" and r.value is not None]
     if candidates:
         pick = min if manifest.direction == "min" else max
         best = pick(candidates, key=lambda r: r.value)  # type: ignore[arg-type,return-value]
         best.is_best = True
+    tested = [r for r in candidates if r.test_value is not None]
+    if tested:
+        max(tested, key=lambda r: r.test_value).is_best_test = True  # type: ignore[arg-type,return-value]
     return manifest, rows
 
 

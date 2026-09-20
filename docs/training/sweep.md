@@ -95,14 +95,31 @@ metrics are always current.
 
 When the sweep finishes it prints a summary table with one row per trial (the
 axis values, the metric and the status) and names the best trial. Trials are
-compared on the **validation split**, not the test split.
+compared on the **validation split**, so the test split plays no part in
+choosing the winner. The sweep never evaluates on the test split itself; that is
+a separate, manual step. Score the best trial once you have decided on it:
+
+```bash
+evaluate shapes_lr_001
+```
+
+or get a test score for **every** trial by evaluating the sweep by name:
+
+```bash
+evaluate shapes_lr
+```
+
+Each finished trial is evaluated and gets its own `eval_report.json`, and a table
+of the test scores is printed at the end. This is for information only: the best
+trial was picked on validation and does not change. It costs one evaluation pass
+per trial, so run it when you want the comparison.
 
 - A trial that fails is recorded as failed and the sweep **continues** with the
   next one.
 - A planned trial whose directory no longer exists is shown as `missing`.
 
 Trial directories are regular experiments, so you can evaluate or predict with
-the best one as usual:
+any of them as usual:
 
 ```bash
 evaluate shapes_lr_backbone_003

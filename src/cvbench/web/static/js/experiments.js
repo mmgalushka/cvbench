@@ -131,6 +131,8 @@ function buildSweepDetail(sw) {
   const best = sw.trials.find(t => t.is_best);
   const fmtVal = v => v != null ? v.toFixed(4) : '—';
   const status = sweepStatus(sw.trials);
+  const testMetric = (sw.trials.find(t => t.test_metric) || {}).test_metric;
+  const testHeader = testMetric ? `test ${testMetric}` : 'test';
 
   const rows = sw.trials.map(t => {
     const openable = t.status !== 'missing';
@@ -142,7 +144,8 @@ function buildSweepDetail(sw) {
         <td>${t.index}</td>
         <td>${nameCell}${t.is_best ? ' <span class="badge badge-best">best</span>' : ''}</td>
         ${axisNames.map(a => `<td>${escHtml(t.params[a] ?? '—')}</td>`).join('')}
-        <td>${fmtVal(t.value)}</td>
+        <td>${fmtVal(t.value)}${t.is_best ? ' <span class="best-star">★</span>' : ''}</td>
+        <td title="${t.is_best_test ? 'Best test score (indicator only; the sweep picks on val)' : ''}">${fmtVal(t.test_value)}${t.is_best_test ? ' <span class="best-star">★</span>' : ''}</td>
         <td><span class="badge badge-${t.status}">${t.status}</span></td>
       </tr>`;
   }).join('');
@@ -178,7 +181,7 @@ function buildSweepDetail(sw) {
           <tr>
             <th>#</th><th>Trial</th>
             ${axisNames.map(a => `<th>${escHtml(a)}</th>`).join('')}
-            <th>${escHtml(sw.metric)}</th><th>Status</th>
+            <th>${escHtml(sw.metric)}</th><th>${escHtml(testHeader)}</th><th>Status</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>

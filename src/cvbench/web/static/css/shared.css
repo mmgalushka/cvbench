@@ -164,6 +164,7 @@ body { margin: 0; }
 }
 .badge-best        { background: #c8e6c9; color: #1b5e20; }
 [data-theme="dark"] .badge-best { background: #1b3d28; color: #81c995; }
+.best-star         { color: #f57c00; }
 
 .badge-task-classification,
 .badge-task-detection {
