@@ -164,7 +164,7 @@ class CVBenchConfig:
 
 def _parse_transforms(raw: list) -> list:
     transforms: list[TransformConfig | OneOfConfig] = []
-    for t in raw:
+    for t in raw or []:
         if "one_of" in t:
             group = t["one_of"]
             candidates = []

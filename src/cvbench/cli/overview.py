@@ -33,7 +33,6 @@ ENTRY_POINTS: tuple[tuple[str, str], ...] = (
     ("predict", "cvbench.cli.predict:predict"),
     ("serve", "cvbench.cli.serve:serve"),
     ("data", "cvbench.cli.data:data"),
-    ("aug", "cvbench.cli.augmentations:augmentations"),
     ("runs", "cvbench.cli.runs:runs"),
 )
 

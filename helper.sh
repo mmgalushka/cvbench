@@ -25,7 +25,7 @@ action_usage(){
     echo -e "  ${CMD}docs${NC}                 regenerate the CLI reference block in README.md"
     echo -e "  ${CMD}site${OPT} serve|build${NC}   serve or build the MkDocs documentation site"
     echo -e ""
-    echo -e "  ${CMD}data|train|evaluate|predict|runs|aug|serve${NC}  pass through to the CLI"
+    echo -e "  ${CMD}data|train|evaluate|predict|runs|serve${NC}  pass through to the CLI"
     echo -e ""
     if [ -x .venv/bin/commands ]; then
         .venv/bin/commands
@@ -136,11 +136,6 @@ action_runs(){
     runs "$@"
 }
 
-action_aug(){
-    action_activate
-    aug "$@"
-}
-
 action_serve(){
     action_activate
     serve "$@"
@@ -202,9 +197,6 @@ case $1 in
         ;;
     runs)
         action_runs ${@:2}
-        ;;
-    aug)
-        action_aug ${@:2}
         ;;
     serve)
         action_serve ${@:2}

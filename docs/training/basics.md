@@ -32,7 +32,7 @@ bare name is resolved under `data/`, and a literal path is used as-is.
 | `--batch-size` | Batch size |
 | `--input-size` | Image input size in pixels |
 | `--dropout` | Dropout rate |
-| `--augmentation` | Path to an augmentation YAML file, or the name of a saved `aug` config — see [Augmentation](../data/augmentation.md) |
+| `--augmentation` | Path to an augmentation YAML file (create one with `data aug`) — see [Augmentation](../data/augmentation.md) |
 | `--resume <checkpoint>` | Path to a checkpoint file to resume training from |
 | `--class-weight` | Class weighting: `null` \| `auto` \| `'{"cat": 1.0, "dog": 2.5}'` |
 | `--fine-tune-from-layer N` | Unfreeze backbone from this layer index onward (`0`=frozen, `-1`=all layers) — see [Two-Phase Training](two-phase.md) |

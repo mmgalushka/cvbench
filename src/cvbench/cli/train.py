@@ -118,7 +118,8 @@ def _parse_loss(value: str | None) -> LossConfig | None:
 @click.option("--input-size", default=None, type=int, help="Image input size in pixels.")
 @click.option("--dropout", default=None, type=float, help="Dropout rate.")
 @click.option("--augmentation", "aug_file", default=None,
-              help="Path to an augmentation YAML file, or the name of a saved 'aug' config.")
+              type=click.Path(exists=True, dir_okay=False),
+              help="Path to an augmentation YAML file (see 'data aug').")
 @click.option("--resume", default=None,
               help="Path to a checkpoint file to resume training from.")
 @click.option("--class-weight", "class_weight_raw", default=None,
@@ -147,14 +148,10 @@ def train(
     under data/.
     All parameters have sensible defaults and can be overridden individually.
     """
-    from cvbench.core.aug_store import resolve_aug_file
     from cvbench.core.data_store import resolve_data_dir
     from cvbench.services.training import run_training  # deferred: pulls in TensorFlow
 
     data_dir = resolve_data_dir(data_dir)
-
-    if aug_file:
-        aug_file = resolve_aug_file(aug_file)
 
     class_weight = _parse_class_weight(class_weight_raw)
     loss = _parse_loss(loss_raw)
