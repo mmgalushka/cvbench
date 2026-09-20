@@ -136,12 +136,21 @@ How each `runs` command treats a sweep name:
 ordinary runs for every command, except that `runs rename` refuses them
 (renaming would make the sweep report the trial as missing).
 
+## In the WebUI
+
+The **Experiments** page lists a sweep as one row (tagged `sweep`) alongside
+ordinary runs, with the best trial's validation loss. Click it to open the sweep
+page: its settings, the axes, and a trial table with the best trial highlighted.
+Click a trial to open it as a normal run; its back link returns to the sweep.
+A sweep can be deleted from its page (this removes all trials). Sweeps and
+trials cannot be renamed, and the Inference and Compare pickers do not list
+trials yet.
+
 ## Limits
 
 - **Grid only.** Random search, numeric ranges and presets are planned.
 - **Sequential.** Trials do not run in parallel.
 - **No resume.** An interrupted sweep is not continued; start a new one with a
   new `--name`. A sweep name that is already in use is rejected.
-- **`runs best` and the WebUI ignore trials.** `runs best` only considers
-  top-level runs (use `runs best experiments/<sweep>` for one sweep), and the
-  WebUI does not show sweeps yet.
+- **`runs best` ignores trials.** It only considers top-level runs (use
+  `runs best experiments/<sweep>` for one sweep).

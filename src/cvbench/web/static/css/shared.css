@@ -155,6 +155,16 @@ body { margin: 0; }
 [data-theme="dark"] .badge-running     { background: #0d2d5a; color: #82b1f5; }
 [data-theme="dark"] .badge-interrupted { background: #3d2200; color: #f5a623; }
 [data-theme="dark"] .badge-failed      { background: #4a1010; color: #f48a8a; }
+.badge-missing,
+.badge-unreadable,
+.badge-sweep {
+  background: transparent;
+  color: var(--pico-muted-color, var(--muted-color));
+  border: 1px solid var(--pico-card-border-color, var(--card-border-color));
+  font-weight: 600;
+}
+.badge-best        { background: #c8e6c9; color: #1b5e20; }
+[data-theme="dark"] .badge-best { background: #1b3d28; color: #81c995; }
 
 .badge-task-classification,
 .badge-task-detection {

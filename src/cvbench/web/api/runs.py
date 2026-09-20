@@ -15,10 +15,12 @@ from cvbench.core.exp_store import (
     EXPERIMENTS_DIR,
     assert_name_available,
     assert_renamable,
+    is_sweep_dir,
     resolve_run_dir,
     scan_experiments,
     validate_run_name,
 )
+from cvbench.core.sweep_store import SweepError, scan_sweeps, summarize
 
 router = APIRouter()
 
@@ -30,6 +32,41 @@ class RenameRequest(BaseModel):
 @router.get("/runs")
 def list_runs():
     return scan_experiments(EXPERIMENTS_DIR)
+
+
+@router.get("/sweeps")
+def list_sweeps():
+    return scan_sweeps(EXPERIMENTS_DIR)
+
+
+@router.get("/sweeps/{name}")
+def get_sweep(name: str):
+    try:
+        sweep_dir = Path(resolve_run_dir(name, allow_sweep=True))
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"Sweep '{name}' not found") from None
+    if not is_sweep_dir(sweep_dir):
+        raise HTTPException(status_code=404, detail=f"'{name}' is not a sweep")
+
+    try:
+        manifest, rows = summarize(sweep_dir)
+    except SweepError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    return {
+        "name": manifest.name or sweep_dir.name,
+        "date": manifest.date,
+        "data_dir": manifest.data_dir,
+        "strategy": manifest.strategy,
+        "metric": manifest.metric,
+        "direction": manifest.direction,
+        "axes": manifest.axes,
+        "trials": [
+            {"index": r.index, "dir": r.dir, "params": r.params,
+             "status": r.status, "value": r.value, "is_best": r.is_best}
+            for r in rows
+        ],
+    }
 
 
 @router.get("/runs/{name}/images/{path:path}")
@@ -95,6 +132,7 @@ def get_run(name: str):
     return {
         "name": cfg.run.name or run_path.name,
         "dir": run_dir,
+        "sweep": run_path.parent.name if is_sweep_dir(run_path.parent) else None,
         "task": cfg.task,
         "status": cfg.run.status,
         "date": cfg.run.date,
@@ -147,7 +185,7 @@ def get_run(name: str):
 @router.patch("/runs/{name}")
 def rename_run(name: str, body: RenameRequest):
     try:
-        run_dir = Path(resolve_run_dir(name))
+        run_dir = Path(resolve_run_dir(name, allow_sweep=True))
     except Exception:
         raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
 
@@ -175,7 +213,7 @@ def rename_run(name: str, body: RenameRequest):
 @router.delete("/runs/{name}")
 def delete_run(name: str):
     try:
-        run_dir = Path(resolve_run_dir(name))
+        run_dir = Path(resolve_run_dir(name, allow_sweep=True))
     except Exception:
         raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
 
