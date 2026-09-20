@@ -7,9 +7,9 @@ frozen, then unfreeze some layers and fine-tune at a lower learning rate.
 ```text
 Phase 1 (epochs 0–30)              Phase 2 (epochs 30–50)
 ┌──────────────────────────┐       ┌──────────────────────────┐
-│ backbone: frozen         │  ──▶  │ backbone: unfrozen from   │
-│ head: training           │       │ layer 100, lr=1e-5        │
-│ lr: default              │       │ head: continues training  │
+│ backbone: frozen         │  ──▶  │ backbone: unfrozen from  │
+│ head: training           │       │ layer 100, lr=1e-5       │
+│ lr: default              │       │ head: continues training │
 └──────────────────────────┘       └──────────────────────────┘
         training_log.csv  ─────────────▶  (appended, both phases)
 ```
