@@ -102,7 +102,6 @@ sweep          Grid-search training flags and report the best trial.
    data upsample  Grow a class folder to TARGET images via augmentation.
 
    Manage and inspect experiment runs.
-   runs compare   Compare two runs side by side.
    runs delete    Delete a run, or just one of its exports.
    runs export    Export a run to TFLite / ONNX / Hailo, or print Jetson steps.
    runs list      List experiment runs (default: experiments/).

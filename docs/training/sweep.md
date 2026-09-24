@@ -146,7 +146,7 @@ How each `runs` command treats a sweep name:
 | `runs list` | one summary row; `runs list <sweep>` lists its trials |
 | `runs show <sweep>` | the sweep's settings and trial table |
 | `runs delete <sweep>` | removes the whole sweep and its trials |
-| `runs rename`, `runs compare`, `runs export` | not supported: a clear message asks for a trial name |
+| `runs rename`, `runs export` | not supported: a clear message asks for a trial name |
 
 `evaluate` and `predict` likewise ask for a trial name. Trials themselves are
 ordinary runs for every command, except that `runs rename` refuses them

@@ -163,30 +163,6 @@ def test_runs_show_not_found():
 
 
 # ---------------------------------------------------------------------------
-# runs compare
-# ---------------------------------------------------------------------------
-
-def test_runs_compare(tmp_path):
-    exp_a = _write_exp(tmp_path, "exp_a", val_accuracy=0.8)
-    exp_b = _write_exp(tmp_path, "exp_b", val_accuracy=0.9)
-    runner = CliRunner()
-    result = runner.invoke(runs, ["compare", str(exp_a), str(exp_b)])
-    assert result.exit_code == 0
-    assert "exp_a" in result.output
-    assert "exp_b" in result.output
-
-
-def test_runs_compare_no_config(tmp_path):
-    exp_a = _write_exp(tmp_path, "exp_a")
-    empty_dir = tmp_path / "empty"
-    empty_dir.mkdir()
-    runner = CliRunner()
-    result = runner.invoke(runs, ["compare", str(exp_a), str(empty_dir)])
-    assert result.exit_code != 0
-    assert "config.yaml" in result.output
-
-
-# ---------------------------------------------------------------------------
 # serve --help (no uvicorn / TensorFlow needed)
 # ---------------------------------------------------------------------------
 
