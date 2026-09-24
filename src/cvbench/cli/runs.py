@@ -57,8 +57,7 @@ def runs():
         ("runs list", "All runs, newest first"),
         ("runs list --sort val_loss", "Order by validation loss instead of date"),
     ],
-    see_also=[("evaluate <run>", "score a run on the test split"),
-              ("runs compare <a> <b>", "put two runs side by side")],
+    see_also=[("evaluate <run>", "score a run on the test split")],
 )
 @click.argument("experiments_dir", default=_DEFAULT_EXPERIMENTS_DIR)
 @click.option(
@@ -102,67 +101,6 @@ def list_runs(experiments_dir, sort):
         print(_console.dim(" Sweeps: `runs list <sweep>` shows their trials."))
 
 
-@runs.command(
-    short_help="Compare two runs side by side.",
-    examples=[
-        ("runs compare cls_effnet_b0_2026_01_20 cls_effnet_b3_2026_01_21",
-         "Diff hyperparameters and metrics for two runs"),
-    ],
-)
-@click.argument("experiment_a")
-@click.argument("experiment_b")
-def compare(experiment_a, experiment_b):
-    """Compare two experiments side by side.
-
-    EXPERIMENT_A and EXPERIMENT_B are run names (e.g. cls_effnet_b3_lr5e5_2026_01_21)
-    or full paths to run directories. Bare names are resolved under experiments/.
-    """
-    run_a = resolve_run_dir(experiment_a)
-    run_b = resolve_run_dir(experiment_b)
-    try:
-        load_config(run_a)
-    except FileNotFoundError:
-        raise click.ClickException(f"No config.yaml in: {run_a}") from None
-    try:
-        load_config(run_b)
-    except FileNotFoundError:
-        raise click.ClickException(f"No config.yaml in: {run_b}") from None
-
-    from pathlib import Path
-
-    from cvbench.core.exp_store import _read_entry
-
-    a = _read_entry(Path(run_a))
-    b = _read_entry(Path(run_b))
-
-    fields = [
-        "backbone",
-        "lr",
-        "epochs",
-        "val_loss",
-        "val_accuracy",
-        "test_accuracy",
-        "epochs_run",
-        "status",
-        "date",
-    ]
-    name_a = a.get("name", run_a)
-    name_b = b.get("name", run_b)
-
-    col_w = 26
-    tr = _console.rule(79, "white")
-    print(tr)
-    print(
-        f" {'Field':<22}  {_fit(name_a, col_w):<{col_w}}  {_fit(name_b, col_w):<{col_w}}"
-    )
-    print(tr)
-    for f in fields:
-        va = str(a.get(f, "—"))
-        vb = str(b.get(f, "—"))
-        diff = " ≠" if va != vb else ""
-        print(f" {f:<22}  {va:<26}  {vb:<26}{diff}")
-    print(tr)
-
 
 def _show_sweep(sweep_dir):
     """`runs show` for a sweep: manifest intent plus the trial table (no per-run details)."""
@@ -198,8 +136,7 @@ def _show_sweep(sweep_dir):
     examples=[
         ("runs show my_run", "Config, metrics, exports, and eval results for one run"),
     ],
-    see_also=[("runs compare <a> <b>", "put two runs side by side"),
-              ("evaluate <run>", "score a run on the test split")],
+    see_also=[("evaluate <run>", "score a run on the test split")],
 )
 @click.argument("experiment")
 def show(experiment):

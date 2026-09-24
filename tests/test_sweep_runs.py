@@ -181,17 +181,6 @@ def test_runs_show_sweep_by_path(exps):
     assert result.exit_code == 0, result.output
 
 
-def test_runs_compare_rejects_sweep_clearly(exps):
-    sweep = _sweep(exps)
-    _write_exp(sweep, "sw_001")
-    _write_exp(exps, "manual")
-    result = CliRunner().invoke(runs, ["compare", "sw", "manual"])
-    assert result.exit_code != 0
-    assert "is a sweep" in result.output
-    assert "No config.yaml" not in result.output
-    assert "Traceback" not in result.output
-
-
 def test_resolve_run_dir_rejects_sweep_unless_allowed(exps):
     _sweep(exps)
     with pytest.raises(click.BadParameter, match="is a sweep"):

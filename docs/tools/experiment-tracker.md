@@ -94,8 +94,7 @@ class-confusion matrix → class-agnostic TP/FP/FN summary.
 
 ### Compare
 
-Pick a second run and diff the two side by side — the WebUI equivalent of the
-CLI's `runs compare`.
+Pick a second run and diff the two side by side.
 
 ### Export
 
