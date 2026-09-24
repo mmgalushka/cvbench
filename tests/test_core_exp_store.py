@@ -8,7 +8,6 @@ import pytest
 from cvbench.core.config import build_config, save_config
 from cvbench.core.exp_store import (
     assert_name_available,
-    best_experiment,
     make_run_name,
     make_unique_dir,
     resolve_run_dir,
@@ -190,30 +189,6 @@ def test_scan_experiments_sort_by_date(tmp_path):
     _write_exp(tmp_path, "old")
     results = scan_experiments(str(tmp_path), sort_by="date")
     assert len(results) == 1
-
-
-# ---------------------------------------------------------------------------
-# best_experiment
-# ---------------------------------------------------------------------------
-
-def test_best_experiment_by_val_accuracy(tmp_path):
-    _write_exp(tmp_path, "low", val_accuracy=0.7)
-    _write_exp(tmp_path, "high", val_accuracy=0.95)
-    b = best_experiment(str(tmp_path), "val_accuracy")
-    assert b["name"] == "high"
-
-
-def test_best_experiment_by_val_loss(tmp_path):
-    _write_exp(tmp_path, "good", val_loss=0.1)
-    _write_exp(tmp_path, "bad", val_loss=0.9)
-    b = best_experiment(str(tmp_path), "val_loss")
-    assert b["name"] == "good"  # lower loss is better
-
-
-def test_best_experiment_no_metric(tmp_path):
-    _write_exp(tmp_path, "no_metric")  # val_accuracy=None
-    b = best_experiment(str(tmp_path), "val_accuracy")
-    assert b is None
 
 
 # ---------------------------------------------------------------------------

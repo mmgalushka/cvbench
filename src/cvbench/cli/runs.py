@@ -13,7 +13,6 @@ from cvbench.core.exp_store import (
     EXPERIMENTS_DIR,
     assert_name_available,
     assert_renamable,
-    best_experiment,
     is_sweep_dir,
     resolve_experiments_dir,
     resolve_run_dir,
@@ -44,7 +43,6 @@ _DEFAULT_EXPERIMENTS_DIR = EXPERIMENTS_DIR
 @_help.group(
     examples=[
         ("runs list", "every run, newest first"),
-        ("runs best --metric val_accuracy", "the strongest run so far"),
         ("runs export my_run --format tflite", "package a run for a device"),
     ],
 )
@@ -470,36 +468,5 @@ def delete(experiment, export_subfolder, yes):
     shutil.rmtree(target)
     print(_console.green(f" Deleted {label}."))
 
-
-@runs.command(
-    short_help="Show the single best run by a metric.",
-    examples=[
-        ("runs best", "Best run by validation loss"),
-        ("runs best --metric test_accuracy", "Best run by test accuracy"),
-    ],
-)
-@click.argument("experiments_dir", default=_DEFAULT_EXPERIMENTS_DIR)
-@click.option(
-    "--metric",
-    default="val_loss",
-    type=click.Choice(["val_loss", "val_accuracy", "test_accuracy"]),
-    show_default=True,
-)
-def best(experiments_dir, metric):
-    """Show the best experiment in EXPERIMENTS_DIR by a given metric."""
-    experiments_dir = resolve_experiments_dir(experiments_dir)
-    run = best_experiment(experiments_dir, metric)
-    if run is None:
-        print(
-            f" No experiments with metric '{metric}' found in '{experiments_dir}'."
-        )
-        return
-
-    print(_console.rule())
-    print(f" {_console.bold(f'CVBench — best run by {metric}')}")
-    print(_console.rule())
-    for k, v in run.items():
-        print(f" {k:<22}: {v}")
-    print(_console.rule())
 
 
