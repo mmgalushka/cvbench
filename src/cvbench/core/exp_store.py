@@ -3,7 +3,7 @@
 Name resolution (bare name vs. literal path, availability checks) is
 delegated to a shared `Registry` (see `core/registry.py`); this module also
 carries run-name generation and the filesystem experiment index used by
-`runs list` / `runs best` and the WebUI.
+`runs list` and the WebUI.
 """
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def sweep_dirs(parent_dir: str = EXPERIMENTS_DIR) -> list[Path]:
 
 
 def resolve_experiments_dir(name_or_path: str) -> str:
-    """Resolve a directory argument for `runs list` / `runs best`.
+    """Resolve a directory argument for `runs list`.
 
     A literal path is used as-is; otherwise a bare name (e.g. a sweep) is looked up under
     EXPERIMENTS_DIR. Falls back to the given value so callers report their own "not found".
@@ -242,12 +242,3 @@ def scan_experiments(parent_dir: str, sort_by: str = "date") -> list[dict]:
         key=lambda r: (r.get(key) is None, r.get(key, "")),
         reverse=reverse,
     )
-
-
-def best_experiment(parent_dir: str, metric: str = "val_loss") -> dict | None:
-    """Return the experiment with the best value for the given metric."""
-    entries = [e for e in scan_experiments(parent_dir) if e.get(metric) is not None]
-    if not entries:
-        return None
-    reverse = metric != "val_loss"
-    return sorted(entries, key=lambda r: r.get(metric, 0), reverse=reverse)[0]

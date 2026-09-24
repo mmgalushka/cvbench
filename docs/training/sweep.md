@@ -145,7 +145,6 @@ How each `runs` command treats a sweep name:
 |---|---|
 | `runs list` | one summary row; `runs list <sweep>` lists its trials |
 | `runs show <sweep>` | the sweep's settings and trial table |
-| `runs best <sweep>` | the best trial by the chosen metric |
 | `runs delete <sweep>` | removes the whole sweep and its trials |
 | `runs rename`, `runs compare`, `runs export` | not supported: a clear message asks for a trial name |
 
@@ -169,5 +168,3 @@ trials yet.
 - **Sequential.** Trials do not run in parallel.
 - **No resume.** An interrupted sweep is not continued; start a new one with a
   new `--name`. A sweep name that is already in use is rejected.
-- **`runs best` ignores trials.** It only considers top-level runs (use
-  `runs best experiments/<sweep>` for one sweep).
