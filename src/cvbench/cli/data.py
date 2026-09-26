@@ -155,7 +155,8 @@ def explore(data_dir, split):
     root = Path(data_dir)
     if not root.is_dir():
         raise click.ClickException(f"Dataset directory not found: '{root}'")
-    issues = prep_mod.find_integrity_issues(root)
+    with _console.progress(len(layout_mod.list_images(root)), "Checking integrity") as advance:
+        issues = prep_mod.find_integrity_issues(root, progress=advance)
     bad = {root / rel for rel, _ in issues.corrupt}
 
     if layout_mod.is_yolo_dataset(root):
@@ -170,13 +171,22 @@ def explore(data_dir, split):
     if not class_dirs:
         raise click.ClickException(f"No class subdirectories found in '{split_dir}'")
 
+    class_images = {
+        cls_dir: [f for f in cls_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS and f not in bad]
+        for cls_dir in class_dirs
+    }
     stats = []
-    for cls_dir in class_dirs:
-        images = [f for f in cls_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS and f not in bad]
+    with _console.progress(sum(map(len, class_images.values())), "Measuring brightness") as advance:
+        brightness: dict[Path, list[float]] = {}
+        for cls_dir, images in class_images.items():
+            brightness[cls_dir] = []
+            for f in images:
+                brightness[cls_dir].append(_mean_brightness(f))
+                advance(1)
+    for cls_dir, images in class_images.items():
         if not images:
             continue
-        brightnesses = [_mean_brightness(f) for f in images]
-        arr = np.array(brightnesses)
+        arr = np.array(brightness[cls_dir])
         stats.append({
             "class": cls_dir.name,
             "count": len(images),
@@ -360,25 +370,25 @@ def upsample(src_dir, dst_dir, aug_file, target):
     print()
 
     # --- copy originals ---
-    print(f" {_console.bold('Copying originals...')}")
-    for img_path in images:
-        token = _fresh_token(used_tokens)
-        used_tokens.add(token)
-        dst_path = dst / f"{token}{img_path.suffix.lower()}"
-        shutil.copy2(img_path, dst_path)
-        arr = np.array(Image.open(img_path).convert("RGB"))
-        used_hashes.add(hashify_mod.hash_array(arr))
+    with _console.progress(n_src, "Copying originals") as advance:
+        for img_path in images:
+            token = _fresh_token(used_tokens)
+            used_tokens.add(token)
+            dst_path = dst / f"{token}{img_path.suffix.lower()}"
+            shutil.copy2(img_path, dst_path)
+            arr = np.array(Image.open(img_path).convert("RGB"))
+            used_hashes.add(hashify_mod.hash_array(arr))
+            advance(1)
     _console.success(f"Copied {n_src} original(s)")
     print()
 
     # --- generate augmented samples ---
     n_to_generate = target - n_src
-    print(f" {_console.bold(f'Generating {n_to_generate} augmented sample(s)...')}")
 
     generated = 0
     total_skipped = 0
 
-    with click.progressbar(length=n_to_generate, width=40) as bar:
+    with _console.progress(n_to_generate, f"Generating {n_to_generate} augmented sample(s)") as advance:
         while generated < n_to_generate:
             src_path = random.choice(images)
             arr = np.array(Image.open(src_path).convert("RGB")).astype(np.float32)
@@ -401,9 +411,8 @@ def upsample(src_dir, dst_dir, aug_file, target):
             used_tokens.add(token)
             Image.fromarray(aug_uint8).save(dst / f"{token}{suffix}")
             generated += 1
-            bar.update(1)
+            advance(1)
 
-    print()
     _console.success(f"Generated {generated} augmented image(s)")
     if total_skipped:
         print(f"  {_console.yellow('⚠')}  Skipped {total_skipped} duplicate(s) after {_MAX_RETRIES} retries each")
@@ -463,9 +472,13 @@ def prep(src, dst, no_hash, no_duplicates, dry_run):
             "Provide an empty or non-existent directory."
         )
 
-    plan = prep_mod.prep_dataset(
-        src_dir, dst_dir, dry_run, hash_names=not no_hash, remove_duplicates=no_duplicates
-    )
+    with _console.progress(len(layout_mod.list_images(src_dir)), "Scanning") as advance:
+        plan = prep_mod.build_plan(
+            src_dir, hash_names=not no_hash, remove_duplicates=no_duplicates, progress=advance
+        )
+    if not dry_run:
+        with _console.progress(len(plan.actions), "Copying") as advance:
+            prep_mod.apply_plan(plan, src_dir, dst_dir, progress=advance)
 
     print(_console.rule())
     print(f" {_console.bold('CVBench — data prep')}")
@@ -577,9 +590,12 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
         )
 
     try:
-        plan = split_mod.split_dataset(src_dir, dst_dir, ratios, seed, dry_run)
+        plan = split_mod.plan_split(src_dir, ratios, seed)
     except ValueError as e:
         raise click.ClickException(str(e)) from e
+    if not dry_run:
+        with _console.progress(len(plan.actions), "Copying") as advance:
+            split_mod.apply_plan(plan, dst_dir, progress=advance)
 
     print(_console.rule())
     print(f" {_console.bold('CVBench — data split')}")
@@ -641,9 +657,12 @@ def flatten(src, dst, dry_run):
         )
 
     try:
-        plan = flatten_mod.flatten_dataset(src_dir, dst_dir, dry_run)
+        plan = flatten_mod.plan_flatten(src_dir)
     except ValueError as e:
         raise click.ClickException(str(e)) from e
+    if not dry_run:
+        with _console.progress(len(plan.actions), "Copying") as advance:
+            flatten_mod.apply_plan(plan, dst_dir, progress=advance)
 
     print(_console.rule())
     print(f" {_console.bold('CVBench — data flatten')}")

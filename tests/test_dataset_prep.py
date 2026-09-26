@@ -337,3 +337,20 @@ def test_hash_image_file_is_full_md5(cls_root):
     full = hashify_mod.hash_image_file(img)
     assert len(full) == 32
     int(full, 16)  # valid hex
+
+
+def test_prep_progress_callbacks_count_every_image(cls_root, tmp_path):
+    from cvbench.datasets import layout
+    from cvbench.datasets import prep as prep_mod
+
+    scanned, copied = [], []
+    plan = prep_mod.build_plan(cls_root, progress=scanned.append)
+    assert len(scanned) == len(layout.list_images(cls_root))
+    assert set(scanned) == {1}
+
+    prep_mod.apply_plan(plan, cls_root, tmp_path / "out", progress=copied.append)
+    assert len(copied) == len(plan.actions)
+
+    issues_seen = []
+    prep_mod.find_integrity_issues(cls_root, progress=issues_seen.append)
+    assert len(issues_seen) == len(scanned)

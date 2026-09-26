@@ -21,11 +21,13 @@ import os
 import re
 import shutil
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from typing import Any, Literal
 
 from rich import box
 from rich.console import Console
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeElapsedColumn, TimeRemainingColumn
 from rich.syntax import Syntax
 from rich.table import Table
 
@@ -200,3 +202,38 @@ def render(renderable: Any) -> str:
         # any that slipped through so a disabled console is truly plain.
         out = re.sub(r"\x1b\[[0-9;]*m", "", out)
     return out
+
+
+@contextmanager
+def progress(total: int, desc: str) -> Iterator[Callable[[int], None]]:
+    """Progress bar for a long loop; yields an ``advance(n)`` callback.
+
+    The bar is drawn only when stdout is a TTY, so piped output, CI logs and
+    tests stay clean; otherwise (or when ``total`` is 0) the callback is a no-op.
+    Under NO_COLOR the bar is drawn without colour. The callback matches the
+    optional ``progress`` parameter of the ``cvbench.datasets`` functions::
+
+        with _console.progress(len(images), "Copying") as advance:
+            plan = build_plan(src, progress=advance)
+    """
+    if total <= 0 or not sys.stdout.isatty():
+        def noop(n: int = 1) -> None:
+            pass
+
+        yield noop
+        return
+    bar = Progress(
+        TextColumn(" {task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        console=_make_console(),
+    )
+    with bar:
+        task = bar.add_task(desc, total=total)
+
+        def advance(n: int = 1) -> None:
+            bar.advance(task, n)
+
+        yield advance
