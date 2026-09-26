@@ -12,10 +12,10 @@ from cvbench.cli import _help
 from cvbench.cli.generate import generate
 from cvbench.core.data_store import DATA_DIR, DATA_REG
 from cvbench.datasets import clean as clean_mod
-from cvbench.datasets import dedup as dedup_mod
 from cvbench.datasets import flatten as flatten_mod
 from cvbench.datasets import hashify as hashify_mod
 from cvbench.datasets import layout as layout_mod
+from cvbench.datasets import prep as prep_mod
 from cvbench.datasets import split as split_mod
 from cvbench.datasets.stats import get_class_distribution, get_dataset_overview, print_class_distribution
 
@@ -417,71 +417,14 @@ def clean(src, dst, dry_run):
 
 
 @data.command(
-    "hashify",
-    short_help="Copy a dataset, renaming images to content hashes.",
+    "prep",
+    short_help="Copy a dataset, hashing filenames and dropping exact duplicates.",
     examples=[
-        ("data hashify data/raw data/hashed",
-         "Give every image a deterministic content-based filename"),
-        ("data hashify data/raw data/hashed --dry-run", "Preview the renames"),
-    ],
-    see_also=[("data dedup data/hashed data/final", "then drop genuine duplicates")],
-)
-@click.argument("src")
-@click.argument("dst")
-@click.option("--dry-run", is_flag=True, default=False,
-              help="Show what would be renamed without writing DST.")
-def hashify(src, dst, dry_run):
-    """Copy SRC to DST, renaming every image to a content-hash filename.
-
-    SRC  dataset directory to hashify (classification or YOLO layout)\n
-    DST  destination for the renamed copy; must be empty or non-existent.
-
-    Names are derived from pixel content, so the same image gets the same
-    16-hex-char filename every time (deterministic, idempotent) regardless
-    of its original basename. Never deletes: two images that land on the
-    same destination name both survive, the second with a numeric suffix.
-    Use 'data dedup' to remove genuine duplicates. YOLO label files are
-    renamed to match their image's new name. SRC is never modified.
-    """
-    from cvbench.core import _console
-
-    src_dir = Path(src)
-    dst_dir = Path(dst)
-
-    if not src_dir.is_dir():
-        raise click.ClickException(f"Source directory not found: '{src_dir}'")
-
-    if dst_dir.exists() and any(dst_dir.iterdir()):
-        raise click.ClickException(
-            f"Destination '{dst_dir}' already contains files. "
-            "Provide an empty or non-existent directory."
-        )
-
-    plan = hashify_mod.hashify_dataset(src_dir, dst_dir, dry_run)
-
-    collisions = sum(1 for a in plan.actions if "-" in Path(a.dst_image).stem)
-
-    print(_console.rule())
-    print(f" {_console.bold('CVBench — data hashify')}")
-    print(_console.rule())
-    print(f"  Source  : {_console.dim(str(src_dir))}")
-    print(f"  Dest    : {_console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
-    print()
-
-    verb = "Would rename" if dry_run else "Renamed"
-    _console.success(f"{verb} {len(plan.actions)} image(s)")
-    if collisions:
-        print(f"  {_console.yellow('⚠')}  {collisions} filename collision(s) resolved with a numeric suffix")
-    print(_console.rule())
-
-
-@data.command(
-    "dedup",
-    short_help="Copy a dataset, dropping exact-duplicate images.",
-    examples=[
-        ("data dedup data/raw data/deduped", "Keep one copy of each image"),
-        ("data dedup data/split data/deduped --across-splits",
+        ("data prep data/raw data/prepped",
+         "Give every image a canonical content-hash filename and drop duplicates"),
+        ("data prep data/split data/prepped --across-splits",
          "Also warn when the same image appears in more than one split"),
+        ("data prep data/raw data/prepped --dry-run", "Preview the plan without writing anything"),
     ],
 )
 @click.argument("src")
@@ -489,17 +432,21 @@ def hashify(src, dst, dry_run):
 @click.option("--across-splits", is_flag=True, default=False,
               help="Warn when a duplicate group spans more than one split (train/val/test).")
 @click.option("--dry-run", is_flag=True, default=False,
-              help="Show what would be removed without writing DST.")
-def dedup(src, dst, across_splits, dry_run):
-    """Copy SRC to DST, dropping exact-duplicate images.
+              help="Show the plan without writing DST.")
+def prep(src, dst, across_splits, dry_run):
+    """Copy SRC to DST, renaming every image to a content-hash filename and
+    dropping exact duplicates.
 
-    SRC  dataset directory to dedup (classification or YOLO layout)\n
-    DST  destination for the deduplicated copy; must be empty or non-existent.
+    SRC  dataset directory to prep (classification or YOLO layout)\n
+    DST  destination for the prepped copy; must be empty or non-existent.
 
-    Duplicates are found by full image-content hash. Within each duplicate
-    group only the lexicographically-first path is kept. For YOLO, dropping
-    an image also drops its paired label file. SRC is never modified. Use
-    'data hashify' first if you also want canonical filenames.
+    Each image's new name is the full 32-hex-char MD5 digest of its pixel
+    content (deterministic and idempotent — the same image always gets the
+    same name). Two different images sharing a digest is negligible at that
+    length, so a name collision reliably means duplicate content: within
+    each duplicate group only the lexicographically-first original path is
+    kept and copied; the rest are dropped. For YOLO, dropping an image also
+    drops its paired label file. SRC is never modified.
     """
     from cvbench.core import _console
 
@@ -515,12 +462,12 @@ def dedup(src, dst, across_splits, dry_run):
             "Provide an empty or non-existent directory."
         )
 
-    plan = dedup_mod.dedup_dataset(src_dir, dst_dir, dry_run)
+    plan = prep_mod.prep_dataset(src_dir, dst_dir, dry_run)
 
     n_dupe_files = sum(len(v) - 1 for v in plan.duplicate_groups.values())
 
     print(_console.rule())
-    print(f" {_console.bold('CVBench — data dedup')}")
+    print(f" {_console.bold('CVBench — data prep')}")
     print(_console.rule())
     print(f"  Source  : {_console.dim(str(src_dir))}")
     print(f"  Dest    : {_console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
@@ -546,9 +493,9 @@ def dedup(src, dst, across_splits, dry_run):
             _console.success("No cross-split leakage detected.")
 
     print()
-    verb = "Would keep" if dry_run else "Kept"
+    verb = "Would write" if dry_run else "Wrote"
     suffix = f"  {_console.dim(f'({n_dupe_files} duplicate(s) dropped)')}" if n_dupe_files else ""
-    _console.success(f"{verb} {len(plan.keep)} image(s){suffix}")
+    _console.success(f"{verb} {len(plan.actions)} image(s){suffix}")
     print(_console.rule())
 
 

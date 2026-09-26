@@ -92,12 +92,11 @@ sweep          Grid-search training flags and report the best trial.
    Generate, inspect and reshape datasets.
    data aug       Write an augmentation config file to edit and reuse.
    data clean     Copy a dataset, dropping OS/editor junk files.
-   data dedup     Copy a dataset, dropping exact-duplicate images.
    data explore   Report per-class brightness and class balance.
    data flatten   Pool an already-split dataset back into one flat folder.
    data generate  Generate a synthetic geometric shapes dataset for pipeline testing.
-   data hashify   Copy a dataset, renaming images to content hashes.
    data list      List datasets (default: data/).
+   data prep      Copy a dataset, hashing filenames and dropping exact duplicates.
    data split     Split a flat dataset into train/val/test, stratified by class.
    data upsample  Grow a class folder to TARGET images via augmentation.
 

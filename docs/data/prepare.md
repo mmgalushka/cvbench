@@ -1,11 +1,11 @@
 # Preparing Real Datasets
 
-The `data` command group has eight subcommands in total: `list` and `explore`
+The `data` command group has seven subcommands in total: `list` and `explore`
 for inspecting a dataset, `upsample` for correcting class imbalance (see
-[Augmentation](augmentation.md#upsampling-a-class-folder)), and five verbs for
+[Augmentation](augmentation.md#upsampling-a-class-folder)), and four verbs for
 reshaping a dataset (classification or
 [YOLO](https://docs.ultralytics.com/datasets/detect/) layout) without touching the
-source — clean, hashify, dedup, split, and flatten. Each of the five copies
+source — clean, prep, split, and flatten. Each of the four copies
 `SRC` to `DST` and leaves `SRC` untouched.
 
 ## Listing and inspecting datasets
@@ -26,17 +26,16 @@ lighting bias or class imbalance before you train.
 |---|---|
 | `data explore --split` | Dataset split to analyse: `train` (default) / `val` / `test` |
 
-### The five dataset-copy verbs
+### The four dataset-copy verbs
 
 | Command | What it does |
 |---|---|
 | `data clean` | Drop OS/editor junk files |
-| `data hashify` | Rename images to content-hash filenames |
-| `data dedup` | Drop exact-duplicate images |
+| `data prep` | Rename images to content-hash filenames and drop exact duplicates |
 | `data split` | Split a flat pool into train/val/test, stratified |
 | `data flatten` | Pool an already-split dataset back into one flat folder |
 
-All five share the same shape: `data <verb> SRC DST [options]`, and most
+All four share the same shape: `data <verb> SRC DST [options]`, and most
 support `--dry-run` to preview the result before writing anything.
 
 ## Cleaning a dataset
@@ -56,46 +55,32 @@ data clean data/my_data data/my_data_clean             # write the cleaned copy
 |---|---|---|
 | `--dry-run` |  | Print what would be removed without writing `DST` |
 
-## Hashifying a dataset
+## Prepping a dataset
 
-Use `data hashify` to copy a dataset (classification or YOLO layout) while
-renaming every image to a content-hash filename (e.g. `0ca9c69d9741cb49.png`),
-instead of its original basename. This is deterministic and idempotent — the
-same image always gets the same name, in any dataset — which makes it easy to
-spot the same source image reappearing across collections. `hashify` never
-deletes anything: two images that land on the same destination name
-(byte-identical images sharing a directory) both survive, the second with a
-numeric suffix. Use `data dedup` to remove genuine duplicates.
-
-```bash
-data hashify data/my_data data/my_data_hashed
-```
-
-| Option | Required | Description |
-|---|---|---|
-| `--dry-run` |  | Print what would be renamed without writing `DST` |
-
-## Deduplicating a dataset
-
-Use `data dedup` to copy a dataset (classification or YOLO layout) while
-dropping exact-duplicate images. Duplicates are grouped by full image-content
-hash; within each group only the lexicographically-first path is kept. For
-YOLO, dropping an image also drops its paired label file. `--across-splits`
-additionally flags duplicate groups whose members span more than one split
-(train/val/test) — the highest-value check, since that's data leakage between
-splits.
+Use `data prep` to copy a dataset (classification or YOLO layout) while
+renaming every image to a content-hash filename (e.g.
+`0ca9c69d9741cb49e9800998ecf8427e.png`) and dropping exact duplicates, in one
+pass. The name is the full 32-hex-char MD5 digest of the image's pixel
+content — deterministic and idempotent, the same image always gets the same
+name in any dataset. At that length, two *different* images sharing a digest
+is negligible, so a name collision reliably means duplicate content: within
+each duplicate group only the lexicographically-first original path is kept
+and copied; the rest are dropped. For YOLO, dropping an image also drops its
+paired label file. `--across-splits` additionally flags duplicate groups
+whose members span more than one split (train/val/test) — the highest-value
+check, since that's data leakage between splits.
 
 ```bash
-data dedup data/my_data data/my_data_deduped --across-splits
+data prep data/my_data data/my_data_prepped --across-splits
 ```
 
 | Option | Required | Description |
 |---|---|---|
 | `--across-splits` |  | Warn when a duplicate group spans more than one split |
-| `--dry-run` |  | Print what would be removed without writing `DST` |
+| `--dry-run` |  | Print the plan without writing `DST` |
 
 !!! warning
-    Run `data dedup` (and especially `--across-splits`) before `data split`
+    Run `data prep` (and especially `--across-splits`) before `data split`
     if you're not sure the source is clean — duplicates that leak across
     train/val/test inflate validation and test metrics.
 
