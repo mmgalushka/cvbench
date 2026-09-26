@@ -10,6 +10,7 @@ to flatten. Run ``data split`` afterward to re-partition the result.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -85,8 +86,8 @@ def build_plan_yolo(src: Path) -> FlattenPlan:
     return plan
 
 
-def apply_plan(plan: FlattenPlan, dst: Path) -> None:
-    """Materialize PLAN at DST."""
+def apply_plan(plan: FlattenPlan, dst: Path, progress: Callable[[int], None] | None = None) -> None:
+    """Materialize PLAN at DST. PROGRESS, if given, is called with 1 per image copied."""
     import shutil
 
     for action in plan.actions:
@@ -97,16 +98,23 @@ def apply_plan(plan: FlattenPlan, dst: Path) -> None:
             dst_label = dst / action.dst_label
             dst_label.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(action.src_label, dst_label)
+        if progress:
+            progress(1)
 
     if plan.is_yolo and plan.class_names is not None:
         layout.write_data_yaml(dst, [], plan.class_names)
 
 
-def flatten_dataset(src: Path, dst: Path, dry_run: bool) -> FlattenPlan:
-    """Build the flatten plan for SRC and, unless DRY_RUN, write it to DST."""
+def plan_flatten(src: Path) -> FlattenPlan:
+    """Build the flatten plan for SRC. Read-only; raises ValueError if SRC is already flat."""
     if not layout.is_already_split(src):
         raise ValueError(f"'{src}' is already flat — nothing to flatten.")
-    plan = build_plan_yolo(src) if layout.is_yolo_dataset(src) else build_plan_classification(src)
+    return build_plan_yolo(src) if layout.is_yolo_dataset(src) else build_plan_classification(src)
+
+
+def flatten_dataset(src: Path, dst: Path, dry_run: bool) -> FlattenPlan:
+    """Build the flatten plan for SRC and, unless DRY_RUN, write it to DST."""
+    plan = plan_flatten(src)
     if not dry_run:
         apply_plan(plan, dst)
     return plan

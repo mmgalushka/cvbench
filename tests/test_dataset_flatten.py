@@ -101,3 +101,13 @@ def test_flatten_yolo_pools_images_and_labels(tmp_path):
     for img in images:
         label = dst / "labels" / f"{img.stem}.txt"
         assert label.is_file()
+
+
+def test_flatten_apply_plan_reports_progress(tmp_path):
+    from cvbench.datasets import flatten as flatten_mod
+
+    src = _make_split_classification(tmp_path / "src", ["cat", "dog"], per_class=3)
+    plan = flatten_mod.plan_flatten(src)
+    calls = []
+    flatten_mod.apply_plan(plan, tmp_path / "dst", progress=calls.append)
+    assert len(calls) == len(plan.actions) == 12

@@ -19,6 +19,7 @@ means "same image"). In a single pass ``data prep`` then:
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -78,19 +79,26 @@ def _read_label(path: Path) -> str:
     return path.read_text().strip() if path.is_file() else ""
 
 
-def _find_corrupt(src: Path, images: list[Path]) -> tuple[dict[str, list[Path]], list[tuple[Path, str]]]:
-    """Hash every image; return (hash -> relative paths, corrupt (path, reason))."""
+def _find_corrupt(
+    src: Path, images: list[Path], progress: Callable[[int], None] | None = None,
+) -> tuple[dict[str, list[Path]], list[tuple[Path, str]]]:
+    """Hash every image; return (hash -> relative paths, corrupt (path, reason)).
+
+    PROGRESS, if given, is called with 1 after each image is handled.
+    """
     groups: dict[str, list[Path]] = {}
     corrupt: list[tuple[Path, str]] = []
     for img in images:
         rel = img.relative_to(src)
         if img.stat().st_size == 0:
             corrupt.append((rel, "empty file"))
-            continue
-        try:
-            groups.setdefault(hashify.hash_image_file(img), []).append(rel)
-        except Exception as e:  # PIL raises many types for bad data
-            corrupt.append((rel, f"cannot decode ({type(e).__name__})"))
+        else:
+            try:
+                groups.setdefault(hashify.hash_image_file(img), []).append(rel)
+            except Exception as e:  # PIL raises many types for bad data
+                corrupt.append((rel, f"cannot decode ({type(e).__name__})"))
+        if progress:
+            progress(1)
     return groups, corrupt
 
 
@@ -134,9 +142,12 @@ class IntegrityIssues:
         return bool(self.corrupt or self.leaks or self.label_conflicts)
 
 
-def find_integrity_issues(src: Path) -> IntegrityIssues:
-    """Read-only scan of SRC for what ``data prep`` would drop."""
-    groups, corrupt = _find_corrupt(src, layout.list_images(src))
+def find_integrity_issues(src: Path, progress: Callable[[int], None] | None = None) -> IntegrityIssues:
+    """Read-only scan of SRC for what ``data prep`` would drop.
+
+    PROGRESS, if given, is called with 1 per image scanned.
+    """
+    groups, corrupt = _find_corrupt(src, layout.list_images(src), progress)
     conflicts = _find_label_conflicts(src, groups, layout.is_yolo_dataset(src))
     leaks = {
         h: leak
@@ -146,15 +157,20 @@ def find_integrity_issues(src: Path) -> IntegrityIssues:
     return IntegrityIssues(sorted(corrupt), leaks, conflicts)
 
 
-def build_plan(src: Path, hash_names: bool = True, remove_duplicates: bool = False) -> PrepPlan:
+def build_plan(
+    src: Path, hash_names: bool = True, remove_duplicates: bool = False,
+    progress: Callable[[int], None] | None = None,
+) -> PrepPlan:
     """Compute the prep plan for SRC. Read-only.
+
+    PROGRESS, if given, is called with 1 per image scanned.
 
     Images whose labels conflict are excluded from the plan and listed in
     ``plan.label_conflicts``.
     """
     is_yolo = layout.is_yolo_dataset(src)
     images = layout.list_images(src)
-    groups, corrupt = _find_corrupt(src, images)
+    groups, corrupt = _find_corrupt(src, images, progress)
 
     plan = PrepPlan(corrupt=sorted(corrupt), dedup=hash_names or remove_duplicates)
     for img in images:
@@ -196,8 +212,10 @@ def build_plan(src: Path, hash_names: bool = True, remove_duplicates: bool = Fal
     return plan
 
 
-def apply_plan(plan: PrepPlan, src: Path, dst: Path) -> None:
-    """Materialize PLAN at DST."""
+def apply_plan(
+    plan: PrepPlan, src: Path, dst: Path, progress: Callable[[int], None] | None = None,
+) -> None:
+    """Materialize PLAN at DST. PROGRESS, if given, is called with 1 per image copied."""
     import shutil
 
     for action in plan.actions:
@@ -208,6 +226,8 @@ def apply_plan(plan: PrepPlan, src: Path, dst: Path) -> None:
             dst_label = dst / action.dst_label
             dst_label.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(action.src_label, dst_label)
+        if progress:
+            progress(1)
 
     for rel in plan.extra_files:
         dst_path = dst / rel

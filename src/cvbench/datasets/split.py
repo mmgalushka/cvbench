@@ -143,8 +143,8 @@ def build_plan_yolo(src: Path, ratios: tuple[float, float, float], seed: int) ->
     return plan
 
 
-def apply_plan(plan: SplitPlan, dst: Path) -> None:
-    """Materialize PLAN at DST."""
+def apply_plan(plan: SplitPlan, dst: Path, progress: Callable[[int], None] | None = None) -> None:
+    """Materialize PLAN at DST. PROGRESS, if given, is called with 1 per image copied."""
     import shutil
 
     for action in plan.actions:
@@ -155,20 +155,27 @@ def apply_plan(plan: SplitPlan, dst: Path) -> None:
             dst_label = dst / action.dst_label
             dst_label.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(action.src_label, dst_label)
+        if progress:
+            progress(1)
 
     if plan.is_yolo and plan.class_names is not None:
         layout.write_data_yaml(dst, plan.splits_written, plan.class_names)
 
 
-def split_dataset(src: Path, dst: Path, ratios: tuple[float, float, float], seed: int, dry_run: bool) -> SplitPlan:
-    """Build the split plan for SRC and, unless DRY_RUN, write it to DST."""
+def plan_split(src: Path, ratios: tuple[float, float, float], seed: int) -> SplitPlan:
+    """Build the split plan for SRC. Read-only; raises ValueError if SRC is already split."""
     if layout.is_already_split(src):
         raise ValueError(
             f"'{src}' is already split into train/val/test — "
             "run 'data flatten' first, then 'data split' the flattened result."
         )
-    plan = build_plan_yolo(src, ratios, seed) if layout.is_yolo_dataset(src) else \
+    return build_plan_yolo(src, ratios, seed) if layout.is_yolo_dataset(src) else \
         build_plan_classification(src, ratios, seed)
+
+
+def split_dataset(src: Path, dst: Path, ratios: tuple[float, float, float], seed: int, dry_run: bool) -> SplitPlan:
+    """Build the split plan for SRC and, unless DRY_RUN, write it to DST."""
+    plan = plan_split(src, ratios, seed)
     if not dry_run:
         apply_plan(plan, dst)
     return plan

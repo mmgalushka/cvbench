@@ -117,3 +117,21 @@ def test_split_yolo_flat_pool_keeps_pairs_and_rewrites_data_yaml(tmp_path):
             assert label.is_file()
             total += 1
     assert total == 20
+
+
+def test_split_apply_plan_reports_progress(tmp_path):
+    import numpy as np
+    from PIL import Image
+
+    from cvbench.datasets import split as split_mod
+
+    src = tmp_path / "src"
+    for cls in ("cat", "dog"):
+        (src / cls).mkdir(parents=True)
+        for i in range(10):
+            arr = np.random.randint(0, 255, (16, 16, 3), dtype=np.uint8)
+            Image.fromarray(arr).save(src / cls / f"{i}.jpg")
+    plan = split_mod.plan_split(src, (0.8, 0.1, 0.1), seed=1)
+    calls = []
+    split_mod.apply_plan(plan, tmp_path / "dst", progress=calls.append)
+    assert len(calls) == len(plan.actions) == 20

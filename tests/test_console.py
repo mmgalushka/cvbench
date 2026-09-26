@@ -108,3 +108,39 @@ def test_term_width_falls_back_when_no_terminal(monkeypatch):
 
     monkeypatch.setattr(shutil, "get_terminal_size", lambda fallback: os.terminal_size(fallback))
     assert _console.term_width(42) == 42
+
+
+def test_progress_is_silent_and_callable_when_not_a_tty(capsys):
+    with _console.progress(5, "Working") as advance:
+        for _ in range(5):
+            advance(1)
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+def test_progress_is_a_noop_for_an_empty_total(monkeypatch, capsys):
+    _force_tty(monkeypatch)
+    with _console.progress(0, "Working") as advance:
+        advance(1)
+    assert capsys.readouterr().out == ""
+
+
+def test_progress_draws_a_bar_on_a_real_tty(monkeypatch, capsys):
+    _force_tty(monkeypatch)
+    with _console.progress(3, "Working") as advance:
+        for _ in range(3):
+            advance(1)
+    out = capsys.readouterr().out
+    assert "Working" in out
+    assert "3/3" in out
+
+
+def test_progress_under_no_color_has_no_colour_codes(monkeypatch, capsys):
+    monkeypatch.setenv("NO_COLOR", "1")
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    with _console.progress(2, "Working") as advance:
+        advance(2)
+    out = capsys.readouterr().out
+    assert "2/2" in out
+    assert not any(f"{ESC}{c}" in out for c in ("3", "9", "38;", "48;"))
