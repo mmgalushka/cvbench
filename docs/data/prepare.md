@@ -21,10 +21,11 @@ from its layout — see [Your First Model](../getting-started/first-model.md))
 and shows per-split image counts and the number of classes. `data explore`
 reports mean brightness and image counts per class, useful for spotting
 lighting bias or class imbalance before you train. It also lists unreadable
-images (empty or undecodable), images that appear in more than one split
+images (empty or undecodable), images PIL reads but TensorFlow's decoder rejects
+(training would crash on them), images that appear in more than one split
 (data leakage) and identical images with conflicting labels, and exits with
 status 1 if it finds any — run
-[`data prep`](#the-three-dataset-copy-verbs) to remove them. This check works
+[`data prep`](#the-three-dataset-copy-verbs) to drop or repair them. This check works
 for YOLO datasets too (brightness and balance are classification-only).
 
 | Option | Description |
@@ -49,6 +50,12 @@ removing images that would hurt training or inflate evaluation. In one pass it:
 
 - **Drops corrupt images** — empty or undecodable files are skipped and listed
   with the reason instead of crashing the command.
+- **Handles images TensorFlow can't decode** — some files PIL opens fine but
+  TensorFlow's decoder (the one training uses) rejects, e.g. a truncated or
+  16-bit BMP saved with a `.jpg` extension. Training would crash on them, so
+  they are listed and, per `--on-incompatible`, dropped (default) or
+  re-encoded as lossless PNG. Only those files are re-encoded; everything
+  else is copied byte-for-byte. `data explore` flags the same files first.
 - **Removes cross-split duplicates** — the same image in more than one of
   train/val/test is data leakage, so only the copy in the highest-priority
   split is kept (train > val > test). For YOLO the paired label file goes
@@ -77,6 +84,7 @@ data prep data/my_data data/my_data_prepped --no-hash --no-duplicates
 |---|---|---|
 | `--no-hash` |  | Keep original filenames (images are still hashed internally to find duplicates); warns when within-split duplicates are present |
 | `--no-duplicates` |  | Drop within-split duplicates; only needed together with `--no-hash` |
+| `--on-incompatible` |  | `drop` (default) or `repair`: what to do with images TensorFlow can't decode |
 | `--dry-run` |  | Print the plan without writing `DST` |
 
 !!! warning

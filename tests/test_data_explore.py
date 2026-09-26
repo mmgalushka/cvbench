@@ -98,3 +98,22 @@ def test_yolo_dataset_reports_leak_and_corrupt(tmp_path):
     assert bad.exit_code == 1
     assert "leak.png" in bad.output
     assert "empty file" in bad.output
+
+
+def _write_truncated_bmp(path: Path) -> None:
+    """A BMP PIL reads but TensorFlow's decoder rejects (size differs from its header)."""
+    import io
+    path.parent.mkdir(parents=True, exist_ok=True)
+    buf = io.BytesIO()
+    Image.fromarray(np.random.default_rng(99).integers(0, 255, (15, 15, 3), dtype=np.uint8)).save(buf, format="BMP")
+    path.write_bytes(buf.getvalue()[:-2])
+
+
+def test_tf_incompatible_image_flagged(clean_root):
+    _write_truncated_bmp(clean_root / "train" / "cat" / "bmp_as.jpg")
+    result = CliRunner().invoke(explore, [str(clean_root)])
+    assert result.exit_code == 1
+    assert "1 image(s) PIL reads but TensorFlow rejects" in result.output
+    assert "bmp_as.jpg" in result.output
+    assert "Input size should match" in result.output
+    assert "No unreadable images found" in result.output  # it is not corrupt, just incompatible
