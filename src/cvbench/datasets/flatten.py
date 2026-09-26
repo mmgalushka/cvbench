@@ -110,11 +110,3 @@ def plan_flatten(src: Path) -> FlattenPlan:
     if not layout.is_already_split(src):
         raise ValueError(f"'{src}' is already flat — nothing to flatten.")
     return build_plan_yolo(src) if layout.is_yolo_dataset(src) else build_plan_classification(src)
-
-
-def flatten_dataset(src: Path, dst: Path, dry_run: bool) -> FlattenPlan:
-    """Build the flatten plan for SRC and, unless DRY_RUN, write it to DST."""
-    plan = plan_flatten(src)
-    if not dry_run:
-        apply_plan(plan, dst)
-    return plan
