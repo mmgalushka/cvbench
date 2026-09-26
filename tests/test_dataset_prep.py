@@ -354,3 +354,51 @@ def test_prep_progress_callbacks_count_every_image(cls_root, tmp_path):
     issues_seen = []
     prep_mod.find_integrity_issues(cls_root, progress=issues_seen.append)
     assert len(issues_seen) == len(scanned)
+
+
+def _incompatible_root(tmp_path) -> Path:
+    """cat/dog dataset where train/cat has a truncated BMP named .jpg (PIL ok, TF rejects)."""
+    import io
+    root = tmp_path / "inc"
+    for split, cls, seed in [("train", "cat", 1), ("train", "dog", 2), ("val", "cat", 3)]:
+        d = root / split / cls
+        d.mkdir(parents=True)
+        arr = np.random.default_rng(seed).integers(0, 255, (16, 16, 3), dtype=np.uint8)
+        Image.fromarray(arr).save(d / "a.png")
+    buf = io.BytesIO()
+    Image.fromarray(np.random.default_rng(9).integers(0, 255, (15, 15, 3), dtype=np.uint8)).save(buf, format="BMP")
+    (root / "train" / "cat" / "bmp_as.jpg").write_bytes(buf.getvalue()[:-2])
+    return root
+
+
+def test_prep_drops_tf_incompatible_by_default(tmp_path):
+    root = _incompatible_root(tmp_path)
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(root), str(dst)])
+    assert result.exit_code == 0, result.output
+    assert "1 TensorFlow-incompatible image(s) dropped" in result.output
+    assert "--on-incompatible repair" in result.output
+    assert len(_all_files(dst)) == 3
+
+
+def test_prep_repairs_tf_incompatible_as_png(tmp_path):
+    import tensorflow as tf
+    root = _incompatible_root(tmp_path)
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(root), str(dst), "--on-incompatible", "repair"])
+    assert result.exit_code == 0, result.output
+    assert "re-encoded as PNG" in result.output
+    files = sorted((dst / "train" / "cat").iterdir())
+    assert len(_all_files(dst)) == 4
+    assert all(f.suffix == ".png" for f in files)
+    for f in dst.rglob("*.png"):  # every output file decodes with the training decoder
+        tf.image.decode_image(tf.io.read_file(str(f)), channels=3, expand_animations=False)
+
+
+def test_prep_repair_keeps_original_name_with_no_hash(tmp_path):
+    root = _incompatible_root(tmp_path)
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(root), str(dst), "--no-hash", "--on-incompatible", "repair"])
+    assert result.exit_code == 0, result.output
+    assert (dst / "train" / "cat" / "bmp_as.png").is_file()
+    assert not (dst / "train" / "cat" / "bmp_as.jpg").exists()

@@ -95,7 +95,7 @@ def _print_group(h, kept, dropped):
 
 
 def _print_integrity(root, issues):
-    """Print the unreadable-image, cross-split-leak and label-conflict sections of ``data explore``."""
+    """Print the unreadable/incompatible-image, cross-split-leak and label-conflict sections of ``data explore``."""
     from cvbench.core import _console
 
     def group_line(h, paths):
@@ -109,6 +109,14 @@ def _print_integrity(root, issues):
             print(f"   {_console.yellow(str(rel))}  {_console.dim(reason)}")
     else:
         _console.success("No unreadable images found.")
+    if issues.incompatible:
+        n = len(issues.incompatible)
+        print(f" {_console.bold(f'{n} image(s) PIL reads but TensorFlow rejects (training would fail):')}")
+        for rel, reason in issues.incompatible:
+            print(f"   {_console.yellow(str(rel))}  {_console.dim(reason)}")
+        _console.warning("Drop them or re-encode them as PNG with 'data prep --on-incompatible drop|repair'.")
+    else:
+        _console.success("No TensorFlow-incompatible images found.")
     if leaks:
         print(f" {_console.bold(f'{len(leaks)} image(s) appear in more than one split:')}")
         for h, paths in leaks.items():
@@ -145,10 +153,11 @@ def explore(data_dir, split):
     DATA_DIR is the root dataset directory (containing train/, val/, test/
     subdirectories) or a split directory directly.
 
-    Unreadable images (empty or undecodable), images that appear in more than
-    one split (data leakage) and identical images with conflicting labels are
-    listed, and the command exits with status 1 if any are found; run
-    ``data prep`` to drop them.
+    Unreadable images (empty or undecodable), images PIL reads but TensorFlow
+    rejects (e.g. a truncated BMP named .jpg; training would crash on them),
+    images that appear in more than one split (data leakage) and identical
+    images with conflicting labels are listed, and the command exits with
+    status 1 if any are found; run ``data prep`` to drop or repair them.
     """
     from cvbench.core import _console
 
@@ -429,6 +438,8 @@ def upsample(src_dir, dst_dir, aug_file, target):
          "Hash-rename images, drop corrupt files, split leaks and duplicates"),
         ("data prep data/raw data/prepped --no-hash --no-duplicates",
          "Keep original filenames but still drop within-split duplicates"),
+        ("data prep data/raw data/prepped --on-incompatible repair",
+         "Re-encode images TensorFlow can't decode as PNG instead of dropping them"),
         ("data prep data/raw data/prepped --dry-run", "Preview the plan without writing anything"),
     ],
 )
@@ -438,16 +449,24 @@ def upsample(src_dir, dst_dir, aug_file, target):
               help="Keep original filenames instead of renaming to content hashes.")
 @click.option("--no-duplicates", is_flag=True, default=False,
               help="Drop within-split duplicates (always on unless --no-hash is given).")
+@click.option("--on-incompatible", type=click.Choice(["drop", "repair"]), default="drop",
+              show_default=True,
+              help="What to do with images PIL reads but TensorFlow rejects: drop them, "
+                   "or re-encode just those as lossless PNG.")
 @click.option("--dry-run", is_flag=True, default=False,
               help="Show the plan without writing DST.")
-def prep(src, dst, no_hash, no_duplicates, dry_run):
+def prep(src, dst, no_hash, no_duplicates, on_incompatible, dry_run):
     """Copy SRC to DST, dropping unusable images and leaked duplicates.
 
     SRC  dataset directory to prep (classification or YOLO layout)\n
     DST  destination for the prepped copy; must be empty or non-existent.
 
     Always: corrupt images (empty or undecodable) are dropped and listed;
-    an image present in more than one split is kept only in the
+    images PIL reads but TensorFlow's decoder rejects (which would crash
+    training) are listed and, per --on-incompatible, dropped (default) or
+    re-encoded as lossless PNG (only those files; every other file is copied
+    byte-for-byte). Run ``data explore`` to see which images are affected.
+    An image present in more than one split is kept only in the
     highest-priority one (train > val > test), and for YOLO its label file
     goes with it. The same image under different classes (or, for YOLO, with
     differing label files) cannot be labelled reliably, so every copy is dropped.
@@ -474,7 +493,8 @@ def prep(src, dst, no_hash, no_duplicates, dry_run):
 
     with _console.progress(len(layout_mod.list_images(src_dir)), "Scanning") as advance:
         plan = prep_mod.build_plan(
-            src_dir, hash_names=not no_hash, remove_duplicates=no_duplicates, progress=advance
+            src_dir, hash_names=not no_hash, remove_duplicates=no_duplicates, progress=advance,
+            on_incompatible=on_incompatible,
         )
     if not dry_run:
         with _console.progress(len(plan.actions), "Copying") as advance:
@@ -493,6 +513,18 @@ def prep(src, dst, no_hash, no_duplicates, dry_run):
             print(f"   {_console.red('✗')} {_console.red(str(rel))}  {_console.dim(reason)}")
     else:
         _console.success("No corrupt images found.")
+
+    if plan.incompatible:
+        repaired = plan.on_incompatible == "repair"
+        verb = "re-encoded as PNG" if repaired else "dropped"
+        print(f" {_console.bold(f'{len(plan.incompatible)} TensorFlow-incompatible image(s) {verb}:')}")
+        for rel, reason in plan.incompatible:
+            mark, color = (_console.yellow("↻"), _console.yellow) if repaired else (_console.red("✗"), _console.red)
+            print(f"   {mark} {color(str(rel))}  {_console.dim(reason)}")
+        if not repaired:
+            _console.warning("Pass --on-incompatible repair to keep them (re-encoded as PNG).")
+    else:
+        _console.success("No TensorFlow-incompatible images found.")
 
     if plan.cross_split_leaks:
         n_leak_files = sum(len(v) - 1 for v in plan.cross_split_leaks.values())
