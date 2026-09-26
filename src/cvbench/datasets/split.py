@@ -171,11 +171,3 @@ def plan_split(src: Path, ratios: tuple[float, float, float], seed: int) -> Spli
         )
     return build_plan_yolo(src, ratios, seed) if layout.is_yolo_dataset(src) else \
         build_plan_classification(src, ratios, seed)
-
-
-def split_dataset(src: Path, dst: Path, ratios: tuple[float, float, float], seed: int, dry_run: bool) -> SplitPlan:
-    """Build the split plan for SRC and, unless DRY_RUN, write it to DST."""
-    plan = plan_split(src, ratios, seed)
-    if not dry_run:
-        apply_plan(plan, dst)
-    return plan
