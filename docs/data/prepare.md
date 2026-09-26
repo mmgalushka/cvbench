@@ -31,7 +31,7 @@ lighting bias or class imbalance before you train.
 | Command | What it does |
 |---|---|
 | `data clean` | Drop OS/editor junk files |
-| `data prep` | Rename images to content-hash filenames and drop exact duplicates |
+| `data prep` | Drop corrupt images and cross-split duplicates; hash-rename and dedup |
 | `data split` | Split a flat pool into train/val/test, stratified |
 | `data flatten` | Pool an already-split dataset back into one flat folder |
 
@@ -58,31 +58,39 @@ data clean data/my_data data/my_data_clean             # write the cleaned copy
 ## Prepping a dataset
 
 Use `data prep` to copy a dataset (classification or YOLO layout) while
-renaming every image to a content-hash filename (e.g.
-`0ca9c69d9741cb49e9800998ecf8427e.png`) and dropping exact duplicates, in one
-pass. The name is the full 32-hex-char MD5 digest of the image's pixel
-content — deterministic and idempotent, the same image always gets the same
-name in any dataset. At that length, two *different* images sharing a digest
-is negligible, so a name collision reliably means duplicate content: within
-each duplicate group only the lexicographically-first original path is kept
-and copied; the rest are dropped. For YOLO, dropping an image also drops its
-paired label file. `--across-splits` additionally flags duplicate groups
-whose members span more than one split (train/val/test) — the highest-value
-check, since that's data leakage between splits.
+removing images that would hurt training or inflate evaluation. In one pass it:
+
+- **Drops corrupt images** — empty or undecodable files are skipped and listed
+  with the reason instead of crashing the command.
+- **Removes cross-split duplicates** — the same image in more than one of
+  train/val/test is data leakage, so only the copy in the highest-priority
+  split is kept (train > val > test). For YOLO the paired label file is
+  dropped too, with a warning if the labels differ.
+- **Fails on label conflicts** — the same image filed under different classes
+  (classification) aborts the command and lists the conflicting paths.
+- **Renames to content hashes and drops within-split duplicates** (default) —
+  the name is the full 32-hex-char MD5 digest of the pixel content (e.g.
+  `0ca9c69d9741cb49e9800998ecf8427e.png`), deterministic and idempotent. Of
+  each duplicate group the lexicographically-first path is kept.
+
+The summary lists every dropped file and shows per-split image counts before
+and after.
 
 ```bash
-data prep data/my_data data/my_data_prepped --across-splits
+data prep data/my_data data/my_data_prepped
+data prep data/my_data data/my_data_prepped --no-hash --no-duplicates
 ```
 
 | Option | Required | Description |
 |---|---|---|
-| `--across-splits` |  | Warn when a duplicate group spans more than one split |
+| `--no-hash` |  | Keep original filenames (images are still hashed internally to find duplicates); warns when within-split duplicates are present |
+| `--no-duplicates` |  | Drop within-split duplicates; only needed together with `--no-hash` |
 | `--dry-run` |  | Print the plan without writing `DST` |
 
 !!! warning
-    Run `data prep` (and especially `--across-splits`) before `data split`
-    if you're not sure the source is clean — duplicates that leak across
-    train/val/test inflate validation and test metrics.
+    Run `data prep` before `data split` if you're not sure the source is
+    clean — duplicates that leak across train/val/test inflate validation and
+    test metrics.
 
 ## Splitting a dataset
 

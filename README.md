@@ -96,7 +96,7 @@ sweep          Grid-search training flags and report the best trial.
    data flatten   Pool an already-split dataset back into one flat folder.
    data generate  Generate a synthetic geometric shapes dataset for pipeline testing.
    data list      List datasets (default: data/).
-   data prep      Copy a dataset, hashing filenames and dropping exact duplicates.
+   data prep      Copy a dataset, dropping corrupt images, split leaks and duplicates.
    data split     Split a flat dataset into train/val/test, stratified by class.
    data upsample  Grow a class folder to TARGET images via augmentation.
 

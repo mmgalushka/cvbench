@@ -97,7 +97,7 @@ def test_prep_drops_duplicate_no_suffix(cls_root_with_dupes, tmp_path):
     assert len(remaining) == 4  # train/cat (deduped to 1), train/dog, val/cat, val/dog
     for f in dst.rglob("*.jpg"):
         assert "-" not in f.stem
-    assert "1 duplicate group" in result.output
+    assert "1 within-split duplicate group" in result.output
 
 
 def test_prep_yolo_renames_labels_in_lockstep(yolo_root, tmp_path):
@@ -153,24 +153,128 @@ def test_prep_flat_dataset_duplicate_is_not_a_leak(tmp_path):
     Image.fromarray(arr).save(root / "cat" / "b.jpg", quality=100)
 
     dst = tmp_path / "dst"
-    result = CliRunner().invoke(prep, [str(root), str(dst), "--across-splits"])
+    result = CliRunner().invoke(prep, [str(root), str(dst)])
     assert result.exit_code == 0, result.output
-    assert "1 duplicate group" in result.output
-    assert "No cross-split leakage detected" in result.output
+    assert "1 within-split duplicate group" in result.output
+    assert "No cross-split duplicates found" in result.output
 
 
-def test_prep_no_across_splits_by_default(cls_root_with_leak, tmp_path):
+def test_prep_across_splits_option_removed(cls_root_with_leak, tmp_path):
+    result = CliRunner().invoke(prep, [str(cls_root_with_leak), str(tmp_path / "dst"), "--across-splits"])
+    assert result.exit_code != 0
+
+
+@pytest.mark.parametrize("extra", [[], ["--no-hash"]])
+def test_prep_removes_cross_split_leak_keeping_train(cls_root_with_leak, tmp_path, extra):
     dst = tmp_path / "dst"
-    result = CliRunner().invoke(prep, [str(cls_root_with_leak), str(dst)])
+    result = CliRunner().invoke(prep, [str(cls_root_with_leak), str(dst), *extra])
     assert result.exit_code == 0, result.output
-    assert "leak" not in result.output.lower()
+    assert "1 cross-split duplicate(s) removed" in result.output
+    files = _all_files(dst)
+    assert len(files) == 1
+    assert next(iter(files)).startswith("train/")
 
 
-def test_prep_across_splits_flags_leak(cls_root_with_leak, tmp_path):
+def test_prep_leak_priority_val_over_test(tmp_path):
+    root = tmp_path / "cls"
+    arr = np.random.randint(0, 255, (16, 16, 3), dtype=np.uint8)
+    for split in ("val", "test"):
+        (root / split / "cat").mkdir(parents=True)
+        Image.fromarray(arr).save(root / split / "cat" / "a.png")
     dst = tmp_path / "dst"
-    result = CliRunner().invoke(prep, [str(cls_root_with_leak), str(dst), "--across-splits"])
+    result = CliRunner().invoke(prep, [str(root), str(dst), "--no-hash"])
     assert result.exit_code == 0, result.output
-    assert "leak" in result.output.lower()
+    assert _all_files(dst) == {"val/cat/a.png"}
+
+
+def test_prep_drops_corrupt_images(cls_root_with_dupes, tmp_path):
+    (cls_root_with_dupes / "train" / "cat" / "empty.jpg").write_bytes(b"")
+    (cls_root_with_dupes / "val" / "dog" / "junk.jpg").write_bytes(b"not an image")
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(cls_root_with_dupes), str(dst), "--no-hash"])
+    assert result.exit_code == 0, result.output
+    assert "2 corrupt image(s) dropped" in result.output
+    assert "empty file" in result.output
+    assert "cannot decode" in result.output
+    assert not (dst / "train" / "cat" / "empty.jpg").exists()
+    assert not (dst / "val" / "dog" / "junk.jpg").exists()
+
+
+def test_prep_no_hash_keeps_names_and_warns_on_duplicates(cls_root_with_dupes, tmp_path):
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(cls_root_with_dupes), str(dst), "--no-hash"])
+    assert result.exit_code == 0, result.output
+    assert (dst / "train" / "cat" / "a.jpg").is_file()
+    assert (dst / "train" / "cat" / "b.jpg").is_file()
+    assert "--no-duplicates" in result.output
+
+
+def test_prep_no_hash_no_duplicates_drops_dupes(cls_root_with_dupes, tmp_path):
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(cls_root_with_dupes), str(dst), "--no-hash", "--no-duplicates"])
+    assert result.exit_code == 0, result.output
+    assert (dst / "train" / "cat" / "a.jpg").is_file()
+    assert not (dst / "train" / "cat" / "b.jpg").exists()
+
+
+def test_prep_cross_class_duplicate_fails(tmp_path):
+    root = tmp_path / "cls"
+    arr = np.random.randint(0, 255, (16, 16, 3), dtype=np.uint8)
+    for cls in ("cat", "dog"):
+        (root / "train" / cls).mkdir(parents=True)
+        Image.fromarray(arr).save(root / "train" / cls / "a.png")
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(root), str(dst)])
+    assert result.exit_code != 0
+    assert "different classes" in result.output
+    assert "train/cat/a.png" in result.output and "train/dog/a.png" in result.output
+    assert not dst.exists()
+
+
+def _make_yolo_leak(tmp_path, val_label: str) -> Path:
+    root = tmp_path / "yolo"
+    arr = np.random.randint(0, 255, (16, 16, 3), dtype=np.uint8)
+    for split, label in (("train", "0 0.5 0.5 0.2 0.2\n"), ("val", val_label)):
+        (root / "images" / split).mkdir(parents=True)
+        (root / "labels" / split).mkdir(parents=True)
+        Image.fromarray(arr).save(root / "images" / split / "a.png")
+        (root / "labels" / split / "a.txt").write_text(label)
+    (root / "data.yaml").write_text("names: [x]\n")
+    return root
+
+
+def test_prep_yolo_leak_drops_label_too(tmp_path):
+    root = _make_yolo_leak(tmp_path, "0 0.5 0.5 0.2 0.2\n")
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(root), str(dst), "--no-hash"])
+    assert result.exit_code == 0, result.output
+    assert _all_files(dst) == {"images/train/a.png", "labels/train/a.txt", "data.yaml"}
+    assert "labels differ" not in result.output
+
+
+def test_prep_yolo_leak_warns_when_labels_differ(tmp_path):
+    root = _make_yolo_leak(tmp_path, "0 0.1 0.1 0.2 0.2\n")
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(root), str(dst)])
+    assert result.exit_code == 0, result.output
+    assert "labels differ" in result.output
+
+
+def test_prep_yolo_drops_corrupt_image_and_label(tmp_path):
+    root = _make_yolo_leak(tmp_path, "0 0.5 0.5 0.2 0.2\n")
+    (root / "images" / "train" / "bad.png").write_bytes(b"")
+    (root / "labels" / "train" / "bad.txt").write_text("0 0.5 0.5 0.2 0.2\n")
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(root), str(dst), "--no-hash"])
+    assert result.exit_code == 0, result.output
+    assert "1 corrupt image(s) dropped" in result.output
+    assert not (dst / "labels" / "train" / "bad.txt").exists()
+
+
+def test_prep_summary_shows_before_and_after_counts(cls_root_with_leak, tmp_path):
+    result = CliRunner().invoke(prep, [str(cls_root_with_leak), str(tmp_path / "dst"), "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "Before" in result.output and "After" in result.output
 
 
 def test_prep_dry_run_writes_nothing(cls_root_with_dupes, tmp_path):
