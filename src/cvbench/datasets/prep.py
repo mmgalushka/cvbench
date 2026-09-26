@@ -302,13 +302,3 @@ def apply_plan(
         dst_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src / rel, dst_path)
 
-
-def prep_dataset(
-    src: Path, dst: Path, dry_run: bool, hash_names: bool = True, remove_duplicates: bool = False,
-    on_incompatible: str = "drop",
-) -> PrepPlan:
-    """Build the prep plan for SRC and, unless DRY_RUN, write it to DST."""
-    plan = build_plan(src, hash_names, remove_duplicates, on_incompatible=on_incompatible)
-    if not dry_run:
-        apply_plan(plan, src, dst)
-    return plan
