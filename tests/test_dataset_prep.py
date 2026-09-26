@@ -187,6 +187,43 @@ def test_prep_leak_priority_val_over_test(tmp_path):
     assert _all_files(dst) == {"val/cat/a.png"}
 
 
+def test_prep_leaves_out_junk_and_non_dataset_files(cls_root, tmp_path):
+    (cls_root / "train" / "cat").mkdir(parents=True, exist_ok=True)
+    junk = [
+        cls_root / ".DS_Store",
+        cls_root / "Thumbs.db",
+        cls_root / "README.md",
+        cls_root / "train" / ".DS_Store",
+        cls_root / "train" / "cat" / "._img.jpg",
+        cls_root / "train" / "cat" / "notes.txt",
+        cls_root / "__MACOSX" / "train" / "._img.jpg",
+    ]
+    for f in junk:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"junk")
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(cls_root), str(dst)])
+    assert result.exit_code == 0, result.output
+    copied = _all_files(dst)
+    assert copied
+    for name in copied:
+        assert Path(name).suffix.lower() in {".jpg", ".jpeg", ".png"}, name
+    assert not (dst / "__MACOSX").exists()
+
+
+def test_prep_yolo_leaves_out_junk_files(yolo_root, tmp_path):
+    for f in (yolo_root / ".DS_Store", yolo_root / "train" / "images" / "._x.jpg",
+              yolo_root / "train" / "labels" / ".DS_Store"):
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"junk")
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(yolo_root), str(dst)])
+    assert result.exit_code == 0, result.output
+    copied = _all_files(dst)
+    assert "data.yaml" in copied
+    assert not any(Path(n).name.startswith("._") or Path(n).name == ".DS_Store" for n in copied)
+
+
 def test_prep_drops_corrupt_images(cls_root_with_dupes, tmp_path):
     (cls_root_with_dupes / "train" / "cat" / "empty.jpg").write_bytes(b"")
     (cls_root_with_dupes / "val" / "dog" / "junk.jpg").write_bytes(b"not an image")

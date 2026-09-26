@@ -1,11 +1,11 @@
 # Preparing Real Datasets
 
-The `data` command group has seven subcommands in total: `list` and `explore`
+The `data` command group has six subcommands in total: `list` and `explore`
 for inspecting a dataset, `upsample` for correcting class imbalance (see
-[Augmentation](augmentation.md#upsampling-a-class-folder)), and four verbs for
+[Augmentation](augmentation.md#upsampling-a-class-folder)), and three verbs for
 reshaping a dataset (classification or
 [YOLO](https://docs.ultralytics.com/datasets/detect/) layout) without touching the
-source — clean, prep, split, and flatten. Each of the four copies
+source — prep, split, and flatten. Each of the three copies
 `SRC` to `DST` and leaves `SRC` untouched.
 
 ## Listing and inspecting datasets
@@ -24,41 +24,23 @@ lighting bias or class imbalance before you train. It also lists unreadable
 images (empty or undecodable), images that appear in more than one split
 (data leakage) and identical images with conflicting labels, and exits with
 status 1 if it finds any — run
-[`data prep`](#the-four-dataset-copy-verbs) to remove them. This check works
+[`data prep`](#the-three-dataset-copy-verbs) to remove them. This check works
 for YOLO datasets too (brightness and balance are classification-only).
 
 | Option | Description |
 |---|---|
 | `data explore --split` | Dataset split to analyse: `train` (default) / `val` / `test` |
 
-### The four dataset-copy verbs
+### The three dataset-copy verbs
 
 | Command | What it does |
 |---|---|
-| `data clean` | Drop OS/editor junk files |
 | `data prep` | Drop corrupt images and cross-split duplicates; hash-rename and dedup |
 | `data split` | Split a flat pool into train/val/test, stratified |
 | `data flatten` | Pool an already-split dataset back into one flat folder |
 
-All four share the same shape: `data <verb> SRC DST [options]`, and most
+All three share the same shape: `data <verb> SRC DST [options]`, and most
 support `--dry-run` to preview the result before writing anything.
-
-## Cleaning a dataset
-
-Use `data clean` to copy a dataset (classification or YOLO layout) while
-dropping OS/editor junk: `.DS_Store`, `Thumbs.db`, `__MACOSX/`,
-`.Spotlight-V100`, AppleDouble shadow files (`._*`), and editor swap/temp
-files. Directories left empty by junk removal are simply not created at the
-destination. The source is never modified.
-
-```bash
-data clean data/my_data data/my_data_clean --dry-run   # preview
-data clean data/my_data data/my_data_clean             # write the cleaned copy
-```
-
-| Option | Required | Description |
-|---|---|---|
-| `--dry-run` |  | Print what would be removed without writing `DST` |
 
 ## Prepping a dataset
 
@@ -74,6 +56,10 @@ removing images that would hurt training or inflate evaluation. In one pass it:
 - **Drops label conflicts entirely** — the same image filed under different
   classes (classification) or with differing label files (YOLO) can't be
   labelled reliably, so every copy is removed from all splits and listed.
+- **Leaves out junk and non-dataset files** — only images (plus each image's
+  YOLO label file and `data.yaml`) are copied, so `.DS_Store`, `Thumbs.db`,
+  `__MACOSX/`, AppleDouble `._*` files, editor swap/temp files, READMEs and
+  stray CSVs never reach `DST`, and directories left empty are not created.
 - **Renames to content hashes and drops within-split duplicates** (default) —
   the name is the full 32-hex-char MD5 digest of the pixel content (e.g.
   `0ca9c69d9741cb49e9800998ecf8427e.png`), deterministic and idempotent. Of

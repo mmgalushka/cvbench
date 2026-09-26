@@ -23,7 +23,6 @@ def test_datasets_package_does_not_import_tensorflow():
         "import cvbench.datasets.shapes\n"
         "import cvbench.datasets.synth\n"
         "import cvbench.datasets.stats\n"
-        "import cvbench.datasets.clean\n"
         "import cvbench.datasets.hashify\n"
         "import cvbench.datasets.prep\n"
         "import cvbench.datasets.split\n"
