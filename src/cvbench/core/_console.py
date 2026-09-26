@@ -94,6 +94,10 @@ def yellow(text: str) -> str:
     return _style_text(text, "bright_yellow")
 
 
+def red(text: str) -> str:
+    return _style_text(text, "bright_red")
+
+
 def blue(text: str) -> str:
     return _style_text(text, "bright_blue")
 

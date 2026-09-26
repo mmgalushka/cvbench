@@ -20,7 +20,12 @@ data explore data/my_data --split test
 from its layout — see [Your First Model](../getting-started/first-model.md))
 and shows per-split image counts and the number of classes. `data explore`
 reports mean brightness and image counts per class, useful for spotting
-lighting bias or class imbalance before you train.
+lighting bias or class imbalance before you train. It also lists unreadable
+images (empty or undecodable), images that appear in more than one split
+(data leakage) and identical images with conflicting labels, and exits with
+status 1 if it finds any — run
+[`data prep`](#the-four-dataset-copy-verbs) to remove them. This check works
+for YOLO datasets too (brightness and balance are classification-only).
 
 | Option | Description |
 |---|---|
@@ -64,10 +69,11 @@ removing images that would hurt training or inflate evaluation. In one pass it:
   with the reason instead of crashing the command.
 - **Removes cross-split duplicates** — the same image in more than one of
   train/val/test is data leakage, so only the copy in the highest-priority
-  split is kept (train > val > test). For YOLO the paired label file is
-  dropped too, with a warning if the labels differ.
-- **Fails on label conflicts** — the same image filed under different classes
-  (classification) aborts the command and lists the conflicting paths.
+  split is kept (train > val > test). For YOLO the paired label file goes
+  with it.
+- **Drops label conflicts entirely** — the same image filed under different
+  classes (classification) or with differing label files (YOLO) can't be
+  labelled reliably, so every copy is removed from all splits and listed.
 - **Renames to content hashes and drops within-split duplicates** (default) —
   the name is the full 32-hex-char MD5 digest of the pixel content (e.g.
   `0ca9c69d9741cb49e9800998ecf8427e.png`), deterministic and idempotent. Of

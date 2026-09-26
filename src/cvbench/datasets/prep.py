@@ -8,8 +8,9 @@ means "same image"). In a single pass ``data prep`` then:
 * removes **cross-split duplicates** — the same image in more than one of
   train/val/test is data leakage — keeping the copy in the highest-priority
   split (train > val > test). For YOLO the paired label file goes with it;
-* fails on **label conflicts** — the same image filed under different
-  classes (classification only);
+* drops **label conflicts** entirely — the same image filed under different
+  classes (classification) or with differing label files (YOLO). Which label
+  is right cannot be told, so every copy goes from all splits;
 * by default renames images to their hash and drops within-split
   duplicates (lexicographically-first path wins). ``hash_names=False``
   keeps original filenames and only drops within-split duplicates when
@@ -24,10 +25,6 @@ from pathlib import Path
 from cvbench.datasets import hashify, layout
 
 SPLIT_PRIORITY = layout.SPLIT_NAMES  # earlier wins when an image leaks across splits
-
-
-class LabelConflictError(ValueError):
-    """The same image content appears under different classes."""
 
 
 @dataclass
@@ -47,7 +44,8 @@ class PrepPlan:
     cross_split_leaks: dict[str, list[Path]] = field(default_factory=dict)
     # hash -> relative paths within one split; dropped only when ``dedup`` is True
     duplicate_groups: dict[str, list[Path]] = field(default_factory=dict)
-    label_mismatches: list[tuple[Path, Path]] = field(default_factory=list)  # (dropped, kept) YOLO images
+    # hash -> relative paths; every copy is dropped because the labels disagree
+    label_conflicts: dict[str, list[Path]] = field(default_factory=dict)
     dedup: bool = True
     counts_before: Counter = field(default_factory=Counter)  # split -> images
     counts_after: Counter = field(default_factory=Counter)
@@ -96,23 +94,63 @@ def _find_corrupt(src: Path, images: list[Path]) -> tuple[dict[str, list[Path]],
     return groups, corrupt
 
 
-def _check_label_conflicts(groups: dict[str, list[Path]]) -> None:
-    conflicts = []
-    for paths in groups.values():
-        classes = {_class_of(p) for p in paths} - {None}
-        if len(classes) > 1:
-            conflicts.append(sorted(paths))
-    if conflicts:
-        lines = [f"  {', '.join(str(p) for p in paths)}" for paths in sorted(conflicts)]
-        raise LabelConflictError(
-            f"{len(conflicts)} image(s) appear under different classes:\n" + "\n".join(lines)
-        )
+def _find_label_conflicts(
+    src: Path, groups: dict[str, list[Path]], is_yolo: bool
+) -> dict[str, list[Path]]:
+    """Groups of identical images whose labels disagree (hash -> sorted paths)."""
+    conflicts = {}
+    for h, paths in groups.items():
+        if is_yolo:
+            disagree = len({_read_label(src / _label_rel(p)) for p in paths}) > 1
+        else:
+            disagree = len({_class_of(p) for p in paths} - {None}) > 1
+        if disagree:
+            conflicts[h] = sorted(paths)
+    return conflicts
+
+
+def _split_leak(paths: list[Path]) -> list[Path] | None:
+    """[kept, *dropped] when PATHS span several splits, else None.
+
+    The first path of the highest-priority split is kept; copies in lower
+    splits are dropped.
+    """
+    by_split: dict[str | None, list[Path]] = {}
+    for p in sorted(paths):
+        by_split.setdefault(_split_of(p), []).append(p)
+    known = [s for s in SPLIT_PRIORITY if s in by_split]
+    if len(known) < 2:
+        return None
+    return [by_split[known[0]][0], *(p for s in known[1:] for p in by_split[s])]
+
+
+@dataclass
+class IntegrityIssues:
+    corrupt: list[tuple[Path, str]]         # (relative path, reason)
+    leaks: dict[str, list[Path]]            # hash -> [kept, *dropped] across splits, labels agree
+    label_conflicts: dict[str, list[Path]]  # hash -> paths whose labels disagree
+
+    def __bool__(self) -> bool:
+        return bool(self.corrupt or self.leaks or self.label_conflicts)
+
+
+def find_integrity_issues(src: Path) -> IntegrityIssues:
+    """Read-only scan of SRC for what ``data prep`` would drop."""
+    groups, corrupt = _find_corrupt(src, layout.list_images(src))
+    conflicts = _find_label_conflicts(src, groups, layout.is_yolo_dataset(src))
+    leaks = {
+        h: leak
+        for h, paths in groups.items()
+        if h not in conflicts and (leak := _split_leak(paths))
+    }
+    return IntegrityIssues(sorted(corrupt), leaks, conflicts)
 
 
 def build_plan(src: Path, hash_names: bool = True, remove_duplicates: bool = False) -> PrepPlan:
     """Compute the prep plan for SRC. Read-only.
 
-    Raises :class:`LabelConflictError` if one image sits under several classes.
+    Images whose labels conflict are excluded from the plan and listed in
+    ``plan.label_conflicts``.
     """
     is_yolo = layout.is_yolo_dataset(src)
     images = layout.list_images(src)
@@ -122,26 +160,18 @@ def build_plan(src: Path, hash_names: bool = True, remove_duplicates: bool = Fal
     for img in images:
         plan.counts_before[_split_of(img.relative_to(src))] += 1
 
-    if not is_yolo:
-        _check_label_conflicts(groups)
+    plan.label_conflicts = _find_label_conflicts(src, groups, is_yolo)
 
     for h, paths in groups.items():
+        if h in plan.label_conflicts:
+            continue
         paths_sorted = sorted(paths)
 
-        by_split: dict[str | None, list[Path]] = {}
-        for p in paths_sorted:
-            by_split.setdefault(_split_of(p), []).append(p)
-        known = [s for s in SPLIT_PRIORITY if s in by_split]
-        if len(known) > 1:
-            keep_split = known[0]
-            kept_members = by_split[keep_split]
-            dropped = [p for s in known[1:] for p in by_split[s]]
-            plan.cross_split_leaks[h] = [kept_members[0], *dropped]
-            if is_yolo:
-                kept_label = _read_label(src / _label_rel(kept_members[0]))
-                for p in dropped:
-                    if _read_label(src / _label_rel(p)) != kept_label:
-                        plan.label_mismatches.append((p, kept_members[0]))
+        leak = _split_leak(paths_sorted)
+        if leak:
+            keep_split = _split_of(leak[0])
+            kept_members = [p for p in paths_sorted if _split_of(p) == keep_split]
+            plan.cross_split_leaks[h] = leak
         else:
             kept_members = paths_sorted
 
