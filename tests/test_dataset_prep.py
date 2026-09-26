@@ -144,6 +144,21 @@ def test_prep_yolo_dedup_drops_duplicate_label_pair(tmp_path):
     assert (dst / "data.yaml").is_file()
 
 
+def test_prep_flat_dataset_duplicate_is_not_a_leak(tmp_path):
+    """A duplicate group inside an unsplit flat pool has no split to leak across."""
+    root = tmp_path / "pool"
+    arr = np.random.randint(0, 255, (16, 16, 3), dtype=np.uint8)
+    (root / "cat").mkdir(parents=True)
+    Image.fromarray(arr).save(root / "cat" / "a.jpg", quality=100)
+    Image.fromarray(arr).save(root / "cat" / "b.jpg", quality=100)
+
+    dst = tmp_path / "dst"
+    result = CliRunner().invoke(prep, [str(root), str(dst), "--across-splits"])
+    assert result.exit_code == 0, result.output
+    assert "1 duplicate group" in result.output
+    assert "No cross-split leakage detected" in result.output
+
+
 def test_prep_no_across_splits_by_default(cls_root_with_leak, tmp_path):
     dst = tmp_path / "dst"
     result = CliRunner().invoke(prep, [str(cls_root_with_leak), str(dst)])

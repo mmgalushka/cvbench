@@ -48,12 +48,9 @@ def _split_of(rel: Path) -> str | None:
     return None
 
 
-def _label_rel(image_rel: Path) -> Path | None:
-    """The YOLO label path relative to a dataset root for an image relative path."""
-    parts = image_rel.parts
-    if parts and parts[0] == layout.IMAGES_DIRNAME:
-        return Path(layout.LABELS_DIRNAME, *parts[1:]).with_suffix(".txt")
-    return None
+def _label_rel(image_rel: Path) -> Path:
+    """The YOLO label path for an image relative path (which starts with 'images/')."""
+    return Path(layout.LABELS_DIRNAME, *image_rel.parts[1:]).with_suffix(".txt")
 
 
 def build_plan(src: Path) -> PrepPlan:
@@ -81,7 +78,7 @@ def build_plan(src: Path) -> PrepPlan:
         src_label = dst_label = None
         if is_yolo:
             label_rel = _label_rel(kept_rel)
-            if label_rel is not None and (src / label_rel).is_file():
+            if (src / label_rel).is_file():
                 src_label = src / label_rel
                 dst_label = _label_rel(dst_rel)
 
