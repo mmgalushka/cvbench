@@ -217,18 +217,21 @@ def test_prep_no_hash_no_duplicates_drops_dupes(cls_root_with_dupes, tmp_path):
     assert not (dst / "train" / "cat" / "b.jpg").exists()
 
 
-def test_prep_cross_class_duplicate_fails(tmp_path):
+def test_prep_cross_class_duplicate_dropped_everywhere(tmp_path):
     root = tmp_path / "cls"
-    arr = np.random.randint(0, 255, (16, 16, 3), dtype=np.uint8)
-    for cls in ("cat", "dog"):
-        (root / "train" / cls).mkdir(parents=True)
-        Image.fromarray(arr).save(root / "train" / cls / "a.png")
+    rng = np.random.default_rng(1)
+    dup = rng.integers(0, 255, (16, 16, 3), dtype=np.uint8)
+    keep = rng.integers(0, 255, (16, 16, 3), dtype=np.uint8)
+    for split, cls in (("train", "cat"), ("train", "dog"), ("val", "dog")):
+        (root / split / cls).mkdir(parents=True)
+        Image.fromarray(dup).save(root / split / cls / "a.png")
+    Image.fromarray(keep).save(root / "train" / "cat" / "ok.png")
     dst = tmp_path / "dst"
-    result = CliRunner().invoke(prep, [str(root), str(dst)])
-    assert result.exit_code != 0
-    assert "different classes" in result.output
-    assert "train/cat/a.png" in result.output and "train/dog/a.png" in result.output
-    assert not dst.exists()
+    result = CliRunner().invoke(prep, [str(root), str(dst), "--no-hash"])
+    assert result.exit_code == 0, result.output
+    assert "conflicting labels dropped" in result.output
+    assert "train/cat/a.png" in result.output and "val/dog/a.png" in result.output
+    assert _all_files(dst) == {"train/cat/ok.png"}
 
 
 def _make_yolo_leak(tmp_path, val_label: str) -> Path:
@@ -249,15 +252,16 @@ def test_prep_yolo_leak_drops_label_too(tmp_path):
     result = CliRunner().invoke(prep, [str(root), str(dst), "--no-hash"])
     assert result.exit_code == 0, result.output
     assert _all_files(dst) == {"images/train/a.png", "labels/train/a.txt", "data.yaml"}
-    assert "labels differ" not in result.output
+    assert "conflicting labels dropped" not in result.output
 
 
-def test_prep_yolo_leak_warns_when_labels_differ(tmp_path):
+def test_prep_yolo_drops_all_copies_when_labels_differ(tmp_path):
     root = _make_yolo_leak(tmp_path, "0 0.1 0.1 0.2 0.2\n")
     dst = tmp_path / "dst"
-    result = CliRunner().invoke(prep, [str(root), str(dst)])
+    result = CliRunner().invoke(prep, [str(root), str(dst), "--no-hash"])
     assert result.exit_code == 0, result.output
-    assert "labels differ" in result.output
+    assert "conflicting labels dropped" in result.output
+    assert _all_files(dst) == {"data.yaml"}
 
 
 def test_prep_yolo_drops_corrupt_image_and_label(tmp_path):

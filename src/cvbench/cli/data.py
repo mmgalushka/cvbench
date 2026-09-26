@@ -86,9 +86,50 @@ def _mean_brightness(path: Path) -> float:
     return float(np.array(Image.open(path).convert("L")).mean())
 
 
+def _print_group(h, kept, dropped):
+    """One line per duplicate group: green = kept, red = dropped."""
+    from cvbench.core import _console
+
+    parts = [f"{_console.green('✓')} {_console.green(str(p))}" for p in kept]
+    parts += [f"{_console.red('✗')} {_console.red(str(p))}" for p in dropped]
+    print(f"   {_console.dim(h[:8])}  {'  '.join(parts)}")
+
+
+def _print_integrity(root, issues):
+    """Print the unreadable-image, cross-split-leak and label-conflict sections of ``data explore``."""
+    from cvbench.core import _console
+
+    def group_line(h, paths):
+        print(f"   {_console.dim(h[:8])}  {', '.join(_console.yellow(str(p)) for p in paths)}")
+
+    corrupt, leaks, conflicts = issues.corrupt, issues.leaks, issues.label_conflicts
+    print(f" {_console.bold('Data integrity')}  {_console.dim('|')}  {_console.dim(str(root))}")
+    if corrupt:
+        print(f" {_console.bold(f'{len(corrupt)} unreadable image(s):')}")
+        for rel, reason in corrupt:
+            print(f"   {_console.yellow(str(rel))}  {_console.dim(reason)}")
+    else:
+        _console.success("No unreadable images found.")
+    if leaks:
+        print(f" {_console.bold(f'{len(leaks)} image(s) appear in more than one split:')}")
+        for h, paths in leaks.items():
+            group_line(h, paths)
+    else:
+        _console.success("No cross-split duplicates found.")
+    if conflicts:
+        print(f" {_console.bold(f'{len(conflicts)} image(s) with conflicting labels:')}")
+        for h, paths in conflicts.items():
+            group_line(h, paths)
+    else:
+        _console.success("No conflicting labels found.")
+    if issues:
+        _console.warning("Data problems found; run 'data prep <src> <dst>' to remove them.")
+    print(_console.rule())
+
+
 @data.command(
     "explore",
-    short_help="Report per-class brightness and class balance.",
+    short_help="Report per-class brightness, class balance and data-integrity problems.",
     examples=[
         ("data explore data/ready", "Analyse the train split"),
         ("data explore data/ready --split test", "Analyse a different split"),
@@ -104,10 +145,26 @@ def explore(data_dir, split):
 
     DATA_DIR is the root dataset directory (containing train/, val/, test/
     subdirectories) or a split directory directly.
+
+    Unreadable images (empty or undecodable), images that appear in more than
+    one split (data leakage) and identical images with conflicting labels are
+    listed, and the command exits with status 1 if any are found; run
+    ``data prep`` to drop them.
     """
     from cvbench.core import _console
 
     root = Path(data_dir)
+    if not root.is_dir():
+        raise click.ClickException(f"Dataset directory not found: '{root}'")
+    issues = prep_mod.find_integrity_issues(root)
+    bad = {root / rel for rel, _ in issues.corrupt}
+
+    if layout_mod.is_yolo_dataset(root):
+        _print_integrity(root, issues)
+        if issues:
+            raise SystemExit(1)
+        return
+
     split_dir = root / split if (root / split).is_dir() else root
 
     class_dirs = sorted(p for p in split_dir.iterdir() if p.is_dir())
@@ -116,7 +173,7 @@ def explore(data_dir, split):
 
     stats = []
     for cls_dir in class_dirs:
-        images = [f for f in cls_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS]
+        images = [f for f in cls_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS and f not in bad]
         if not images:
             continue
         brightnesses = [_mean_brightness(f) for f in images]
@@ -180,6 +237,9 @@ def explore(data_dir, split):
     if not imbalanced:
         _console.success("No significant class imbalance detected.")
     print(_console.rule())
+    _print_integrity(root, issues)
+    if issues:
+        raise SystemExit(1)
 
 
 @data.command(
@@ -444,7 +504,8 @@ def prep(src, dst, no_hash, no_duplicates, dry_run):
     Always: corrupt images (empty or undecodable) are dropped and listed;
     an image present in more than one split is kept only in the
     highest-priority one (train > val > test), and for YOLO its label file
-    goes with it; the same image under different classes is an error.
+    goes with it. The same image under different classes (or, for YOLO, with
+    differing label files) cannot be labelled reliably, so every copy is dropped.
 
     By default images are renamed to the full 32-hex-char MD5 digest of
     their pixel content and within-split duplicates are dropped (the
@@ -466,12 +527,9 @@ def prep(src, dst, no_hash, no_duplicates, dry_run):
             "Provide an empty or non-existent directory."
         )
 
-    try:
-        plan = prep_mod.prep_dataset(
-            src_dir, dst_dir, dry_run, hash_names=not no_hash, remove_duplicates=no_duplicates
-        )
-    except ValueError as e:
-        raise click.ClickException(str(e)) from e
+    plan = prep_mod.prep_dataset(
+        src_dir, dst_dir, dry_run, hash_names=not no_hash, remove_duplicates=no_duplicates
+    )
 
     print(_console.rule())
     print(f" {_console.bold('CVBench — data prep')}")
@@ -483,31 +541,30 @@ def prep(src, dst, no_hash, no_duplicates, dry_run):
     if plan.corrupt:
         print(f" {_console.bold(f'{len(plan.corrupt)} corrupt image(s) dropped:')}")
         for rel, reason in plan.corrupt:
-            print(f"   {_console.yellow(str(rel))}  {_console.dim(reason)}")
+            print(f"   {_console.red('✗')} {_console.red(str(rel))}  {_console.dim(reason)}")
     else:
         _console.success("No corrupt images found.")
 
-    print()
     if plan.cross_split_leaks:
         n_leak_files = sum(len(v) - 1 for v in plan.cross_split_leaks.values())
         print(f" {_console.bold(f'{n_leak_files} cross-split duplicate(s) removed:')}")
         for h, paths in plan.cross_split_leaks.items():
-            print(f"   {_console.dim(h[:8])}  {_console.green(str(paths[0]))} (kept)")
-            for p in paths[1:]:
-                print(f"   {' ' * 8}  {_console.yellow(str(p))} (dropped)")
-        for dropped, kept in plan.label_mismatches:
-            _console.warning(f"labels differ: {dropped} (dropped) vs {kept} (kept)")
+            _print_group(h, paths[:1], paths[1:])
     else:
         _console.success("No cross-split duplicates found.")
 
-    print()
+    if plan.label_conflicts:
+        n_conflict_files = sum(len(v) for v in plan.label_conflicts.values())
+        print(f" {_console.bold(f'{n_conflict_files} file(s) with conflicting labels dropped:')}")
+        for h, paths in plan.label_conflicts.items():
+            _print_group(h, [], paths)
+    else:
+        _console.success("No conflicting labels found.")
+
     if plan.duplicate_groups:
-        verb_dup = "dropped" if plan.dedup else "kept"
         print(f" {_console.bold(f'{len(plan.duplicate_groups)} within-split duplicate group(s):')}")
         for h, paths in plan.duplicate_groups.items():
-            print(f"   {_console.dim(h[:8])}  {_console.green(str(paths[0]))} (kept)")
-            for p in paths[1:]:
-                print(f"   {' ' * 8}  {_console.yellow(str(p))} ({verb_dup})")
+            _print_group(h, paths if not plan.dedup else paths[:1], paths[1:] if plan.dedup else [])
         if not plan.dedup:
             _console.warning("Duplicates were kept; pass --no-duplicates to remove them.")
     else:

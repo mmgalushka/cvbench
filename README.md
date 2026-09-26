@@ -92,7 +92,7 @@ sweep          Grid-search training flags and report the best trial.
    Generate, inspect and reshape datasets.
    data aug       Write an augmentation config file to edit and reuse.
    data clean     Copy a dataset, dropping OS/editor junk files.
-   data explore   Report per-class brightness and class balance.
+   data explore   Report per-class brightness, class balance and data-integrity problems.
    data flatten   Pool an already-split dataset back into one flat folder.
    data generate  Generate a synthetic geometric shapes dataset for pipeline testing.
    data list      List datasets (default: data/).
