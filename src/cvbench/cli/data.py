@@ -418,35 +418,39 @@ def clean(src, dst, dry_run):
 
 @data.command(
     "prep",
-    short_help="Copy a dataset, hashing filenames and dropping exact duplicates.",
+    short_help="Copy a dataset, dropping corrupt images, split leaks and duplicates.",
     examples=[
         ("data prep data/raw data/prepped",
-         "Give every image a canonical content-hash filename and drop duplicates"),
-        ("data prep data/split data/prepped --across-splits",
-         "Also warn when the same image appears in more than one split"),
+         "Hash-rename images, drop corrupt files, split leaks and duplicates"),
+        ("data prep data/raw data/prepped --no-hash --no-duplicates",
+         "Keep original filenames but still drop within-split duplicates"),
         ("data prep data/raw data/prepped --dry-run", "Preview the plan without writing anything"),
     ],
 )
 @click.argument("src")
 @click.argument("dst")
-@click.option("--across-splits", is_flag=True, default=False,
-              help="Warn when a duplicate group spans more than one split (train/val/test).")
+@click.option("--no-hash", is_flag=True, default=False,
+              help="Keep original filenames instead of renaming to content hashes.")
+@click.option("--no-duplicates", is_flag=True, default=False,
+              help="Drop within-split duplicates (always on unless --no-hash is given).")
 @click.option("--dry-run", is_flag=True, default=False,
               help="Show the plan without writing DST.")
-def prep(src, dst, across_splits, dry_run):
-    """Copy SRC to DST, renaming every image to a content-hash filename and
-    dropping exact duplicates.
+def prep(src, dst, no_hash, no_duplicates, dry_run):
+    """Copy SRC to DST, dropping unusable images and leaked duplicates.
 
     SRC  dataset directory to prep (classification or YOLO layout)\n
     DST  destination for the prepped copy; must be empty or non-existent.
 
-    Each image's new name is the full 32-hex-char MD5 digest of its pixel
-    content (deterministic and idempotent — the same image always gets the
-    same name). Two different images sharing a digest is negligible at that
-    length, so a name collision reliably means duplicate content: within
-    each duplicate group only the lexicographically-first original path is
-    kept and copied; the rest are dropped. For YOLO, dropping an image also
-    drops its paired label file. SRC is never modified.
+    Always: corrupt images (empty or undecodable) are dropped and listed;
+    an image present in more than one split is kept only in the
+    highest-priority one (train > val > test), and for YOLO its label file
+    goes with it; the same image under different classes is an error.
+
+    By default images are renamed to the full 32-hex-char MD5 digest of
+    their pixel content and within-split duplicates are dropped (the
+    lexicographically-first path is kept). With --no-hash the original
+    filenames are kept and duplicates are only warned about, unless
+    --no-duplicates is also given. SRC is never modified.
     """
     from cvbench.core import _console
 
@@ -462,9 +466,12 @@ def prep(src, dst, across_splits, dry_run):
             "Provide an empty or non-existent directory."
         )
 
-    plan = prep_mod.prep_dataset(src_dir, dst_dir, dry_run)
-
-    n_dupe_files = sum(len(v) - 1 for v in plan.duplicate_groups.values())
+    try:
+        plan = prep_mod.prep_dataset(
+            src_dir, dst_dir, dry_run, hash_names=not no_hash, remove_duplicates=no_duplicates
+        )
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
 
     print(_console.rule())
     print(f" {_console.bold('CVBench — data prep')}")
@@ -473,29 +480,49 @@ def prep(src, dst, across_splits, dry_run):
     print(f"  Dest    : {_console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
     print()
 
-    if plan.duplicate_groups:
-        print(f" {_console.bold(f'{len(plan.duplicate_groups)} duplicate group(s) found:')}")
-        for h, paths in plan.duplicate_groups.items():
-            kept, dupes = paths[0], paths[1:]
-            print(f"   {_console.dim(h[:8])}  {_console.green(str(kept))} (kept)")
-            for p in dupes:
-                print(f"   {' ' * 8}  {_console.yellow(str(p))} (dropped)")
+    if plan.corrupt:
+        print(f" {_console.bold(f'{len(plan.corrupt)} corrupt image(s) dropped:')}")
+        for rel, reason in plan.corrupt:
+            print(f"   {_console.yellow(str(rel))}  {_console.dim(reason)}")
     else:
-        _console.success("No duplicates found.")
+        _console.success("No corrupt images found.")
 
-    if across_splits:
-        print()
-        if plan.cross_split_leaks:
-            _console.warning(f"{len(plan.cross_split_leaks)} duplicate group(s) leak across splits:")
-            for h, paths in plan.cross_split_leaks.items():
-                print(f"   {_console.dim(h[:8])}  {', '.join(str(p) for p in paths)}")
-        else:
-            _console.success("No cross-split leakage detected.")
+    print()
+    if plan.cross_split_leaks:
+        n_leak_files = sum(len(v) - 1 for v in plan.cross_split_leaks.values())
+        print(f" {_console.bold(f'{n_leak_files} cross-split duplicate(s) removed:')}")
+        for h, paths in plan.cross_split_leaks.items():
+            print(f"   {_console.dim(h[:8])}  {_console.green(str(paths[0]))} (kept)")
+            for p in paths[1:]:
+                print(f"   {' ' * 8}  {_console.yellow(str(p))} (dropped)")
+        for dropped, kept in plan.label_mismatches:
+            _console.warning(f"labels differ: {dropped} (dropped) vs {kept} (kept)")
+    else:
+        _console.success("No cross-split duplicates found.")
+
+    print()
+    if plan.duplicate_groups:
+        verb_dup = "dropped" if plan.dedup else "kept"
+        print(f" {_console.bold(f'{len(plan.duplicate_groups)} within-split duplicate group(s):')}")
+        for h, paths in plan.duplicate_groups.items():
+            print(f"   {_console.dim(h[:8])}  {_console.green(str(paths[0]))} (kept)")
+            for p in paths[1:]:
+                print(f"   {' ' * 8}  {_console.yellow(str(p))} ({verb_dup})")
+        if not plan.dedup:
+            _console.warning("Duplicates were kept; pass --no-duplicates to remove them.")
+    else:
+        _console.success("No within-split duplicates found.")
+
+    print()
+    splits = [s for s in (*layout_mod.SPLIT_NAMES, None)
+              if plan.counts_before[s] or plan.counts_after[s]]
+    print(_console.dim(f"   {'Split':<8}  {'Before':>7}  {'After':>7}"))
+    for s in splits:
+        print(f"   {s or '(none)':<8}  {plan.counts_before[s]:>7}  {plan.counts_after[s]:>7}")
 
     print()
     verb = "Would write" if dry_run else "Wrote"
-    suffix = f"  {_console.dim(f'({n_dupe_files} duplicate(s) dropped)')}" if n_dupe_files else ""
-    _console.success(f"{verb} {len(plan.actions)} image(s){suffix}")
+    _console.success(f"{verb} {len(plan.actions)} image(s)")
     print(_console.rule())
 
 
