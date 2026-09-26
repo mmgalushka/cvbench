@@ -11,7 +11,6 @@ import numpy as np
 from cvbench.cli import _help
 from cvbench.cli.generate import generate
 from cvbench.core.data_store import DATA_DIR, DATA_REG
-from cvbench.datasets import clean as clean_mod
 from cvbench.datasets import flatten as flatten_mod
 from cvbench.datasets import hashify as hashify_mod
 from cvbench.datasets import layout as layout_mod
@@ -410,69 +409,6 @@ def upsample(src_dir, dst_dir, aug_file, target):
         print(f"  {_console.yellow('⚠')}  Skipped {total_skipped} duplicate(s) after {_MAX_RETRIES} retries each")
     print()
     print(f"  Output  : {_console.bold(str(dst))}  ({_console.green(str(len(list(dst.iterdir()))))} images total)")
-    print(_console.rule())
-
-
-@data.command(
-    "clean",
-    short_help="Copy a dataset, dropping OS/editor junk files.",
-    examples=[
-        ("data clean data/raw data/clean", "Drop .DS_Store, Thumbs.db, ._* and editor temp files"),
-        ("data clean data/raw data/clean --dry-run", "List the junk without writing anything"),
-    ],
-)
-@click.argument("src")
-@click.argument("dst")
-@click.option("--dry-run", is_flag=True, default=False,
-              help="Show what would be removed without writing DST.")
-def clean(src, dst, dry_run):
-    """Copy SRC to DST, dropping OS/editor junk.
-
-    SRC  dataset directory to clean (classification or YOLO layout)\n
-    DST  destination for the cleaned copy; must be empty or non-existent.
-
-    Drops Finder/Explorer metadata (.DS_Store, Thumbs.db, __MACOSX/, ...),
-    AppleDouble shadow files (._*), and editor swap/temp files. Directories
-    left empty by junk removal are simply not created at DST. SRC is never
-    modified.
-    """
-    from cvbench.core import _console
-
-    src_dir = Path(src)
-    dst_dir = Path(dst)
-
-    if not src_dir.is_dir():
-        raise click.ClickException(f"Source directory not found: '{src_dir}'")
-
-    if dst_dir.exists() and any(dst_dir.iterdir()):
-        raise click.ClickException(
-            f"Destination '{dst_dir}' already contains files. "
-            "Provide an empty or non-existent directory."
-        )
-
-    plan = clean_mod.clean_dataset(src_dir, dst_dir, dry_run)
-
-    print(_console.rule())
-    print(f" {_console.bold('CVBench — data clean')}")
-    print(_console.rule())
-    print(f"  Source  : {_console.dim(str(src_dir))}")
-    print(f"  Dest    : {_console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
-    print()
-
-    n_junk = len(plan.junk_files) + len(plan.junk_dirs)
-    if n_junk:
-        print(f" {_console.bold('Junk found:')}")
-        for rel in plan.junk_dirs:
-            print(f"   {_console.yellow('⚠')}  {rel}/  {_console.dim('(directory)')}")
-        for rel in plan.junk_files:
-            print(f"   {_console.yellow('⚠')}  {rel}")
-    else:
-        _console.success("No junk found.")
-
-    print()
-    verb = "Would keep" if dry_run else "Kept"
-    suffix = f"  {_console.dim(f'({n_junk} junk item(s) skipped)')}" if n_junk else ""
-    _console.success(f"{verb} {len(plan.keep)} file(s){suffix}")
     print(_console.rule())
 
 
