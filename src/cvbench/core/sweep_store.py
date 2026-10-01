@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import random
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -49,6 +50,21 @@ SWEEPABLE_FLAGS: tuple[str, ...] = (
     "seed",
     "augmentation",
 )
+
+# Curated base space for `--strategy random` (see sample_grid / cli/sweep.py). Any sweep flag the
+# user passes explicitly overrides the corresponding entry before sampling.
+DEFAULT_RANDOM_SPACE: dict[str, list[str]] = {
+    # 1e-2 was dropped: combined with sgd:momentum=0.9 and a fully unfrozen backbone
+    # (fine_tune_from_layer=-1) it reliably diverges to NaN on a from-scratch detection
+    # head within a handful of batches. 1e-3 (the `train` default) is a safer ceiling.
+    "lr": ["1e-3", "3e-4", "1e-4", "1e-5"],
+    "optimizer": ["adam", "sgd:momentum=0.9"],
+    "dropout": ["0.0", "0.2", "0.3", "0.5"],
+    "fine_tune_from_layer": ["0", "-1"],
+    "lr_scheduler": ["patience=2,factor=0.5", "patience=5,factor=0.3"],
+    "batch_size": ["16", "32", "64"],
+    "loss": ["crossentropy", "focal:gamma=2.0"],
+}
 
 # Flags whose value is a spec with comma-separated params (e.g. `sgd:momentum=0.9,weight_decay=1e-4`).
 _SPEC_FLAGS = ("optimizer", "loss", "lr_scheduler")
@@ -155,6 +171,23 @@ def expand_grid(axes: dict[str, list[str]]) -> list[dict[str, str]]:
     return [dict(zip(flags, combo, strict=True)) for combo in itertools.product(*(axes[f] for f in flags))]
 
 
+def sample_grid(axes: dict[str, list[str]], n: int, seed: int) -> list[dict[str, str]]:
+    """Sample `n` distinct combinations without replacement from the cartesian product of axes.
+
+    Raises SweepError if `n` is not less than the number of distinct combinations available
+    (sampling the whole space is just a grid; use `--strategy grid` for that).
+    """
+    combos = expand_grid(axes)
+    if n < 1:
+        raise SweepError("--trials must be at least 1.")
+    if n >= len(combos):
+        raise SweepError(
+            f"--trials {n} must be less than the {len(combos)} distinct combinations available; "
+            f"use --strategy grid, or a lower --trials."
+        )
+    return random.Random(seed).sample(combos, n)
+
+
 def trial_dir_name(sweep_name: str, index: int) -> str:
     """Directory name of the 1-based trial `index`, e.g. `shapes_lr_003`."""
     return f"{sweep_name}_{index:03d}"
@@ -199,12 +232,16 @@ class SweepManifest:
     metric: str
     direction: str
     axes: dict[str, list[str]]
+    trials: list[dict[str, str]] | None = None  # strategy "random": the actual sampled combos
+    sample_seed: int | None = None  # strategy "random": seed used to sample `trials`
 
 
 def write_manifest(sweep_dir: str | Path, manifest: SweepManifest) -> None:
     """Write `sweep.yaml` into sweep_dir."""
     data = asdict(manifest)
     data["axes"] = {k: [str(v) for v in vals] for k, vals in manifest.axes.items()}
+    if manifest.trials is not None:
+        data["trials"] = [{str(k): str(v) for k, v in t.items()} for t in manifest.trials]
     with open(Path(sweep_dir) / SWEEP_MANIFEST, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
@@ -228,6 +265,13 @@ def read_manifest(sweep_dir: str | Path) -> SweepManifest:
         axes_raw = raw["axes"]
         if not isinstance(axes_raw, dict):
             raise TypeError("axes must be a mapping")
+        trials_raw = raw.get("trials")
+        trials = None
+        if trials_raw is not None:
+            if not isinstance(trials_raw, list):
+                raise TypeError("trials must be a list")
+            trials = [{str(k): str(v) for k, v in t.items()} for t in trials_raw]
+        sample_seed_raw = raw.get("sample_seed")
         return SweepManifest(
             version=int(version),
             name=str(raw["name"]),
@@ -237,6 +281,8 @@ def read_manifest(sweep_dir: str | Path) -> SweepManifest:
             metric=str(raw["metric"]),
             direction=str(raw["direction"]),
             axes={str(k): [str(v) for v in vals] for k, vals in axes_raw.items()},
+            trials=trials,
+            sample_seed=int(sample_seed_raw) if sample_seed_raw is not None else None,
         )
     except (KeyError, TypeError, ValueError) as e:
         raise SweepError(f"Invalid {path}: {e!r}") from e
@@ -297,8 +343,9 @@ def summarize(sweep_dir: str | Path) -> tuple[SweepManifest, list[TrialRow]]:
     """Read the manifest and build one row per planned trial, marking the best."""
     sweep = Path(sweep_dir)
     manifest = read_manifest(sweep)
+    combos = manifest.trials if manifest.trials is not None else expand_grid(manifest.axes)
     rows: list[TrialRow] = []
-    for i, params in enumerate(expand_grid(manifest.axes), start=1):
+    for i, params in enumerate(combos, start=1):
         name = trial_dir_name(manifest.name, i)
         tdir = sweep / name
         if not tdir.is_dir():

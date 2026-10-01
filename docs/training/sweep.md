@@ -47,7 +47,9 @@ Other options:
 | Option | Description |
 |---|---|
 | `--name` | Sweep name; also the directory under `experiments/` and the trial prefix |
-| `--strategy` | Search strategy. Only `grid` is available for now |
+| `--strategy` | Search strategy: `grid` (default) or `random` |
+| `--trials` | Number of trials to sample. Required for `random`; rejected for `grid` |
+| `--sample-seed` | Seed for `random` sampling (auto-picked and recorded in `sweep.yaml` if omitted) |
 | `--metric` | Selection metric: `val_loss`, `val_accuracy` or `map50` |
 | `--from EXP` | Use an existing experiment's config as the baseline |
 | `--show` | Print the resolved trials and their count, without training |
@@ -56,8 +58,44 @@ The default metric is `val_loss` (lower is better) for classification and
 `map50` (higher is better) for detection.
 
 !!! note "No numeric ranges yet"
-    Values must be listed explicitly. `:` ranges such as `0.1:0.5` are rejected;
-    random search, which will use them, is a planned follow-up.
+    Values must be listed explicitly. `:` ranges such as `0.1:0.5` are rejected.
+
+## Random search
+
+`--strategy random --trials N` samples `N` trials instead of training the full
+grid. It starts from a built-in default search space:
+
+| Flag | Default candidates |
+|---|---|
+| `--lr` | `1e-3`, `3e-4`, `1e-4`, `1e-5` |
+| `--optimizer` | `adam`, `sgd:momentum=0.9` |
+| `--dropout` | `0.0`, `0.2`, `0.3`, `0.5` |
+| `--fine-tune-from-layer` | `0`, `-1` |
+| `--lr-scheduler` | `patience=2,factor=0.5`, `patience=5,factor=0.3` |
+| `--batch-size` | `16`, `32`, `64` |
+| `--loss` | `crossentropy`, `focal:gamma=2.0` |
+
+Any of these flags passed explicitly overrides the default entry: a single
+value fixes it for every trial, a comma-list of two or more replaces the
+default candidates. Flags not mentioned keep their default entry. Any other
+sweepable flag (e.g. `--backbone`) can also be passed and is sampled the same
+way, exactly as under `--strategy grid`.
+
+```bash
+sweep data/shapes --strategy random --trials 10
+sweep data/shapes --strategy random --trials 10 --lr 1e-3,1e-4,1e-5 --epochs 20
+```
+
+Trials are sampled without replacement, so a sweep never trains the same
+combination twice. `--trials` must be smaller than the number of distinct
+combinations available; if it isn't, the error names the max and suggests
+`--strategy grid` or a lower `--trials`. The sampling seed is recorded in
+`sweep.yaml` as `sample_seed`; pass the same `--lr` etc. and `--sample-seed`
+again to reproduce the same set of trials.
+
+!!! note "Out of scope"
+    Numeric ranges (`0.1:0.5` syntax) and named presets beyond the one default
+    space are planned follow-ups.
 
 ## Check the grid first
 
@@ -87,9 +125,10 @@ experiments/
 ```
 
 `sweep.yaml` records what you asked for: name, date, data directory, strategy,
-metric, direction (min or max) and the axes. It does not duplicate results;
-those are read live from each trial's `config.yaml`, so a trial's status and
-metrics are always current.
+metric, direction (min or max) and the axes — plus, for `random`, the sampled
+`trials` and `sample_seed`. It does not duplicate results; those are read live
+from each trial's `config.yaml`, so a trial's status and metrics are always
+current.
 
 ## Reading the results
 
@@ -162,9 +201,18 @@ A sweep can be deleted from its page (this removes all trials). Sweeps and
 trials cannot be renamed, and the Inference and Compare pickers do not list
 trials yet.
 
+## Stopping a sweep
+
+Ctrl-C stops the **whole sweep** immediately — unlike a standalone `train`,
+which finishes the current batch and checkpoints before stopping, a sweep
+trial interrupted mid-training is simply marked `interrupted` and the sweep
+exits (no later trials start). Completed and failed trials still show up in
+the final summary table.
+
 ## Limits
 
-- **Grid only.** Random search, numeric ranges and presets are planned.
+- **Grid and random only.** Numeric ranges and presets beyond the one default
+  search space are planned.
 - **Sequential.** Trials do not run in parallel.
 - **No resume.** An interrupted sweep is not continued; start a new one with a
   new `--name`. A sweep name that is already in use is rejected.

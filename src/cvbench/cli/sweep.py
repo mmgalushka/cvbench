@@ -6,6 +6,7 @@ A sweep is a directory of ordinary experiments plus a ``sweep.yaml`` manifest
 from __future__ import annotations
 
 import os
+import random
 import sys
 from datetime import date
 from pathlib import Path
@@ -18,6 +19,7 @@ from cvbench.cli.train import _parse_class_weight, _parse_loss, _parse_lr_schedu
 from cvbench.core import _console
 from cvbench.core.exp_store import EXPERIMENTS_DIR, assert_name_available, make_unique_dir
 from cvbench.core.sweep_store import (
+    DEFAULT_RANDOM_SPACE,
     SWEEPABLE_FLAGS,
     SweepError,
     SweepManifest,
@@ -26,6 +28,7 @@ from cvbench.core.sweep_store import (
     default_metric,
     expand_grid,
     metric_direction,
+    sample_grid,
     split_axis_values,
     summarize,
     trial_dir_name,
@@ -147,9 +150,15 @@ def _evaluate_on_val(trial_dir: str) -> None:
     if not spec.val_dir:
         _console.warning("No val split for this dataset; mAP@50 unavailable.")
         return
+    best_path = Path(trial_dir) / "best.keras"
+    if not best_path.is_file():
+        raise ValueError(
+            f"no checkpoint was saved ({best_path} is missing) — the monitored metric "
+            "likely never improved (check training_log.csv for a NaN/diverging loss)"
+        )
     val_spec = dataclasses.replace(spec, test_dir=spec.val_dir)
     val_ds = task.build_eval_dataset(cfg, val_spec)
-    model = task.load_model(f"{trial_dir}/best.keras")
+    model = task.load_model(str(best_path))
     with tempfile.TemporaryDirectory() as tmp:
         report = task.evaluate(
             model=model, eval_ds=val_ds, cfg=cfg, spec=val_spec, run_dir=trial_dir, output_dir=tmp,
@@ -169,6 +178,10 @@ def _evaluate_on_val(trial_dir: str) -> None:
          "Name the sweep and rank by validation accuracy"),
         ("sweep data/shapes --lr 1e-3,1e-4 --show",
          "Print the trials that would run, then stop"),
+        ("sweep data/shapes --strategy random --trials 10",
+         "Sample 10 trials from the built-in default search space"),
+        ("sweep data/shapes --strategy random --trials 10 --lr 1e-3,1e-4,1e-5",
+         "Random search, overriding the default --lr candidates"),
     ],
     see_also=[
         ("runs show <trial>", "inspect the best trial"),
@@ -181,7 +194,12 @@ def _evaluate_on_val(trial_dir: str) -> None:
 @click.option("--name", "name", default=None,
               help="Sweep name = directory under experiments/ (default: sweep_<YYYY_MM_DD>).")
 @click.option("--strategy", default="grid", type=click.Choice(["grid", "random"]), show_default=True,
-              help="Search strategy. Only grid is implemented; random will follow.")
+              help="Search strategy. 'grid' trains every combination; 'random' samples --trials of them "
+                   "from a curated default space (overridable per flag).")
+@click.option("--trials", "n_trials", default=None, type=int,
+              help="Number of trials to sample. Required for --strategy random; rejected for grid.")
+@click.option("--sample-seed", "sample_seed", default=None, type=int,
+              help="Seed for --strategy random sampling (auto-picked and recorded in sweep.yaml if omitted).")
 @click.option("--metric", default=None, type=click.Choice(list(_METRICS)),
               help="Metric used to pick the best trial (default: val_loss; map50 for detection).")
 @click.option("--from", "from_dir", default=None, type=click.Path(exists=True),
@@ -209,13 +227,16 @@ def _evaluate_on_val(trial_dir: str) -> None:
 @click.option("--val-split", default=None,
               help="Validation split fraction(s), comma-separated (when no val/ directory exists).")
 @click.option("--seed", default=None, help="Random seed(s), comma-separated.")
-def sweep(data_dir, name, strategy, metric, from_dir, show, **flag_values):
-    """Train every combination of the given flag values on DATA_DIR.
+def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, show, **flag_values):
+    """Train every combination (grid) or a sample of combinations (random) on DATA_DIR.
 
     Each sweepable flag takes a comma-separated list: one value fixes the
-    setting, two or more make a grid axis. At least one flag needs two or more
-    values. Trials run one after another into experiments/<name>/; a failing
-    trial is reported and the sweep continues. Ends with a table ranking the trials.
+    setting, two or more make a grid axis. Under --strategy grid, at least one
+    flag needs two or more values. Under --strategy random, a curated default
+    search space is used for any flag not explicitly passed; --trials picks how
+    many combinations to sample from it. Trials run one after another into
+    experiments/<name>/; a failing trial is reported and the sweep continues.
+    Ends with a table ranking the trials.
 
     DATA_DIR can be a full path (data/my_dataset) or a bare dataset name
     resolved under data/.
@@ -225,30 +246,41 @@ def sweep(data_dir, name, strategy, metric, from_dir, show, **flag_values):
     from cvbench.datasets.layout import detect_task_name
 
     try:
-        if strategy != "grid":
+        if strategy == "random":
+            if n_trials is None:
+                raise click.ClickException("--trials is required for --strategy random.")
+        elif n_trials is not None:
             raise click.ClickException(
-                f"--strategy {strategy} is not implemented yet; only 'grid' is supported in this release."
+                "--trials is only valid with --strategy random (grid trains every combination)."
             )
 
         # Parse every list up front so a typo fails before anything is created or trained.
-        axes: dict[str, list[str]] = {}
-        fixed_raw: dict[str, str] = {}
+        # Random search starts from the curated default space; any flag the user passes
+        # explicitly overrides the corresponding entry (grid starts from nothing).
+        space: dict[str, list[str]] = dict(DEFAULT_RANDOM_SPACE) if strategy == "random" else {}
         for flag in SWEEPABLE_FLAGS:
             raw = flag_values.get(flag)
-            if raw is None:
-                continue
-            values = split_axis_values(flag, raw)
+            if raw is not None:
+                space[flag] = split_axis_values(flag, raw)
+        axes: dict[str, list[str]] = {}
+        fixed_raw: dict[str, str] = {}
+        for flag, values in space.items():
             if len(values) >= 2:
                 axes[flag] = values
             else:
                 fixed_raw[flag] = values[0]
-        if not axes:
+        if strategy == "grid" and not axes:
             raise click.ClickException(
                 "Nothing to sweep: give at least one flag two or more comma-separated values "
                 "(e.g. --lr 1e-3,1e-4). For a single configuration use 'train'."
             )
         fixed = {f: _convert(f, v) for f, v in fixed_raw.items()}
-        trials = expand_grid(axes)
+        if strategy == "random":
+            if sample_seed is None:
+                sample_seed = random.randrange(2**31)
+            trials = sample_grid(axes, n_trials, sample_seed)
+        else:
+            trials = expand_grid(axes)
         trial_values = [{f: _convert(f, v) for f, v in t.items()} for t in trials]
 
         data_dir = resolve_data_dir(data_dir)
@@ -279,6 +311,8 @@ def sweep(data_dir, name, strategy, metric, from_dir, show, **flag_values):
           f"strategy {strategy}, metric {metric} ({direction})")
     if fixed_raw:
         print(_console.dim(" fixed: " + ", ".join(f"{k}={v}" for k, v in fixed_raw.items())))
+    if strategy == "random":
+        print(_console.dim(f" sample-seed {sample_seed} (recorded in sweep.yaml; reuse it to repeat these trials)"))
     if show:
         print_trial_table(planned, axis_names, None)
         print(_console.dim(f" --show: nothing was trained. Total: {len(trials)} trials."))
@@ -289,6 +323,8 @@ def sweep(data_dir, name, strategy, metric, from_dir, show, **flag_values):
     write_manifest(sweep_dir, SweepManifest(
         version=1, name=name, date=date.today().strftime("%Y-%m-%d"), data_dir=str(data_dir),
         strategy=strategy, metric=metric, direction=direction, axes=axes,
+        trials=trials if strategy == "random" else None,
+        sample_seed=sample_seed if strategy == "random" else None,
     ))
 
     from cvbench.services.training import run_training  # deferred: pulls in TensorFlow
@@ -300,13 +336,31 @@ def sweep(data_dir, name, strategy, metric, from_dir, show, **flag_values):
         print(f" {_console.bold(f'[{i}/{len(trials)}] {trial_name}')}  "
               + ", ".join(f"{k}={v}" for k, v in plan.items()))
         try:
+            # interrupt_enabled=False: a standalone `train` catches Ctrl-C to finish the
+            # current batch and checkpoint gracefully, but under a sweep that would only
+            # stop the current trial and silently move on to the next one. Disabling it
+            # lets Ctrl-C raise KeyboardInterrupt immediately, caught below to stop the
+            # whole sweep right away.
             run_training(data_dir=data_dir, output_dir=trial_dir, from_dir=from_dir,
-                         **_kwargs({**fixed, **values}))
-            if metric == "map50":
-                _evaluate_on_val(trial_dir)
+                         interrupt_enabled=False, **_kwargs({**fixed, **values}))
+        except KeyboardInterrupt:
+            _console.warning(f"\n Interrupted — stopping the sweep (trial {trial_name} did not finish).")
+            break
         except Exception as e:  # noqa: BLE001 - one bad trial must not stop the sweep
             _console.error(f"Trial {trial_name} failed: {type(e).__name__}: {e}")
             continue
+        # Evaluation is a separate step from training: a trial that trained fine but has
+        # no best.keras (e.g. the monitored metric never improved) must be reported as a
+        # val-evaluation failure, not misattributed as "training failed".
+        if metric == "map50":
+            try:
+                _evaluate_on_val(trial_dir)
+            except KeyboardInterrupt:
+                _console.warning(f"\n Interrupted — stopping the sweep (evaluating {trial_name}).")
+                break
+            except Exception as e:  # noqa: BLE001 - one bad trial must not stop the sweep
+                _console.error(f"Trial {trial_name} trained but val evaluation failed: {type(e).__name__}: {e}")
+                continue
 
     _finish(sweep_dir)
 
