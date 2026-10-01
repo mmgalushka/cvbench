@@ -5,6 +5,7 @@ import pytest
 
 from cvbench.core.config import build_config, save_config
 from cvbench.core.sweep_store import (
+    DEFAULT_RANDOM_SPACE,
     SweepError,
     SweepManifest,
     best_trial,
@@ -12,6 +13,7 @@ from cvbench.core.sweep_store import (
     expand_grid,
     metric_direction,
     read_manifest,
+    sample_grid,
     split_axis_values,
     summarize,
     trial_dir_name,
@@ -162,6 +164,43 @@ def test_validate_sweep_name_bad(name):
 
 
 # ---------------------------------------------------------------------------
+# sample_grid
+# ---------------------------------------------------------------------------
+
+def test_sample_grid_count_and_no_duplicates():
+    axes = {"lr": ["1", "2", "3"], "backbone": ["a", "b", "c"]}  # 9 combos
+    combos = sample_grid(axes, 5, seed=0)
+    assert len(combos) == 5
+    assert len({tuple(sorted(c.items())) for c in combos}) == 5
+    assert all(c in expand_grid(axes) for c in combos)
+
+
+def test_sample_grid_deterministic_with_same_seed():
+    axes = {"lr": ["1", "2", "3", "4"]}
+    assert sample_grid(axes, 2, seed=123) == sample_grid(axes, 2, seed=123)
+
+
+def test_sample_grid_rejects_n_at_or_above_total():
+    axes = {"lr": ["1", "2"]}
+    with pytest.raises(SweepError, match="distinct combinations"):
+        sample_grid(axes, 2, seed=0)
+    with pytest.raises(SweepError, match="distinct combinations"):
+        sample_grid(axes, 3, seed=0)
+
+
+def test_sample_grid_rejects_less_than_one():
+    with pytest.raises(SweepError, match="at least 1"):
+        sample_grid({"lr": ["1", "2"]}, 0, seed=0)
+
+
+def test_default_random_space_has_expected_flags():
+    assert set(DEFAULT_RANDOM_SPACE) == {
+        "lr", "optimizer", "dropout", "fine_tune_from_layer", "lr_scheduler", "batch_size", "loss",
+    }
+    assert all(len(v) >= 2 for v in DEFAULT_RANDOM_SPACE.values())
+
+
+# ---------------------------------------------------------------------------
 # metrics
 # ---------------------------------------------------------------------------
 
@@ -212,6 +251,16 @@ def test_manifest_not_a_mapping(tmp_path):
     (tmp_path / "sweep.yaml").write_text("- a\n- b\n")
     with pytest.raises(SweepError, match="mapping"):
         read_manifest(tmp_path)
+
+
+def test_manifest_round_trip_random_trials(tmp_path):
+    m = SweepManifest(
+        version=1, name="sw", date="2026-01-01", data_dir="data", strategy="random",
+        metric="val_loss", direction="min", axes={"lr": ["1e-3", "1e-4", "1e-5"]},
+        trials=[{"lr": "1e-3"}, {"lr": "1e-5"}], sample_seed=42,
+    )
+    write_manifest(tmp_path, m)
+    assert read_manifest(tmp_path) == m
 
 
 def test_manifest_missing_field(tmp_path):
@@ -290,6 +339,22 @@ def test_summarize_map50_uses_test_metric(tmp_path):
     _write_exp(d, "sw_003", test_metric="accuracy", test_accuracy=0.99)  # wrong metric: ignored
     _, rows = summarize(d)
     assert [r.value for r in rows] == [0.3, 0.7, None]
+    assert best_trial(rows).dir == "sw_002"
+
+
+def test_summarize_random_uses_manifest_trials(tmp_path):
+    m = SweepManifest(
+        version=1, name="sw", date="2026-01-01", data_dir="data", strategy="random",
+        metric="val_loss", direction="min", axes={"lr": ["1e-3", "1e-4", "1e-5"]},
+        trials=[{"lr": "1e-5"}, {"lr": "1e-3"}], sample_seed=0,
+    )
+    d = tmp_path / m.name
+    d.mkdir()
+    write_manifest(d, m)
+    _write_exp(d, "sw_001", val_loss=0.9)
+    _write_exp(d, "sw_002", val_loss=0.1)
+    _, rows = summarize(d)
+    assert [r.params for r in rows] == [{"lr": "1e-5"}, {"lr": "1e-3"}]
     assert best_trial(rows).dir == "sw_002"
 
 

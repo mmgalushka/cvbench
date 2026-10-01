@@ -60,11 +60,17 @@ def run_training(
     fine_tune_from_layer: int | None = None,
     val_split: float | None = None,
     seed: int | None = None,
+    interrupt_enabled: bool | None = None,
 ) -> str:
     """Orchestrate a full training run.
 
     Builds config, datasets, model, and delegates to core trainer.
     Returns the experiment directory path.
+
+    `interrupt_enabled`, when not None, overrides `cfg.training.interrupt.enabled`
+    (graceful Ctrl-C: finish the current batch, checkpoint, and stop). Callers that
+    chain several runs in one process (e.g. `sweep`) pass False so Ctrl-C raises
+    KeyboardInterrupt immediately instead of only stopping the current run.
     """
     from cvbench.core import _console
 
@@ -93,6 +99,8 @@ def run_training(
         val_split=val_split,
         seed=seed,
     )
+    if interrupt_enabled is not None:
+        cfg.training.interrupt.enabled = interrupt_enabled
 
     if aug_file:
         from cvbench.core.config import load_aug_file
@@ -149,6 +157,9 @@ def run_training(
             num_train_samples=num_train,
             class_weight=resolved_weights,
         )
+    except KeyboardInterrupt:
+        update_run_status(exp_dir, status="interrupted")
+        raise
     except BaseException:
         update_run_status(exp_dir, status="failed")
         raise

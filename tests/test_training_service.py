@@ -48,3 +48,42 @@ def test_run_training_marks_status_failed_on_crash(tmp_path, monkeypatch):
 
     cfg = load_config(str(exp_dir))
     assert cfg.run.status == "failed"
+
+
+class _InterruptingTask(_CrashingTask):
+    """Dataset build raises KeyboardInterrupt instead of crashing, simulating Ctrl-C."""
+
+    def build_datasets(self, cfg, spec):
+        raise KeyboardInterrupt()
+
+
+def test_run_training_marks_status_interrupted_on_keyboard_interrupt(tmp_path, monkeypatch):
+    exp_dir = tmp_path / "interrupted_run"
+    monkeypatch.setattr(training_service, "detect_task_name", lambda data_dir: "classification")
+    monkeypatch.setattr(training_service, "get_task", lambda name: _InterruptingTask())
+
+    with pytest.raises(KeyboardInterrupt):
+        training_service.run_training(data_dir=str(tmp_path / "data"), output_dir=str(exp_dir))
+
+    cfg = load_config(str(exp_dir))
+    assert cfg.run.status == "interrupted"
+
+
+def test_run_training_interrupt_enabled_overrides_config(tmp_path, monkeypatch):
+    exp_dir = tmp_path / "run"
+    monkeypatch.setattr(training_service, "detect_task_name", lambda data_dir: "classification")
+    seen_cfg = {}
+
+    class _RecordingTask(_CrashingTask):
+        def build_datasets(self, cfg, spec):
+            seen_cfg["enabled"] = cfg.training.interrupt.enabled
+            raise RuntimeError("stop before the real training loop")
+
+    monkeypatch.setattr(training_service, "get_task", lambda name: _RecordingTask())
+
+    with pytest.raises(RuntimeError, match="stop before"):
+        training_service.run_training(
+            data_dir=str(tmp_path / "data"), output_dir=str(exp_dir), interrupt_enabled=False,
+        )
+
+    assert seen_cfg["enabled"] is False
