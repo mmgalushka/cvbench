@@ -65,6 +65,7 @@ class YoloLoss(keras.losses.Loss):
         # nor an ignored near-miss anchor.
         neg_mask = (1.0 - obj_t) * (1.0 - ignore_t)
         num_pos = keras.ops.maximum(keras.ops.sum(pos_mask), 1.0)
+        num_neg = keras.ops.maximum(keras.ops.sum(neg_mask), 1.0)
 
         xy_loss = keras.ops.sum(
             (
@@ -79,9 +80,9 @@ class YoloLoss(keras.losses.Loss):
 
         obj_bce = keras.ops.binary_crossentropy(obj_t, obj_p, from_logits=True)
         obj_loss = (
-            self.obj_weight * keras.ops.sum(obj_bce * pos_mask)
-            + self.noobj_weight * keras.ops.sum(obj_bce * neg_mask)
-        ) / num_pos
+            self.obj_weight * keras.ops.sum(obj_bce * pos_mask) / num_pos
+            + self.noobj_weight * keras.ops.sum(obj_bce * neg_mask) / num_neg
+        )
 
         cls_bce = keras.ops.binary_crossentropy(cls_t, cls_p, from_logits=True)
         cls_loss = keras.ops.sum(cls_bce * pos_mask[..., None]) / num_pos
