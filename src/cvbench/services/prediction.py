@@ -77,15 +77,20 @@ def _load_image(img_path: str, size: int) -> np.ndarray:
     return arr[None]  # (1, H, W, 3) RGB
 
 
-def _infer_keras(model_path: Path, images: list[str], size: int) -> list[np.ndarray]:
+def _infer_keras(model_path: Path, images: list[str], size: int) -> list[list[np.ndarray]]:
     import keras
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
         model = keras.saving.load_model(str(model_path))
-    return [model.predict(_load_image(p, size), verbose=0)[0] for p in images]
+    results = []
+    for p in images:
+        out = model.predict(_load_image(p, size), verbose=0)
+        outs = out if isinstance(out, (list, tuple)) else [out]
+        results.append([np.asarray(o[0], dtype=np.float32) for o in outs])
+    return results
 
 
-def _infer_onnx(model_path: Path, images: list[str], size: int) -> list[np.ndarray]:
+def _infer_onnx(model_path: Path, images: list[str], size: int) -> list[list[np.ndarray]]:
     try:
         import onnxruntime as ort
     except ImportError:
@@ -96,12 +101,15 @@ def _infer_onnx(model_path: Path, images: list[str], size: int) -> list[np.ndarr
     sess = ort.InferenceSession(str(model_path))
     input_name = sess.get_inputs()[0].name
     return [
-        np.array(sess.run(None, {input_name: _load_image(p, size)})[0][0], dtype=np.float32)
+        [
+            np.asarray(o[0], dtype=np.float32)
+            for o in sess.run(None, {input_name: _load_image(p, size)})
+        ]
         for p in images
     ]
 
 
-def _infer_tflite(model_path: Path, images: list[str], size: int) -> list[np.ndarray]:
+def _infer_tflite(model_path: Path, images: list[str], size: int) -> list[list[np.ndarray]]:
     try:
         import tensorflow as tf
     except ImportError:
@@ -114,7 +122,9 @@ def _infer_tflite(model_path: Path, images: list[str], size: int) -> list[np.nda
     for p in images:
         interp.set_tensor(inp[0]["index"], _load_image(p, size))
         interp.invoke()
-        results.append(np.array(interp.get_tensor(out[0]["index"])[0], dtype=np.float32))
+        results.append([
+            np.asarray(interp.get_tensor(o["index"])[0], dtype=np.float32) for o in out
+        ])
     return results
 
 
@@ -141,17 +151,77 @@ def _build_results(
     return results
 
 
+def _build_detection_results(
+    images: list[str],
+    outputs_list: list[list[np.ndarray]],
+    cfg,
+    conf: float | None,
+) -> list[dict]:
+    """Decode each image's raw head outputs into detections.
+
+    Exported models don't guarantee output order (TFLite sorts tensors by
+    name), so scales are re-ordered to match ``cfg.detection.strides`` —
+    finest stride first means largest grid first.
+    """
+    from cvbench.detection.decode import decode_batch
+
+    det = cfg.detection
+    if not det.anchors or not det.strides:
+        raise ValueError(
+            "This detection run predates anchor-based decoding and cannot be "
+            "used for inference — retrain with the current detection head."
+        )
+    class_names = cfg.data.classes
+    threshold = det.conf_threshold if conf is None else conf
+    results = []
+    for img_path, outs in zip(images, outputs_list, strict=True):
+        scales = sorted(outs, key=lambda o: o.shape[0], reverse=True)
+        dets = decode_batch(
+            [o[None] for o in scales],
+            num_classes=len(class_names),
+            anchors=det.anchors,
+            strides=det.strides,
+            conf_threshold=threshold,
+            max_detections=det.max_detections,
+            nms_iou_threshold=det.iou_threshold,
+        )[0]
+        results.append({
+            "filename": Path(img_path).name,
+            "detections": [
+                {
+                    "class_index": d["class_id"],
+                    "class_name": (
+                        class_names[d["class_id"]]
+                        if d["class_id"] < len(class_names)
+                        else str(d["class_id"])
+                    ),
+                    "confidence": d["confidence"],
+                    "x": d["x"],
+                    "y": d["y"],
+                    "w": d["w"],
+                    "h": d["h"],
+                }
+                for d in dets
+            ],
+        })
+    return results
+
+
 def run_experiment_prediction(
     experiment: str,
     input_path: str,
     fmt: str,
+    conf: float | None = None,
 ) -> dict:
     """Run inference for an experiment across one or all model formats.
 
     fmt: "keras" | "onnx" | "tflite" | "plan" | "all"
+    conf: detection runs only — minimum score for a detection to be reported
+        (default: the run's ``detection.conf_threshold``).
 
     Returns dict with keys:
         plan_only       – True when fmt == "plan"
+        task            – "classification" | "detection"
         experiment      – resolved run name
         run_dir         – Path to run directory
         formats_run     – list of {format, results}
@@ -161,6 +231,11 @@ def run_experiment_prediction(
 
     if fmt == "plan":
         return {"plan_only": True, "experiment": run_dir.name, "run_dir": run_dir}
+
+    run_cfg = load_config(str(run_dir))
+    task = getattr(run_cfg, "task", "classification")
+    if conf is not None and task != "detection":
+        raise ValueError("--conf only applies to detection runs")
 
     images = _collect_images(input_path)
     if not images:
@@ -181,17 +256,22 @@ def run_experiment_prediction(
         try:
             size, class_names = _get_run_info(run_dir, f)
             if f == "keras":
-                probs_list = _infer_keras(path, images, size)
+                outputs_list = _infer_keras(path, images, size)
             elif f == "onnx":
-                probs_list = _infer_onnx(path, images, size)
+                outputs_list = _infer_onnx(path, images, size)
             else:
-                probs_list = _infer_tflite(path, images, size)
-            formats_run.append({"format": f, "results": _build_results(images, probs_list, class_names)})
+                outputs_list = _infer_tflite(path, images, size)
+            if task == "detection":
+                results = _build_detection_results(images, outputs_list, run_cfg, conf)
+            else:
+                results = _build_results(images, [o[0] for o in outputs_list], class_names)
+            formats_run.append({"format": f, "results": results})
         except RuntimeError as e:
             formats_skipped.append({"format": f, "reason": str(e)})
 
     return {
         "plan_only": False,
+        "task": task,
         "experiment": run_dir.name,
         "run_dir": run_dir,
         "formats_run": formats_run,

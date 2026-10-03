@@ -12,6 +12,8 @@ from cvbench.core import _console
          "Run a folder through the exported TFLite model"),
         ("predict cls_effnet_b0_2026_01_21 images/ --format all",
          "Compare every exported format side by side to spot conversion drift"),
+        ("predict det_yolo_2026_01_21 photo.jpg --conf 0.4",
+         "Detect objects, keeping only boxes scoring at least 0.4"),
         ("predict --format plan",
          "Print the Jetson inference script (no run or images needed)"),
     ],
@@ -31,13 +33,24 @@ from cvbench.core import _console
     show_default=True,
     help="Model format to use for inference.",
 )
-def predict(experiment, input_path, fmt):
+@click.option(
+    "--conf",
+    type=click.FloatRange(0.0, 1.0),
+    default=None,
+    help="Detection runs only: minimum score to report a box "
+    "(default: the run's detection.conf_threshold).",
+)
+def predict(experiment, input_path, fmt, conf):
     """Run inference on INPUT using a trained EXPERIMENT.
 
     EXPERIMENT is a run name or full path to a run directory.
     INPUT is an image file or folder of images.
 
     Both arguments are optional when --format plan is used.
+
+    Classification runs print the top class per image. Detection runs print
+    every decoded box (class, score, normalized x y w h); use --conf to
+    change the score threshold.
 
     Use --format all to run every available format side by side and spot
     conversion differences (useful for debugging false positives after export).
@@ -58,7 +71,7 @@ def predict(experiment, input_path, fmt):
         raise click.UsageError("INPUT is required.")
 
     try:
-        result = run_experiment_prediction(experiment, input_path, fmt)
+        result = run_experiment_prediction(experiment, input_path, fmt, conf)
     except (ValueError, FileNotFoundError) as e:
         raise click.ClickException(str(e)) from e
 
@@ -75,6 +88,11 @@ def predict(experiment, input_path, fmt):
     print()
     if not formats_run:
         print(_console.yellow(" No models available to run inference."))
+    elif result["task"] == "detection":
+        if fmt == "all":
+            _print_all_formats_detection(formats_run)
+        else:
+            _print_single_format_detection(formats_run[0]["results"])
     elif fmt == "all":
         _print_all_formats(formats_run)
     else:
@@ -102,6 +120,52 @@ def _print_single_format(results: list[dict]) -> None:
         print(
             f" {r['filename']:<40} {r['class_name']:<20} {r['confidence'] * 100:5.1f}%"
         )
+
+
+def _print_single_format_detection(results: list[dict]) -> None:
+    for r in results:
+        dets = r["detections"]
+        print(f" {r['filename']}  {len(dets)} detection{'s' if len(dets) != 1 else ''}")
+        for d in dets:
+            print(
+                f"   {d['class_name']:<20} {d['confidence'] * 100:5.1f}%"
+                f"  x={d['x']:.3f} y={d['y']:.3f} w={d['w']:.3f} h={d['h']:.3f}"
+            )
+
+
+def _print_all_formats_detection(formats_run: list[dict]) -> None:
+    """One row per image: detection count and class mix per format, flagging
+    formats that disagree with the first (reference) one."""
+    col_w = 28
+    fmt_names = [f["format"] for f in formats_run]
+    header = f" {'image':<38}" + "".join(f"  {n:<{col_w}}" for n in fmt_names)
+    print(header)
+    print(_console.dim(" " + "─" * (len(header) - 1)))
+
+    def summary(res: dict) -> tuple[int, list[str]]:
+        names = sorted(d["class_name"] for d in res["detections"])
+        return len(names), names
+
+    for ref in formats_run[0]["results"]:
+        ref_summary = summary(ref)
+        row = f" {ref['filename']:<38}"
+        for fmt_data in formats_run:
+            res = next(
+                (r for r in fmt_data["results"] if r["filename"] == ref["filename"]),
+                None,
+            )
+            if res is None:
+                cell = "—"
+            else:
+                count, names = summary(res)
+                top = max(res["detections"], key=lambda d: d["confidence"], default=None)
+                cell = f"{count} box{'es' if count != 1 else ''}"
+                if top:
+                    cell += f" (top {top['confidence'] * 100:.1f}%)"
+                if fmt_data is not formats_run[0] and (count, names) != ref_summary:
+                    cell += "  ⚠️"
+            row += f"  {cell:<{col_w}}"
+        print(row)
 
 
 def _print_all_formats(formats_run: list[dict]) -> None:

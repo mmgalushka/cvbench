@@ -40,6 +40,21 @@ produces a side-by-side table with each format's prediction and confidence,
 flagging (⚠️) any row where a format's class disagrees with the reference
 (`keras`) prediction.
 
+## Detection runs
+
+For a detection run, `predict` decodes the model output and prints every box
+per image: class, score, and normalized `x y w h` (top-left corner and size,
+as fractions of the image).
+
+```bash
+predict det_yolo_2026_01_21 photo.jpg --conf 0.4
+```
+
+`--conf` sets the minimum score for a box to be reported; it defaults to the
+run's `detection.conf_threshold` and is rejected for classification runs. With
+`--format all`, each format shows its box count and top score per image, and
+flags (⚠️) rows where a format's boxes differ from the `keras` reference.
+
 Next: package the model for deployment — see
 [Export Formats (TFLite/ONNX)](../deployment/export.md),
 [Hailo HEF Export](../deployment/hailo.md), or
