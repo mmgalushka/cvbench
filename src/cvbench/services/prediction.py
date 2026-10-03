@@ -22,6 +22,10 @@ _TFLITE_VARIANTS = [
 ]
 
 
+class UnsupportedTaskError(ValueError):
+    """The run's task has no CLI ``predict`` support."""
+
+
 def _collect_images(path: str) -> list[str]:
     p = Path(path)
     if p.is_file():
@@ -161,6 +165,11 @@ def run_experiment_prediction(
 
     if fmt == "plan":
         return {"plan_only": True, "experiment": run_dir.name, "run_dir": run_dir}
+
+    if getattr(load_config(str(run_dir)), "task", "classification") == "detection":
+        raise UnsupportedTaskError(
+            "predict does not support detection runs yet; use evaluate or serve"
+        )
 
     images = _collect_images(input_path)
     if not images:

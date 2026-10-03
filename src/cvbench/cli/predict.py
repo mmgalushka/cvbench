@@ -39,11 +39,17 @@ def predict(experiment, input_path, fmt):
 
     Both arguments are optional when --format plan is used.
 
+    Classification runs only; detection runs are not supported yet (use
+    evaluate or serve).
+
     Use --format all to run every available format side by side and spot
     conversion differences (useful for debugging false positives after export).
     Use --format plan to print the Jetson inference script and run instructions.
     """
-    from cvbench.services.prediction import run_experiment_prediction
+    from cvbench.services.prediction import (
+        UnsupportedTaskError,
+        run_experiment_prediction,
+    )
 
     if fmt == "plan":
         print(_console.rule(thick=True))
@@ -59,6 +65,8 @@ def predict(experiment, input_path, fmt):
 
     try:
         result = run_experiment_prediction(experiment, input_path, fmt)
+    except UnsupportedTaskError as e:
+        raise click.UsageError(str(e)) from e
     except (ValueError, FileNotFoundError) as e:
         raise click.ClickException(str(e)) from e
 
