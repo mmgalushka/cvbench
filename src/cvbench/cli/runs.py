@@ -335,16 +335,6 @@ def export(experiment, fmt, quantize, output_dir, calib_total, calib_strategy):
     from cvbench.services.export import run_export  # deferred: pulls in TensorFlow
 
     try:
-        run_dir = resolve_run_dir(experiment)
-        if getattr(load_config(str(run_dir)), "task", "classification") == "detection":
-            click.echo(
-                f"{_console.yellow('Warning:')} predict does not support detection "
-                "runs yet; the export is usable outside cvbench only.",
-                err=True,
-            )
-    except FileNotFoundError:
-        pass  # run_export reports the missing run
-    try:
         run_export(
             experiment, format=fmt, quantize=quantize, output_dir=output_dir,
             calib_total=calib_total, calib_strategy=calib_strategy,
