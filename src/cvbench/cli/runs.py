@@ -278,7 +278,7 @@ def rename(experiment, new_name):
     short_help="Export a run to TFLite / ONNX / Hailo, or print Jetson steps.",
     examples=[
         ("runs export my_run --format tflite", "Plain float TFLite model"),
-        ("runs export my_run --format tflite --quantize int8", "Quantized TFLite for microcontrollers"),
+        ("runs export my_run --format tflite --quantize int8", "Dynamic-range int8 TFLite (float32 I/O, smaller file)"),
         ("runs export my_run --format onnx", "ONNX model for onnxruntime"),
         ("runs export my_run --format hailo", "Prepare a Hailo compilation package"),
         ("runs export my_run --format plan", "Print Jetson TensorRT build instructions"),
@@ -291,20 +291,38 @@ def rename(experiment, new_name):
     "fmt",
     required=True,
     type=click.Choice(["tflite", "onnx", "plan", "hailo"]),
-    help="Export format (plan prints Jetson TensorRT instructions; hailo prepares Hailo Docker package).",
+    help=(
+        "Export format (plan prepares model.onnx and prints Jetson TensorRT steps; hailo prepares"
+        " a Hailo Docker package). onnx/plan need the 'export' extra: pip install 'cvbench[export]'."
+        " Exported models take float32 NHWC input, values 0-255; normalisation is inside the model."
+    ),
 )
 @click.option(
     "--quantize",
     default="none",
     type=click.Choice(["none", "float16", "int8"]),
     show_default=True,
-    help="TFLite quantization mode (ignored for ONNX and plan).",
+    help=(
+        "TFLite quantization mode (ignored for other formats). int8 is dynamic-range:"
+        " int8 weights with float32 input/output, not full-integer."
+    ),
 )
 @click.option(
     "--output",
     "output_dir",
     default=None,
-    help="Output directory (default: <experiment>/export/). Ignored for plan.",
+    help=(
+        "Parent directory for tflite/onnx exports; a <format> subfolder is created inside"
+        " (default: <run>/export/). Ignored for plan and hailo."
+    ),
+)
+@click.option(
+    "--hw-arch",
+    "hw_arch",
+    default="hailo8l",
+    type=click.Choice(["hailo8", "hailo8l", "hailo8r"]),
+    show_default=True,
+    help="Hailo target architecture used in the printed compile steps (hailo format only).",
 )
 @click.option(
     "--calib-total",
@@ -326,7 +344,7 @@ def rename(experiment, new_name):
         " diverse (k-means across all images)."
     ),
 )
-def export(experiment, fmt, quantize, output_dir, calib_total, calib_strategy):
+def export(experiment, fmt, quantize, output_dir, hw_arch, calib_total, calib_strategy):
     """Export the best checkpoint of EXPERIMENT to TFLite, ONNX, or Hailo package,
     or print Jetson deployment instructions (plan).
 
@@ -337,7 +355,7 @@ def export(experiment, fmt, quantize, output_dir, calib_total, calib_strategy):
     try:
         run_export(
             experiment, format=fmt, quantize=quantize, output_dir=output_dir,
-            calib_total=calib_total, calib_strategy=calib_strategy,
+            calib_total=calib_total, calib_strategy=calib_strategy, hw_arch=hw_arch,
         )
     except FileNotFoundError as e:
         raise click.ClickException(str(e)) from e

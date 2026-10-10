@@ -50,6 +50,7 @@ runs export my_run --format hailo --calib-total 512 --calib-strategy diverse
 |---|---|---|
 | `--calib-total N` | `1024` | Target total images in the calibration set |
 | `--calib-strategy` | `stratified` | See table above |
+| `--hw-arch` | `hailo8l` | Target used in the printed steps: `hailo8`, `hailo8l` or `hailo8r` |
 
 !!! tip "What calibration is for"
     Hailo converts float32 weights and activations to low-bit integers
@@ -57,6 +58,9 @@ runs export my_run --format hailo --calib-total 512 --calib-strategy diverse
     model to measure the value ranges it needs to preserve, so a calibration
     set that resembles your real inputs directly affects accuracy after
     conversion.
+
+If the training set has fewer distinct images than `--calib-total` allows, the
+calibration set is smaller than requested and the export prints a warning.
 
 The final calibration array is shuffled before being written — sequential
 per-class ordering can bias Hailo's calibration algorithm, which processes

@@ -15,6 +15,8 @@ from cvbench.core.exp_store import resolve_run_dir
 
 _TFLITE_QUANTIZE_SUFFIX = {"none": "", "float16": "_float16", "int8": "_int8"}
 
+HAILO_HW_ARCHS = ("hailo8", "hailo8l", "hailo8r")
+
 
 def _subfolder_name(format: str, quantize: str) -> str:
     if format == "tflite":
@@ -107,7 +109,7 @@ def _print_plan_instructions(run_name: str, onnx_exists: bool) -> None:
         f" {_console.bold('Step 1')} {_console.dim('— copy the ONNX model to your Jetson:')}"
     )
     print()
-    print(f"   scp experiments/{run_name}/export/onnx/model.onnx \\")
+    print(f"   scp experiments/{run_name}/export/plan/model.onnx \\")
     print("       user@jetson:/home/user/model.onnx")
     print()
     print(
@@ -117,7 +119,17 @@ def _print_plan_instructions(run_name: str, onnx_exists: bool) -> None:
     print("   trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32")
     print()
     print(
-        f" {_console.bold('Step 3')} {_console.dim('— run inference using the TensorRT Python API or DeepStream.')}"
+        f" {_console.bold('Step 3')} {_console.dim('— on the Jetson, save infer.py and run it:')}"
+    )
+    print()
+    print(f"   predict {run_name} --format plan      # prints infer.py")
+    print("   ./infer.py model.plan image.jpg")
+    print()
+    print(
+        _console.dim(
+            " Or use the TensorRT Python API / DeepStream directly. Input is float32"
+            " NHWC 0–255; normalisation is inside the model."
+        )
     )
     print()
     if not onnx_exists:
@@ -130,6 +142,16 @@ def _print_plan_instructions(run_name: str, onnx_exists: bool) -> None:
         print(f"   runs export {run_name} --format onnx")
         print()
     print(_console.rule())
+
+
+def _print_onnx_snippet(model_name: str, input_size: int) -> None:
+    print(_console.dim(" Run it with onnxruntime (input: float32 NHWC, values 0–255):"))
+    print()
+    print("   import numpy as np, onnxruntime as ort")
+    print(f'   sess = ort.InferenceSession("{model_name}")')
+    print(f"   x = np.zeros((1, {input_size}, {input_size}, 3), dtype=np.float32)  # your image, 0-255")
+    print('   probs = sess.run(None, {"image": x})[0]')
+    print()
 
 
 def _collect_images(directory: Path) -> list[Path]:
@@ -259,6 +281,14 @@ def _build_calibration_set(
     calib_set = np.array(calib_data)
     np.save(str(output_path), calib_set)
     print(_console.dim(f"  Written   calib_set.npy  shape={calib_set.shape}"))
+    if len(selected) < total:
+        print(
+            _console.yellow(
+                f"  Warning   calibration set has {len(selected)} images, fewer than the"
+                f" {total} requested (not enough distinct training images for"
+                f" '{strategy}'); quantization may be less accurate."
+            )
+        )
     return len(selected), n_classes
 
 
@@ -300,6 +330,13 @@ def _prepare_hailo_package(
         print(_console.dim("  Reusing   calib_set.npy"))
         shape = np.load(str(calib_path), mmap_mode="r").shape
         calib_meta = {"calib_set_images": shape[0], "calib_set_shuffled": True}
+        if shape[0] < calib_total:
+            print(
+                _console.yellow(
+                    f"  Warning   existing calib_set.npy has {shape[0]} images, fewer than"
+                    f" the {calib_total} requested; delete it to rebuild."
+                )
+            )
     else:
         n_total, n_classes = _build_calibration_set(
             cfg, calib_path, total=calib_total, strategy=calib_strategy
@@ -316,10 +353,12 @@ def _prepare_hailo_package(
     return export_dir, calib_meta
 
 
-def _print_hailo_instructions(run_name: str, export_dir: Path) -> None:
+def _print_hailo_instructions(
+    run_name: str, export_dir: Path, hw_arch: str = "hailo8l"
+) -> None:
     rel = f"experiments/{run_name}/export/hailo"
     print(_console.rule())
-    print(" Hailo HEF — hailo8l deployment")
+    print(f" Hailo HEF — {hw_arch} deployment")
     print(_console.rule())
     print()
     print(
@@ -342,7 +381,7 @@ def _print_hailo_instructions(run_name: str, export_dir: Path) -> None:
     )
     print()
     print("   hailo optimize \\")
-    print("       --hw-arch hailo8l \\")
+    print(f"       --hw-arch {hw_arch} \\")
     print("       --calib-set-path calib_set.npy \\")
     print("       --model-script model.alls \\")
     print("       --output-har-path model_optimized.har \\")
@@ -350,7 +389,7 @@ def _print_hailo_instructions(run_name: str, export_dir: Path) -> None:
     print()
     print(f" {_console.bold('Step 3')} {_console.dim('— compile to HEF:')}")
     print()
-    print("   hailo compiler --hw-arch hailo8l model_optimized.har")
+    print(f"   hailo compiler --hw-arch {hw_arch} model_optimized.har")
     print()
     print(_console.rule())
 
@@ -362,11 +401,21 @@ def run_export(
     output_dir: str | None = None,
     calib_total: int = 1024,
     calib_strategy: str = "proportional",
+    hw_arch: str = "hailo8l",
 ) -> Path | None:
     """Export the best checkpoint of a run to TFLite, ONNX, or print Jetson plan instructions.
 
-    Returns the path to the export subfolder (None for plan format).
+    Exported models take float32 NHWC input in the 0-255 range; normalisation
+    happens inside the model. ``output_dir`` applies to tflite/onnx only (a
+    ``<format>`` subfolder is created inside it); plan and hailo always write
+    to ``<run>/export/<format>/``.
+
+    Returns the path to the export subfolder.
     """
+    if hw_arch not in HAILO_HW_ARCHS:
+        raise RuntimeError(
+            f"Unknown --hw-arch '{hw_arch}'. Choose from: {', '.join(HAILO_HW_ARCHS)}"
+        )
     run_dir = Path(resolve_run_dir(experiment))
 
     if format == "plan":
@@ -445,6 +494,7 @@ def run_export(
             "val_accuracy": cfg.run.val_accuracy,
             "val_loss": cfg.run.val_loss,
             "exported_at": datetime.now().isoformat(timespec="seconds"),
+            "hw_arch": hw_arch,
             **calib_meta,
         }
         (export_dir / "export_info.json").write_text(
@@ -454,7 +504,7 @@ def run_export(
         print(_console.rule())
         print(_console.green(f" Package ready → {export_dir}"))
         print(_console.rule())
-        _print_hailo_instructions(run_dir.name, export_dir)
+        _print_hailo_instructions(run_dir.name, export_dir, hw_arch)
         return export_dir
 
     import tensorflow as tf
@@ -525,5 +575,14 @@ def run_export(
     print(_console.rule())
     print(_console.green(f" Export complete → {export_dir}"))
     print(_console.rule())
+    if format == "tflite" and quantize == "int8":
+        print(
+            _console.dim(
+                " Note: int8 is dynamic-range quantization (int8 weights, float32"
+                " input/output), not full-integer."
+            )
+        )
+    if format == "onnx":
+        _print_onnx_snippet(model_path.name, cfg.model.input_size)
 
     return export_dir
