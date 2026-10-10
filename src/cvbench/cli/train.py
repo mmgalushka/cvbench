@@ -3,7 +3,18 @@ import json
 import click
 
 from cvbench.cli import _help
-from cvbench.core.config import LossConfig, LRSchedulerConfig, OptimizerConfig
+from cvbench.core.config import (
+    DataConfig,
+    LossConfig,
+    LRSchedulerConfig,
+    ModelConfig,
+    OptimizerConfig,
+    TrainingConfig,
+)
+
+_DATA = DataConfig()
+_MODEL = ModelConfig()
+_TRAIN = TrainingConfig()
 
 # NOTE: cvbench.services.training is imported inside train() — it pulls in
 # TensorFlow, and importing it at module scope would make `train --help` (and
@@ -106,36 +117,47 @@ def _parse_loss(value: str | None) -> LossConfig | None:
 @click.option("--output", "output_dir", default=None,
               help="Experiment output directory (default: experiments/<auto-name>/).")
 @click.option("--from", "from_dir", default=None, type=click.Path(exists=True),
-              help="Load config from an existing experiment as baseline.")
+              help="Load config from an existing experiment as baseline (default: none).")
 @click.option("--backbone", default=None,
               help="Backbone name (efficientnet_b0..b5, resnet_18, resnet_50). "
-                   "Detection defaults to resnet_18 unless this is passed explicitly.")
+                   f"(default: {_MODEL.backbone}; detection defaults to resnet_18 "
+                   "unless this is passed explicitly).")
 @click.option("--weights", default=None, type=click.Choice(["imagenet", "none"]),
-              help="Backbone weight init: imagenet (pretrained, default) or none (random/scratch).")
-@click.option("--epochs", default=None, type=int, help="Number of training epochs.")
-@click.option("--lr", default=None, type=float, help="Learning rate.")
-@click.option("--batch-size", default=None, type=int, help="Batch size.")
-@click.option("--input-size", default=None, type=int, help="Image input size in pixels.")
-@click.option("--dropout", default=None, type=float, help="Dropout rate.")
+              help=f"Backbone weight init: imagenet (pretrained) or none (random/scratch) "
+                   f"(default: {_MODEL.weights}).")
+@click.option("--epochs", default=None, type=int, help=f"Number of training epochs (default: {_TRAIN.epochs}).")
+@click.option("--lr", default=None, type=float, help=f"Learning rate (default: {_TRAIN.learning_rate:g}).")
+@click.option("--batch-size", default=None, type=int, help=f"Batch size (default: {_DATA.batch_size}).")
+@click.option("--input-size", default=None, type=int,
+              help=f"Image input size in pixels (default: {_MODEL.input_size}).")
+@click.option("--dropout", default=None, type=float, help=f"Dropout rate (default: {_MODEL.dropout}).")
 @click.option("--augmentation", "aug_file", default=None,
               type=click.Path(exists=True, dir_okay=False),
-              help="Path to an augmentation YAML file (see 'data aug').")
+              help="Path to an augmentation YAML file, see 'data aug' (default: none).")
 @click.option("--resume", default=None,
-              help="Path to a checkpoint file to resume training from.")
+              help="Path to a checkpoint file to resume training from (default: none).")
 @click.option("--class-weight", "class_weight_raw", default=None,
-              help="Class weighting: null | auto | '{\"cat\": 1.0, \"dog\": 2.5}'")
+              help="Class weighting: null | auto | '{\"cat\": 1.0, \"dog\": 2.5}' (default: null).")
 @click.option("--loss", "loss_raw", default=None,
-              help="Loss function: crossentropy | focal | focal:gamma=2.0 | focal:gamma=2.0,label_smoothing=0.1")
+              help="Loss function: crossentropy | focal | focal:gamma=2.0 | "
+                   "focal:gamma=2.0,label_smoothing=0.1 (default: crossentropy)")
 @click.option("--optimizer", "optimizer_raw", default=None,
-              help="Optimizer: adam | sgd | adam:weight_decay=1e-4 | sgd:weight_decay=1e-4,momentum=0.9")
+              help="Optimizer: adam | sgd | adam:weight_decay=1e-4 | "
+                   "sgd:weight_decay=1e-4,momentum=0.9 (default: adam)")
 @click.option("--lr-scheduler", "lr_scheduler_raw", default=None,
-              help="LR scheduler: patience=5 | patience=5,factor=0.5,min=1e-7")
+              help="LR scheduler: patience=5 | patience=5,factor=0.5,min=1e-7 (default: disabled).")
 @click.option("--fine-tune-from-layer", default=None, type=int,
-              help="Unfreeze backbone from this layer index onward (0=frozen, -1=all layers).")
+              help="Unfreeze the backbone from this layer index onward: 0 keeps it FROZEN "
+                   "(only the new head trains), -1 unfreezes all layers "
+                   f"(default: {_MODEL.fine_tune_from_layer}, frozen). "
+                   "A frozen backbone often ends near chance accuracy on small or "
+                   "unusual datasets; try -1 with a lower --lr.")
 @click.option("--val-split", default=None, type=float,
-              help="Fraction of train set to use for validation when no val/ directory exists (default: 0.2).")
+              help="Fraction of train set to use for validation when no val/ directory "
+                   f"exists (default: {_DATA.val_split}).")
 @click.option("--seed", default=None, type=int,
-              help="Random seed for reproducibility (sets Python, NumPy, and TensorFlow seeds).")
+              help="Random seed for reproducibility, sets Python, NumPy and TensorFlow seeds "
+                   "(default: none, not seeded).")
 def train(
     data_dir, output_dir, from_dir, backbone, weights, epochs, lr,
     batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
@@ -146,7 +168,15 @@ def train(
     DATA_DIR must contain train/, val/, and test/ subdirectories. It can be a
     full path (data/my_dataset) or a bare dataset name (my_dataset), resolved
     under data/.
-    All parameters have sensible defaults and can be overridden individually.
+
+    The task is auto-detected: a dataset with images/ and labels/ folders is
+    trained as detection, a dataset of per-class folders as classification.
+
+    Every option has a default (shown in its help). The default backbone is
+    frozen, so only the new head trains; if accuracy ends near chance, unfreeze
+    it with --fine-tune-from-layer -1 and a lower --lr, or train longer with
+    --epochs, a stronger --augmentation, or --class-weight auto on imbalanced
+    data.
     """
     from cvbench.core.data_store import resolve_data_dir
     from cvbench.services.training import run_training  # deferred: pulls in TensorFlow

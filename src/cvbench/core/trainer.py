@@ -14,13 +14,49 @@ if TYPE_CHECKING:
     from cvbench.core.task import Task
 
 
-def _print_header(exp_dir: str, cfg: CVBenchConfig):
+# A frozen run is flagged when its val accuracy is within this margin of chance.
+_NEAR_CHANCE_MARGIN = 0.10
+# Below this many validation images, val metrics are too noisy to trust.
+_SMALL_VAL_IMAGES = 30
+
+
+def _fine_tune_label(fine_tune_from_layer: int) -> str:
+    if fine_tune_from_layer == 0:
+        return "frozen backbone (only the head trains)"
+    if fine_tune_from_layer == -1:
+        return "all layers unfrozen"
+    return f"unfrozen from layer {fine_tune_from_layer}"
+
+
+def _near_chance_advisory(cfg: CVBenchConfig, final_metrics: dict) -> str | None:
+    """Return an advisory when a frozen-backbone run ended near chance accuracy."""
+    val_acc = final_metrics.get("val_accuracy")
+    num_classes = cfg.model.num_classes
+    if val_acc is None or num_classes < 2 or cfg.model.fine_tune_from_layer != 0:
+        return None
+    chance = 1.0 / num_classes
+    if val_acc > chance + _NEAR_CHANCE_MARGIN:
+        return None
+    return (
+        f"val_accuracy {val_acc:.4f} is near chance ({chance:.4f} for {num_classes} classes) "
+        "and the backbone is frozen, so only the head was trained. "
+        "Try --fine-tune-from-layer -1 with a lower --lr (e.g. 1e-5), more --epochs, "
+        "or --augmentation."
+    )
+
+
+def _print_header(exp_dir: str, cfg: CVBenchConfig, val_images: int | None = None):
     print(_console.rule())
     print(f" {_console.bold('CVBench — train')}")
     print(_console.rule())
+    print(f" Task      : {cfg.task}")
     print(f" Data      : {_console.dim(cfg.data.data_dir)}")
-    print(f" Backbone  : {cfg.model.backbone}")
+    print(f" Backbone  : {cfg.model.backbone}  (weights: {cfg.model.weights})")
+    print(f" Fine-tune : {_fine_tune_label(cfg.model.fine_tune_from_layer)}")
+    print(f" Input size: {cfg.model.input_size}px   Batch size: {cfg.data.batch_size}")
     print(f" Epochs    : {cfg.training.epochs}")
+    seed = cfg.training.seed
+    print(f" Seed      : {seed if seed is not None else 'none (not reproducible)'}")
     opt = cfg.training.optimizer
     opt_label = opt.type.upper()
     if opt.weight_decay > 0:
@@ -40,6 +76,10 @@ def _print_header(exp_dir: str, cfg: CVBenchConfig):
     print(f" Aug       : {n_transforms} transform(s)")
     print(f" Output    : {_console.dim(exp_dir)}")
     print(_console.rule())
+    if val_images is not None and val_images < _SMALL_VAL_IMAGES:
+        _console.warning(
+            f"Validation set has only {val_images} image(s); val metrics will be noisy."
+        )
     print()  # breathing room before epoch output
 
 
@@ -91,7 +131,8 @@ def train(
     run_dir = Path(exp_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    _print_header(exp_dir, cfg)
+    val_images = task.count_images(cfg.data.val_dir) if cfg.data.val_dir else None
+    _print_header(exp_dir, cfg, val_images)
 
     # Resume from checkpoint if requested
     initial_epoch = 0
@@ -227,7 +268,14 @@ def train(
             val_str = f"{e['value']:.4f}" if e["value"] is not None else "—"
             epoch_str = f"{e['epoch']:>4}"
             print(f"   epoch {_console.bold(epoch_str)}  →  {val_str}")
-    print(f"\n Run directory → {_console.dim(str(run_dir))}")
+    advisory = None if interrupted else _near_chance_advisory(cfg, final_metrics)
+    if advisory:
+        print()
+        _console.warning(advisory)
+    print(f"\n Run name      : {_console.bold(cfg.run.name)}")
+    print(f" Run directory → {_console.dim(str(run_dir))}")
+    if not interrupted:
+        print(f" Next          : {_console.green(f'evaluate {cfg.run.name}')}")
     print(_console.rule())
 
     return str(run_dir)
