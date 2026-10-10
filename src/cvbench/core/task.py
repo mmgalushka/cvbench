@@ -127,8 +127,12 @@ class Task(abc.ABC):
         spec: DatasetSpec,
         run_dir: str,
         output_dir: str | None,
+        conf: float | None = None,
     ) -> dict:
-        """Run evaluation and return the report dict (also written to disk)."""
+        """Run evaluation and return the report dict (also written to disk).
+
+        CONF overrides the detection score threshold; tasks without one ignore it.
+        """
 
     @abc.abstractmethod
     def test_score(self, report: dict) -> tuple[str, float | None]:

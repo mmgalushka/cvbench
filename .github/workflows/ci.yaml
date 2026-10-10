@@ -30,6 +30,9 @@ jobs:
       - name: Run tests
         run: pytest -m "not tf" --cov --cov-report=xml
 
+      - name: Detection quality gate
+        run: pytest -m slow --no-cov
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:

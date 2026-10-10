@@ -98,4 +98,5 @@ filterwarnings = [
 ]
 markers = [
     "tf: marks tests that require TensorFlow (deselect with '-m \"not tf\"')",
+    "slow: trains a real model for minutes; run on its own with '-m slow'",
 ]

@@ -7,7 +7,9 @@ import numpy as np
 import tqdm
 
 from cvbench.core import _console
+from cvbench.core.exp_store import loss_still_falling
 from cvbench.core.report import report_envelope, write_report
+from cvbench.core.report_print import TRAIN_LONGER
 from cvbench.core.report_print import print_detection_body as print_body
 from cvbench.datasets.layout import list_images, read_yolo_boxes, yolo_label_dir
 from cvbench.detection.decode import decode_batch
@@ -140,7 +142,7 @@ def _print_report(report: dict, run_dir: str, out_dir: Path) -> None:
     print(_console.rule())
     print(f" {_console.bold('CVBench — evaluate')}  {_console.dim('|')}  {_console.dim('run: ' + run_name)}")
     print(_console.rule())
-    print_body(report)
+    print_body(report, [TRAIN_LONGER] if loss_still_falling(run_dir) else [])
     print(f" {_console.bold('Saved:')}")
     print(f"   {_console.dim(str(out_dir / 'eval_report.json'))}")
     print(_console.rule())

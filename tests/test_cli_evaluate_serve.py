@@ -26,7 +26,7 @@ def test_evaluate_run_passes_options_to_service(monkeypatch):
     result = CliRunner().invoke(evaluate_mod.evaluate, ["my_run", "--output-dir", "out"])
 
     assert result.exit_code == 0, result.output
-    assert calls == [("run", {"experiment": "my_run", "output_dir": "out"})]
+    assert calls == [("run", {"experiment": "my_run", "output_dir": "out", "conf": None})]
 
 
 def test_evaluate_sweep_prints_trial_table(monkeypatch):
@@ -57,6 +57,29 @@ def test_evaluate_sweep_rejects_output_dir(monkeypatch):
 
     assert result.exit_code == 2
     assert "--output-dir is not supported" in result.output
+    assert calls == []
+
+
+def test_evaluate_passes_conf_to_service(monkeypatch):
+    calls = _fake_evaluation(monkeypatch)
+    monkeypatch.setattr("cvbench.core.exp_store.resolve_run_dir", lambda n, allow_sweep=False: n)
+    monkeypatch.setattr("cvbench.core.exp_store.is_sweep_dir", lambda p: False)
+
+    result = CliRunner().invoke(evaluate_mod.evaluate, ["my_run", "--conf", "0.4"])
+
+    assert result.exit_code == 0, result.output
+    assert calls == [("run", {"experiment": "my_run", "output_dir": None, "conf": 0.4})]
+
+
+def test_evaluate_sweep_rejects_conf(monkeypatch):
+    calls = _fake_evaluation(monkeypatch)
+    monkeypatch.setattr("cvbench.core.exp_store.resolve_run_dir", lambda n, allow_sweep=False: n)
+    monkeypatch.setattr("cvbench.core.exp_store.is_sweep_dir", lambda p: True)
+
+    result = CliRunner().invoke(evaluate_mod.evaluate, ["my_sweep", "--conf", "0.4"])
+
+    assert result.exit_code == 2
+    assert "--conf is not supported" in result.output
     assert calls == []
 
 

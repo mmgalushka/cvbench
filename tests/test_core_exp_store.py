@@ -245,3 +245,40 @@ def test_test_accuracy_prefers_config_value_over_report(tmp_path):
     }))
     results = scan_experiments(str(tmp_path))
     assert results[0]["test_accuracy"] == 0.99
+
+
+def _write_log(tmp_path, losses, column="val_loss"):
+    (tmp_path / "training_log.csv").write_text(
+        f"epoch,{column}\n" + "".join(f"{i},{v}\n" for i, v in enumerate(losses))
+    )
+
+
+def test_loss_still_falling_true_when_best_epoch_is_last(tmp_path):
+    from cvbench.core.exp_store import loss_still_falling
+    _write_log(tmp_path, [5.0, 4.0, 3.0, 2.5, 2.0])
+    assert loss_still_falling(tmp_path) is True
+
+
+def test_loss_still_falling_false_on_plateau(tmp_path):
+    from cvbench.core.exp_store import loss_still_falling
+    _write_log(tmp_path, [5.0, 2.0, 1.0, 1.0, 1.0, 1.0])
+    assert loss_still_falling(tmp_path) is False
+
+
+def test_loss_still_falling_false_when_best_epoch_is_early(tmp_path):
+    from cvbench.core.exp_store import loss_still_falling
+    _write_log(tmp_path, [5.0, 1.0, 2.0, 3.0, 4.0])
+    assert loss_still_falling(tmp_path) is False
+
+
+def test_loss_still_falling_false_without_log_or_with_few_epochs(tmp_path):
+    from cvbench.core.exp_store import loss_still_falling
+    assert loss_still_falling(tmp_path) is False
+    _write_log(tmp_path, [3.0, 2.0])
+    assert loss_still_falling(tmp_path) is False
+
+
+def test_loss_still_falling_falls_back_to_train_loss(tmp_path):
+    from cvbench.core.exp_store import loss_still_falling
+    _write_log(tmp_path, [5.0, 4.0, 3.0, 2.0], column="loss")
+    assert loss_still_falling(tmp_path) is True

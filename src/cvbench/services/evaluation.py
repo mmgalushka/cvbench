@@ -13,6 +13,7 @@ from cvbench.tasks import resolve_task
 def run_evaluation(
     experiment: str,
     output_dir: str | None = None,
+    conf: float | None = None,
     # NOTE: on_batch_end is reserved for the WebUI progress streaming.
     # When the WebUI calls run_evaluation() it should pass a callable:
     #
@@ -42,6 +43,8 @@ def run_evaluation(
 
     cfg = load_config(run_dir)
     task = resolve_task(cfg)
+    if conf is not None and cfg.task != "detection":
+        _console.warning("--conf only applies to detection runs; ignoring it.")
 
     spec = task.resolve_layout(cfg)
     test_ds = task.build_eval_dataset(cfg, spec)
@@ -58,6 +61,7 @@ def run_evaluation(
         spec=spec,
         run_dir=run_dir,
         output_dir=output_dir,
+        conf=conf,
     )
 
     metric, value = task.test_score(report)
