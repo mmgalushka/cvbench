@@ -4,6 +4,7 @@ import random
 import secrets
 import shutil
 from pathlib import Path
+from typing import Any
 
 import click
 import numpy as np
@@ -16,7 +17,7 @@ from cvbench.datasets import hashify as hashify_mod
 from cvbench.datasets import layout as layout_mod
 from cvbench.datasets import prep as prep_mod
 from cvbench.datasets import split as split_mod
-from cvbench.datasets.stats import get_class_distribution, get_dataset_overview, print_class_distribution
+from cvbench.datasets.stats import get_dataset_overview, print_class_distribution
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
 _TOKEN_LEN = 16
@@ -95,13 +96,14 @@ def _print_group(h, kept, dropped):
 
 
 def _print_integrity(root, issues):
-    """Print the unreadable/incompatible-image, cross-split-leak and label-conflict sections of ``data explore``."""
+    """Print the integrity sections of ``data explore`` (unreadable, incompatible, leaks, duplicates, conflicts)."""
     from cvbench.core import _console
 
     def group_line(h, paths):
         print(f"   {_console.dim(h[:8])}  {', '.join(_console.yellow(str(p)) for p in paths)}")
 
     corrupt, leaks, conflicts = issues.corrupt, issues.leaks, issues.label_conflicts
+    duplicates = issues.duplicates
     print(f" {_console.bold('Data integrity')}  {_console.dim('|')}  {_console.dim(str(root))}")
     if corrupt:
         print(f" {_console.bold(f'{len(corrupt)} unreadable image(s):')}")
@@ -123,6 +125,13 @@ def _print_integrity(root, issues):
             group_line(h, paths)
     else:
         _console.success("No cross-split duplicates found.")
+    if duplicates:
+        print(f" {_console.bold(f'{len(duplicates)} within-split duplicate group(s):')}")
+        for h, paths in duplicates.items():
+            group_line(h, paths)
+        _console.warning("Next: run 'data prep <src> <dst>' to remove the duplicates.")
+    else:
+        _console.success("No within-split duplicates found.")
     if conflicts:
         print(f" {_console.bold(f'{len(conflicts)} image(s) with conflicting labels:')}")
         for h, paths in conflicts.items():
@@ -134,71 +143,35 @@ def _print_integrity(root, issues):
     print(_console.rule())
 
 
-@data.command(
-    "explore",
-    short_help="Report per-class brightness, class balance and data-integrity problems.",
-    examples=[
-        ("data explore data/ready", "Analyse the train split"),
-        ("data explore data/ready --split test", "Analyse a different split"),
-    ],
-    see_also=[("data upsample <src> <dst> --augmentation aug.yaml --target 500",
-               "grow an under-represented class")],
-)
-@click.argument("data_dir")
-@click.option("--split", default="train", show_default=True,
-              help="Dataset split to analyse (train / val / test).")
-def explore(data_dir, split):
-    """Analyse per-class brightness and class distribution to detect potential bias.
-
-    DATA_DIR is the root dataset directory (containing train/, val/, test/
-    subdirectories) or a split directory directly.
-
-    Unreadable images (empty or undecodable), images PIL reads but TensorFlow
-    rejects (e.g. a truncated BMP named .jpg; training would crash on them),
-    images that appear in more than one split (data leakage) and identical
-    images with conflicting labels are listed, and the command exits with
-    status 1 if any are found; run ``data prep`` to drop or repair them.
-    """
+def _explore_split(split_dir: Path, bad: set[Path]) -> bool:
+    """Print the brightness and class-balance report for SPLIT_DIR; False if it holds no images."""
     from cvbench.core import _console
-
-    root = Path(data_dir)
-    if not root.is_dir():
-        raise click.ClickException(f"Dataset directory not found: '{root}'")
-    with _console.progress(len(layout_mod.list_images(root)), "Checking integrity") as advance:
-        issues = prep_mod.find_integrity_issues(root, progress=advance)
-    bad = {root / rel for rel, _ in issues.corrupt}
-
-    if layout_mod.is_yolo_dataset(root):
-        _print_integrity(root, issues)
-        if issues:
-            raise SystemExit(1)
-        return
-
-    split_dir = root / split if (root / split).is_dir() else root
 
     class_dirs = sorted(p for p in split_dir.iterdir() if p.is_dir())
     if not class_dirs:
         raise click.ClickException(f"No class subdirectories found in '{split_dir}'")
 
-    class_images = {
-        cls_dir: [f for f in cls_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS and f not in bad]
+    all_images = {
+        cls_dir: [f for f in cls_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS]
         for cls_dir in class_dirs
     }
-    stats = []
-    with _console.progress(sum(map(len, class_images.values())), "Measuring brightness") as advance:
+    readable = {cls_dir: [f for f in images if f not in bad] for cls_dir, images in all_images.items()}
+    stats: list[dict[str, Any]] = []
+    with _console.progress(sum(map(len, readable.values())), "Measuring brightness") as advance:
         brightness: dict[Path, list[float]] = {}
-        for cls_dir, images in class_images.items():
+        for cls_dir, images in readable.items():
             brightness[cls_dir] = []
             for f in images:
                 brightness[cls_dir].append(_mean_brightness(f))
                 advance(1)
-    for cls_dir, images in class_images.items():
+    for cls_dir, images in readable.items():
         if not images:
             continue
         arr = np.array(brightness[cls_dir])
         stats.append({
             "class": cls_dir.name,
-            "count": len(images),
+            "count": len(all_images[cls_dir]),
+            "unreadable": len(all_images[cls_dir]) - len(images),
             "mean": float(arr.mean()),
             "std": float(arr.std()),
             "min": float(arr.min()),
@@ -206,7 +179,7 @@ def explore(data_dir, split):
         })
 
     if not stats:
-        raise click.ClickException("No images found.")
+        return False
 
     means = [s["mean"] for s in stats]
     dataset_mean = float(np.mean(means))
@@ -224,11 +197,13 @@ def explore(data_dir, split):
 
     for s in stats:
         flag = f"  {_console.yellow('⚠️')}" if s in biased else ""
+        n_bad = s["unreadable"]
+        note = f"  {_console.dim(f'({n_bad} unreadable, excluded from brightness)')}" if n_bad else ""
         mean_str = _console.bold(f"{s['mean']:>6.1f}")
         print(
             f"   {s['class']:<{max_cls}}  {s['count']:>7}  "
             f"{mean_str}  {s['std']:>6.1f}  "
-            f"{s['min']:>5.1f}  {s['max']:>5.1f}{flag}"
+            f"{s['min']:>5.1f}  {s['max']:>5.1f}{flag}{note}"
         )
 
     print()
@@ -246,14 +221,59 @@ def explore(data_dir, split):
         _console.success("No significant brightness bias detected.")
 
     print()
-    dist = get_class_distribution(str(split_dir))
-    print_class_distribution(dist)
-    counts = list(dist.values())
-    std_of_counts = float(np.std(counts))
-    mean_of_counts = float(np.mean(counts))
-    imbalanced = std_of_counts > 0 and any(abs(c - mean_of_counts) > std_of_counts for c in counts)
-    if not imbalanced:
+    dist = dict(sorted(((c.name, len(i)) for c, i in all_images.items()), key=lambda x: -x[1]))
+    if not print_class_distribution(dist):
         _console.success("No significant class imbalance detected.")
+    return True
+
+
+@data.command(
+    "explore",
+    short_help="Report per-class brightness, class balance and data-integrity problems.",
+    examples=[
+        ("data explore data/ready", "Analyse every split"),
+        ("data explore data/ready --split test", "Analyse a single split"),
+    ],
+    see_also=[("data prep <src> <dst>", "drop duplicates, leaks and unreadable images"),
+              ("data upsample <src> <dst> --augmentation aug.yaml --target 500",
+               "grow an under-represented class")],
+)
+@click.argument("data_dir")
+@click.option("--split", default=None,
+              help="Analyse only this split (train / val / test); default: every split present.")
+def explore(data_dir, split):
+    """Analyse per-class brightness and class distribution to detect potential bias.
+
+    DATA_DIR is the root dataset directory (containing train/, val/, test/
+    subdirectories) or a split directory directly.
+
+    Unreadable images (empty or undecodable), images PIL reads but TensorFlow
+    rejects (e.g. a truncated BMP named .jpg; training would crash on them),
+    images that appear in more than one split (data leakage), identical images
+    within a split and identical images with conflicting labels are listed once
+    for the whole dataset, and the command exits with status 1 if any are
+    found; run ``data prep`` to drop or repair them.
+    """
+    from cvbench.core import _console
+
+    root = Path(data_dir)
+    if not root.is_dir():
+        raise click.ClickException(f"Dataset directory not found: '{root}'")
+    with _console.progress(len(layout_mod.list_images(root)), "Checking integrity") as advance:
+        issues = prep_mod.find_integrity_issues(root, progress=advance)
+    bad = {root / rel for rel, _ in issues.corrupt}
+
+    if layout_mod.is_yolo_dataset(root):
+        _print_integrity(root, issues)
+        if issues:
+            raise SystemExit(1)
+        return
+
+    names = [split] if split else [n for n in layout_mod.SPLIT_NAMES if (root / n).is_dir()]
+    split_dirs = [root / n for n in names if (root / n).is_dir()] or [root]
+    reported = [_explore_split(d, bad) for d in split_dirs]
+    if not any(reported):
+        raise click.ClickException("No images found.")
     print(_console.rule())
     _print_integrity(root, issues)
     if issues:

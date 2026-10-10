@@ -12,7 +12,7 @@ source — prep, split, and flatten. Each of the three copies
 
 ```bash
 data list                          # every dataset under data/, with task, split sizes, and class count
-data explore data/my_data          # per-class brightness and class-balance report for the train split
+data explore data/my_data          # per-class brightness and class-balance report for every split
 data explore data/my_data --split test
 ```
 
@@ -23,14 +23,15 @@ reports mean brightness and image counts per class, useful for spotting
 lighting bias or class imbalance before you train. It also lists unreadable
 images (empty or undecodable), images PIL reads but TensorFlow's decoder rejects
 (training would crash on them), images that appear in more than one split
-(data leakage) and identical images with conflicting labels, and exits with
+(data leakage), identical images within a split and identical images with
+conflicting labels (listed once for the whole dataset), and exits with
 status 1 if it finds any — run
 [`data prep`](#the-three-dataset-copy-verbs) to drop or repair them. This check works
 for YOLO datasets too (brightness and balance are classification-only).
 
 | Option | Description |
 |---|---|
-| `data explore --split` | Dataset split to analyse: `train` (default) / `val` / `test` |
+| `data explore --split` | Analyse one split (`train` / `val` / `test`); default: every split present |
 
 ### The three dataset-copy verbs
 
