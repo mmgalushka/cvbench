@@ -155,6 +155,142 @@ def test_cli_folder_without_images_is_an_error(cls_run, tmp_path):
     assert "No images found" in result.output
 
 
+def test_cli_unreadable_file_is_skipped_and_reported(cls_run, images, monkeypatch):
+    (images / "fake.jpg").write_text("this is text, not a jpeg")
+    _stub(monkeypatch, "keras", [0])
+
+    result = CliRunner().invoke(predict, ["run", str(images)])
+
+    assert result.exit_code == 0, result.output
+    assert " 2 images" in result.output
+    assert "unreadable: fake.jpg" in result.output
+    assert "Cannot read image" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_cli_single_unreadable_file_is_a_clean_error(cls_run, images):
+    fake = images / "fake.jpg"
+    fake.write_text("nope")
+
+    result = CliRunner().invoke(predict, ["run", str(fake)])
+
+    assert result.exit_code == 1
+    assert "Cannot read image: fake.jpg" in result.output
+    assert "UnidentifiedImageError" not in result.output
+
+
+def test_cli_no_images_lists_supported_extensions(cls_run, images):
+    result = CliRunner().invoke(predict, ["run", str(images / "notes.txt")])
+
+    assert result.exit_code == 1
+    assert "supported extensions" in result.output and ".jpg" in result.output
+
+
+def test_cli_top_k_prints_ranked_pairs(cls_run, images, monkeypatch):
+    monkeypatch.setattr(
+        prediction, "_infer_keras",
+        lambda p, imgs, s: [[np.array([0.2, 0.5, 0.3], dtype=np.float32)] for _ in imgs],
+    )
+
+    result = CliRunner().invoke(predict, ["run", str(images / "a.jpg"), "--top-k", "3"])
+
+    assert result.exit_code == 0, result.output
+    ranked = [ln.split()[0] for ln in result.output.splitlines() if ln.startswith("   ")]
+    assert ranked == ["dog", "bird", "cat"]
+    assert "50.0%" in result.output and "30.0%" in result.output
+
+
+def test_cli_probs_shows_every_class(cls_run, images, monkeypatch):
+    _stub(monkeypatch, "keras", [0])
+
+    result = CliRunner().invoke(predict, ["run", str(images / "a.jpg"), "--probs"])
+
+    assert result.exit_code == 0, result.output
+    assert sum(ln.startswith("   ") for ln in result.output.splitlines()) == len(CLASSES)
+
+
+def test_cli_top_k_rejected_for_detection(cls_run, images, monkeypatch):
+    monkeypatch.setattr(prediction, "load_config", lambda path: _cfg(task="detection"))
+
+    result = CliRunner().invoke(predict, ["run", str(images), "--top-k", "2"])
+
+    assert result.exit_code == 1
+    assert "only apply to classification" in result.output
+
+
+def test_cli_all_formats_shows_max_diff_and_near_chance_warning(cls_run, images, monkeypatch):
+    near_chance = np.array([0.34, 0.33, 0.33], dtype=np.float32)
+    drifted = np.array([0.33, 0.34, 0.33], dtype=np.float32)
+    monkeypatch.setattr(prediction, "_infer_keras", lambda p, i, s: [[near_chance] for _ in i])
+    monkeypatch.setattr(prediction, "_infer_onnx", lambda p, i, s: [[drifted] for _ in i])
+    monkeypatch.setattr(prediction, "_infer_tflite", lambda p, i, s: [[near_chance] for _ in i])
+
+    result = CliRunner().invoke(predict, ["run", str(images / "a.jpg"), "--format", "all"])
+
+    assert result.exit_code == 0, result.output
+    assert "max|diff|" in result.output
+    row = next(ln for ln in result.output.splitlines() if ln.startswith(" a.jpg"))
+    assert row.rstrip().endswith("0.0100")
+    assert "near-chance" in result.output
+
+
+def test_cli_reports_model_file_used(cls_run, images, monkeypatch):
+    _stub(monkeypatch, "keras", [0])
+
+    result = CliRunner().invoke(predict, ["run", str(images / "a.jpg")])
+
+    assert f"model:   keras     {cls_run / 'keras'}" in result.output
+
+
+def test_cli_model_option_runs_explicit_file(cls_run, images, monkeypatch, tmp_path):
+    custom = tmp_path / "custom_int8.tflite"
+    custom.write_bytes(b"")
+    monkeypatch.setattr(prediction, "_model_path", lambda run_dir, f: None)
+    seen = []
+
+    def fake(path, imgs, size):
+        seen.append(path)
+        return [[_probs(1)] for _ in imgs]
+
+    monkeypatch.setattr(prediction, "_infer_tflite", fake)
+
+    result = CliRunner().invoke(
+        predict, ["run", str(images / "a.jpg"), "--model", str(custom)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen == [custom]
+    assert str(custom) in result.output and "dog" in result.output
+
+
+def test_cli_model_option_validates_format(cls_run, images, tmp_path):
+    custom = tmp_path / "m.tflite"
+    custom.write_bytes(b"")
+    odd = tmp_path / "m.bin"
+    odd.write_bytes(b"")
+    img = str(images / "a.jpg")
+
+    mismatch = CliRunner().invoke(
+        predict, ["run", img, "--model", str(custom), "--format", "onnx"]
+    )
+    with_all = CliRunner().invoke(
+        predict, ["run", img, "--model", str(custom), "--format", "all"]
+    )
+    bad_ext = CliRunner().invoke(predict, ["run", img, "--model", str(odd)])
+
+    assert mismatch.exit_code == with_all.exit_code == bad_ext.exit_code == 2
+    assert "--format is onnx" in mismatch.output
+    assert "cannot be combined" in with_all.output
+    assert ".keras, .onnx or .tflite" in bad_ext.output
+
+
+def test_tflite_found_in_relocated_export_subfolder(tmp_path):
+    (tmp_path / "export" / "custom").mkdir(parents=True)
+    (tmp_path / "export" / "custom" / "quant.tflite").write_bytes(b"")
+
+    assert prediction._model_path(tmp_path, "tflite").name == "quant.tflite"
+
+
 def test_cli_conf_rejected_for_classification(cls_run, images):
     result = CliRunner().invoke(predict, ["run", str(images), "--conf", "0.3"])
 
@@ -290,10 +426,11 @@ def test_build_results_names_classes_and_falls_back_to_index():
     named = prediction._build_results(["d/a.jpg", "d/b.jpg"], probs, CLASSES)
     bare = prediction._build_results(["d/a.jpg"], [_probs(2)], None)
 
-    assert named[0] == {
-        "filename": "a.jpg", "class_index": 1, "confidence": pytest.approx(0.9),
-        "class_name": "dog",
+    assert {k: named[0][k] for k in ("filename", "class_index", "class_name")} == {
+        "filename": "a.jpg", "class_index": 1, "class_name": "dog",
     }
+    assert named[0]["confidence"] == pytest.approx(0.9)
+    assert [e["class_name"] for e in named[0]["top_k"]] == ["dog"]
     assert named[1]["class_name"] == "3"  # index beyond the class list
     assert bare[0]["class_name"] == "2"
 

@@ -29,6 +29,24 @@ def _collect_images(path: str) -> list[str]:
     return sorted(str(f) for f in p.rglob("*") if f.suffix.lower() in _IMAGE_EXTS)
 
 
+def _supported_extensions() -> str:
+    return ", ".join(sorted(_IMAGE_EXTS))
+
+
+def _unreadable_reason(img_path: str) -> str | None:
+    """Return why an image can't be decoded, or None when it is readable."""
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(img_path) as img:
+            img.load()
+    except UnidentifiedImageError:
+        return "not a valid image file"
+    except (OSError, ValueError) as e:
+        return str(e) or type(e).__name__
+    return None
+
+
 def _model_path(run_dir: Path, fmt: str) -> Path | None:
     if fmt == "keras":
         p = run_dir / "best.keras"
@@ -41,7 +59,8 @@ def _model_path(run_dir: Path, fmt: str) -> Path | None:
             p = run_dir / "export" / subfolder / filename
             if p.exists():
                 return p
-        return None
+        # Relocated or custom-named exports still live somewhere under export/.
+        return next(iter(sorted((run_dir / "export").rglob("*.tflite"))), None)
     raise ValueError(f"Unknown format: {fmt}")
 
 
@@ -132,21 +151,27 @@ def _build_results(
     images: list[str],
     probs_list: list[np.ndarray],
     class_names: list[str] | None,
+    top_k: int | None = 1,
 ) -> list[dict]:
+    """Shape per-image probabilities; ``top_k=None`` keeps every class."""
+
+    def name_of(idx: int) -> str:
+        return class_names[idx] if class_names and idx < len(class_names) else str(idx)
+
     results = []
     for img_path, probs in zip(images, probs_list, strict=True):
-        top_idx = int(np.argmax(probs))
-        confidence = float(probs[top_idx])
-        class_name = (
-            class_names[top_idx]
-            if class_names and top_idx < len(class_names)
-            else str(top_idx)
-        )
+        order = [int(i) for i in np.argsort(-np.asarray(probs), kind="stable")]
+        top_idx = order[0]
         results.append({
             "filename": Path(img_path).name,
             "class_index": top_idx,
-            "confidence": confidence,
-            "class_name": class_name,
+            "confidence": float(probs[top_idx]),
+            "class_name": name_of(top_idx),
+            "top_k": [
+                {"class_name": name_of(i), "confidence": float(probs[i])}
+                for i in order[: top_k or len(order)]
+            ],
+            "probs": [float(x) for x in probs],
         })
     return results
 
@@ -212,20 +237,26 @@ def run_experiment_prediction(
     input_path: str,
     fmt: str,
     conf: float | None = None,
+    top_k: int | None = 1,
+    model_path: str | None = None,
 ) -> dict:
     """Run inference for an experiment across one or all model formats.
 
     fmt: "keras" | "onnx" | "tflite" | "plan" | "all"
     conf: detection runs only — minimum score for a detection to be reported
         (default: the run's ``detection.conf_threshold``).
+    top_k: classification runs only — classes reported per image (None = all).
+    model_path: explicit model file; the format is taken from ``fmt``, which
+        must be one of keras/onnx/tflite.
 
     Returns dict with keys:
         plan_only       – True when fmt == "plan"
         task            – "classification" | "detection"
         experiment      – resolved run name
         run_dir         – Path to run directory
-        formats_run     – list of {format, results}
+        formats_run     – list of {format, model_path, results}
         formats_skipped – list of {format, reason}
+        inputs_skipped  – list of {filename, reason} for unreadable images
     """
     run_dir = Path(resolve_run_dir(experiment))
 
@@ -236,21 +267,51 @@ def run_experiment_prediction(
     task = getattr(run_cfg, "task", "classification")
     if conf is not None and task != "detection":
         raise ValueError("--conf only applies to detection runs")
+    if task == "detection" and top_k != 1:
+        raise ValueError("--top-k and --probs only apply to classification runs")
 
-    images = _collect_images(input_path)
+    found = _collect_images(input_path)
+    if not found:
+        raise ValueError(
+            f"No images found at: {input_path} "
+            f"(supported extensions: {_supported_extensions()})"
+        )
+    images: list[str] = []
+    inputs_skipped: list[dict] = []
+    for img in found:
+        reason = _unreadable_reason(img)
+        if reason is None:
+            images.append(img)
+        else:
+            inputs_skipped.append({"filename": Path(img).name, "reason": reason})
     if not images:
-        raise ValueError(f"No images found at: {input_path}")
+        first = inputs_skipped[0]
+        detail = (
+            f"{first['filename']} ({first['reason']})"
+            if len(inputs_skipped) == 1
+            else f"all {len(inputs_skipped)} files at {input_path} are unreadable"
+        )
+        raise ValueError(f"Cannot read image: {detail}")
+
+    if model_path is not None:
+        if fmt not in FORMATS:
+            raise ValueError("--model needs a single format (keras, onnx or tflite)")
+        if not Path(model_path).is_file():
+            raise ValueError(f"Model file not found: {model_path}")
 
     formats_to_run = list(FORMATS) if fmt == "all" else [fmt]
     formats_run: list[dict] = []
     formats_skipped: list[dict] = []
 
     for f in formats_to_run:
-        path = _model_path(run_dir, f)
+        path = Path(model_path) if model_path is not None else _model_path(run_dir, f)
         if path is None:
             formats_skipped.append({
                 "format": f,
-                "reason": f"not exported — run: runs export {run_dir.name} --format {f}",
+                "reason": (
+                    f"not exported — run: runs export {run_dir.name} --format {f}"
+                    " (or pass --model PATH)"
+                ),
             })
             continue
         try:
@@ -264,8 +325,10 @@ def run_experiment_prediction(
             if task == "detection":
                 results = _build_detection_results(images, outputs_list, run_cfg, conf)
             else:
-                results = _build_results(images, [o[0] for o in outputs_list], class_names)
-            formats_run.append({"format": f, "results": results})
+                results = _build_results(
+                    images, [o[0] for o in outputs_list], class_names, top_k
+                )
+            formats_run.append({"format": f, "model_path": str(path), "results": results})
         except RuntimeError as e:
             formats_skipped.append({"format": f, "reason": str(e)})
 
@@ -276,6 +339,7 @@ def run_experiment_prediction(
         "run_dir": run_dir,
         "formats_run": formats_run,
         "formats_skipped": formats_skipped,
+        "inputs_skipped": inputs_skipped,
     }
 
 

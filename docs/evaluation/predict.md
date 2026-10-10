@@ -38,7 +38,42 @@ predict cls_effnet_b0_2026_01_21 images/ --format all
 
 produces a side-by-side table with each format's prediction and confidence,
 flagging (⚠️) any row where a format's class disagrees with the reference
-(`keras`) prediction.
+(`keras`) prediction. The `max|diff|` column is the largest probability
+difference between any format and the reference, which catches drift that
+leaves the top-1 class unchanged. If the reference model's mean top-1
+confidence is near chance, a warning notes that matching class names are weak
+evidence and `max|diff|` is the number to trust.
+
+## More than the top class
+
+```bash
+predict cls_effnet_b0_2026_01_21 photo.jpg --top-k 3
+predict cls_effnet_b0_2026_01_21 photo.jpg --probs
+```
+
+`--top-k N` shows the N most likely classes per image; `--probs` shows every
+class probability. Both are classification only.
+
+## Choosing the model file
+
+After the results, `predict` prints which model file each format used. To run
+a specific file (a quantized or relocated export, for example), pass it
+directly; the format is taken from its extension (`.keras`, `.onnx`,
+`.tflite`):
+
+```bash
+predict cls_effnet_b0_2026_01_21 images/ --model out/model_int8.tflite
+```
+
+`--model` can't be combined with `--format all`. For `--format tflite`, any
+`.tflite` file under the run's `export/` folder is found automatically.
+
+## Unreadable inputs
+
+Files that can't be decoded as images are skipped and listed under the
+results (`unreadable: fake.jpg  Cannot read image (...)`). If nothing in
+`INPUT` is readable, `predict` exits with `Cannot read image: ...`. When no
+supported images are found, the error lists the accepted extensions.
 
 ## Detection runs
 
