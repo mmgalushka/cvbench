@@ -207,3 +207,18 @@ def test_no_stale_umbrella_command_references():
                 if pattern.search(line) and "docker" not in line:
                     offenders.append(f"{path.relative_to(REPO)}:{i}: {line.strip()}")
     assert not offenders, "there is no `cvbench` umbrella command:\n" + "\n".join(offenders)
+
+
+def test_train_help_shows_defaults_and_frozen_wording():
+    from cvbench.cli.train import train
+
+    out = _ANSI.sub("", CliRunner().invoke(train, ["--help"]).output)
+    flat = " ".join(out.split())
+    options = flat.split("Options", 1)[1]
+    for opt in ("--epochs", "--lr", "--batch-size", "--input-size", "--dropout", "--backbone",
+                "--weights", "--loss", "--optimizer", "--lr-scheduler", "--val-split", "--seed",
+                "--class-weight", "--fine-tune-from-layer"):
+        section = options.split(opt + " ", 1)[1].split(" --", 1)[0]
+        assert "default" in section, f"{opt} help does not state its default"
+    assert "FROZEN" in flat
+    assert "images/ and labels/" in flat
