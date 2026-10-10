@@ -412,8 +412,8 @@ def trial_config_values(trial_dir: str | Path, flags: list[str]) -> dict[str, An
 def sweep_entry(sweep_dir: str | Path) -> dict[str, Any] | None:
     """Summarize a sweep as one `runs list` entry (same keys as `scan_experiments` plus `is_sweep` and `n_trials`).
 
-    `val_loss` / `epochs_run` come from the best trial (never the ranking metric) and are None
-    when no trial has finished. Status is `running` while any trial runs, else `done`.
+    `val_loss` / `val_accuracy` / `test_accuracy` / `epochs_run` come from the best trial (never
+    the ranking metric) and are None when no trial has finished. Status is `running` while any trial runs, else `done`.
     Returns None if the manifest is missing or unreadable.
     """
     sweep = Path(sweep_dir)
@@ -431,6 +431,8 @@ def sweep_entry(sweep_dir: str | Path) -> dict[str, Any] | None:
         "task": task,
         "status": "running" if any(e["status"] == "running" for e in entries) else "done",
         "val_loss": best_entry["val_loss"] if best_entry else None,
+        "val_accuracy": best_entry["val_accuracy"] if best_entry else None,
+        "test_accuracy": best_entry["test_accuracy"] if best_entry else None,
         "epochs_run": best_entry["epochs_run"] if best_entry else None,
         "date": manifest.date,
         "is_sweep": True,

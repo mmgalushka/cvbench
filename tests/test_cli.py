@@ -5,7 +5,7 @@ from click.testing import CliRunner
 
 from cvbench.cli.runs import runs
 from cvbench.cli.serve import serve
-from cvbench.core.config import build_config, save_config
+from cvbench.core.config import build_config, load_config, save_config
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -52,9 +52,36 @@ def test_runs_list_sort_by_val_accuracy(tmp_path):
     assert result.output.index("exp_high") < result.output.index("exp_low")
 
 
+def test_runs_list_shows_val_acc_and_test_columns(tmp_path):
+    _write_exp(tmp_path, "exp_a", val_accuracy=0.9123, test_accuracy=0.8765)
+    result = CliRunner().invoke(runs, ["list", str(tmp_path), "--sort", "val_accuracy"])
+    assert result.exit_code == 0
+    assert "Val Acc" in result.output
+    assert "Test" in result.output
+    assert "0.9123" in result.output
+    assert "0.8765" in result.output
+
+
 # ---------------------------------------------------------------------------
 # runs show
 # ---------------------------------------------------------------------------
+
+def test_runs_show_prints_config_and_command(tmp_path):
+    exp_a = _write_exp(tmp_path, "exp_a", cli_command="train data --epochs 3")
+    cfg = load_config(str(exp_a))
+    cfg.model.fine_tune_from_layer = 120
+    cfg.training.seed = 7
+    cfg.training.loss.label_smoothing = 0.1
+    save_config(cfg, str(exp_a))
+    result = CliRunner().invoke(runs, ["show", str(exp_a)])
+    assert result.exit_code == 0
+    assert "model.fine_tune_from_layer" in result.output
+    assert "120" in result.output
+    assert "training.seed" in result.output
+    assert "training.loss.label_smoothing" in result.output
+    assert "train data --epochs 3" in result.output
+    # Defaults that aren't in the always-shown set stay out.
+    assert "training.optimizer.momentum" not in result.output
 
 def test_runs_show(tmp_path):
     exp_a = _write_exp(tmp_path, "exp_a", val_accuracy=0.9)

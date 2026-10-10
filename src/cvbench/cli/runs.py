@@ -37,6 +37,54 @@ def _fit(s: str, width: int) -> str:
     return s[:head] + "…" + s[-tail:]
 
 
+def _score(value) -> str:
+    """Format a metric for a table cell; '—' when it was never recorded."""
+    return f"{value:.4f}" if isinstance(value, (int, float)) else "—"
+
+
+# Settings `runs show` always lists, even at their default — the knobs people compare runs on.
+_ALWAYS_SHOWN = (
+    "model.fine_tune_from_layer",
+    "training.loss.type",
+    "training.optimizer.type",
+    "training.seed",
+)
+# Run bookkeeping (shown above) and bulky/derived values that would only add noise.
+_HIDDEN_PREFIXES = ("run.", "detection.anchors", "augmentation.", "data.classes")
+
+
+def _flatten(d: dict, prefix: str = "") -> dict:
+    flat = {}
+    for k, v in d.items():
+        key = f"{prefix}{k}"
+        if isinstance(v, dict):
+            flat.update(_flatten(v, f"{key}."))
+        else:
+            flat[key] = v
+    return flat
+
+
+def _config_lines(cfg) -> list[tuple[str, object]]:
+    """(key, value) pairs for every non-default config setting, plus the always-shown knobs."""
+    import dataclasses
+
+    from cvbench.core.config import CVBenchConfig
+
+    current = _flatten(dataclasses.asdict(cfg))
+    default = _flatten(dataclasses.asdict(CVBenchConfig()))
+    lines = []
+    for key, value in current.items():
+        if key.endswith("_explicit"):
+            continue
+        if key in _ALWAYS_SHOWN or (
+            value != default.get(key) and not key.startswith(_HIDDEN_PREFIXES)
+        ):
+            lines.append((key, value))
+    names = [getattr(t, "name", None) or "one_of" for t in cfg.augmentation.transforms]
+    lines.append(("augmentation", ", ".join(names) if names else "none"))
+    return lines
+
+
 _DEFAULT_EXPERIMENTS_DIR = EXPERIMENTS_DIR
 
 
@@ -85,16 +133,27 @@ def list_runs(experiments_dir, sort):
 
     rows = []
     for r in entries:
-        loss = r.get("val_loss")
-        loss_str = f"{loss:.4f}" if loss is not None else "—"
+        loss_str = _score(r.get("val_loss"))
+        val_acc_str = _score(r.get("val_accuracy"))
+        test_str = _score(r.get("test_accuracy"))
         task_short = "det" if r.get("task") == "detection" else "cls"
         if r.get("is_sweep"):
             task_short += "·sweep"
         epochs = r.get("epochs_run")
         epochs_str = "—" if epochs is None else epochs
-        rows.append((_fit(r["name"], 40), task_short, r.get("status", "?"), loss_str, epochs_str))
+        rows.append(
+            (_fit(r["name"], 40), task_short, r.get("status", "?"), loss_str, val_acc_str, test_str, epochs_str)
+        )
     _console.table(
-        ["Run", "Task", "Status", ("Val Loss", "right"), ("Epochs", "right")],
+        [
+            "Run",
+            "Task",
+            "Status",
+            ("Val Loss", "right"),
+            ("Val Acc", "right"),
+            ("Test", "right"),
+            ("Epochs", "right"),
+        ],
         rows,
     )
     if sweeps:
@@ -159,7 +218,7 @@ def show(experiment):
         return
 
     try:
-        load_config(str(run_dir))
+        cfg = load_config(str(run_dir))
     except FileNotFoundError:
         raise click.ClickException(f"No config.yaml in: {run_dir}") from None
 
@@ -183,6 +242,13 @@ def show(experiment):
     print(_console.rule())
     for f in fields:
         print(f" {f:<22}: {entry.get(f, '—')}")
+    print(_console.rule())
+
+    print(f" {_console.bold('Config')} {_console.dim('(non-default values)')}")
+    for key, value in _config_lines(cfg):
+        print(f"   {key:<30}: {value}")
+    if cfg.run.cli_command:
+        print(f"   {'command':<30}: {cfg.run.cli_command}")
     print(_console.rule())
 
     export_dir = run_dir / "export"
