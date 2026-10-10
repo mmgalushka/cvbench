@@ -9,6 +9,8 @@ from pathlib import Path
 from cvbench.core import _console
 from cvbench.datasets import layout
 
+IMBALANCE_THRESHOLD = 3.0  # max/min class count ratio at which imbalance is reported
+
 
 def get_dataset_overview(data_dir: str | Path) -> dict[str, dict[str, int]]:
     """Per-split image/class counts for DATA_DIR (classification or YOLO layout).
@@ -79,8 +81,12 @@ def resolve_class_weights(
     return None
 
 
-def print_class_distribution(class_dist: dict[str, int]) -> None:
-    """Print per-class sample counts with a bar chart."""
+def print_class_distribution(class_dist: dict[str, int]) -> bool:
+    """Print per-class sample counts with a bar chart; return True if imbalance was flagged.
+
+    Imbalance is flagged when the largest class is at least ``IMBALANCE_THRESHOLD``
+    times the smallest.
+    """
     counts = list(class_dist.values())
     max_count = max(counts)
     min_count = min(counts)
@@ -97,22 +103,23 @@ def print_class_distribution(class_dist: dict[str, int]) -> None:
         rows.append((cls, count, bar, f"{pct:.1f}%"))
     _console.table(["Class", ("Images", "right"), "", ("%", "right")], rows)
 
-    std_counts = (sum((c - total / len(counts)) ** 2 for c in counts) / len(counts)) ** 0.5
-    imbalanced = std_counts > 0 and any(abs(c - total / len(counts)) > std_counts for c in counts)
+    imbalanced = ratio >= IMBALANCE_THRESHOLD
     if imbalanced:
         print()
-        _console.warning(f"Imbalance ratio {ratio:.0f}:1 detected")
+        ratio_str = "∞" if ratio == float("inf") else f"{ratio:.1f}"
+        _console.warning(f"Imbalance ratio {ratio_str}:1 (threshold {IMBALANCE_THRESHOLD:.1f}:1)")
+    return imbalanced
 
 
 def print_imbalance_warning(class_dist: dict[str, int], class_weight_cfg) -> None:
-    """Print an imbalance warning with class-weight tip when ratio >= 3:1."""
+    """Print an imbalance warning with class-weight tip when ratio >= IMBALANCE_THRESHOLD."""
     counts = list(class_dist.values())
     max_count = max(counts)
     min_count = min(counts) if min(counts) > 0 else 1
     ratio = max_count / min_count
 
-    if ratio >= 3.0:
-        _console.warning(f"Imbalance ratio {ratio:.0f}:1 detected")
+    if ratio >= IMBALANCE_THRESHOLD:
+        _console.warning(f"Imbalance ratio {ratio:.1f}:1 (threshold {IMBALANCE_THRESHOLD:.1f}:1)")
         if class_weight_cfg is None:
             print(f"   {_console.dim('Tip: rerun with --class-weight auto')}")
         elif class_weight_cfg == "auto":

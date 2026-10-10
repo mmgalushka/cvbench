@@ -188,9 +188,12 @@ class IntegrityIssues:
     incompatible: list[tuple[Path, str]]    # readable by PIL, rejected by TensorFlow
     leaks: dict[str, list[Path]]            # hash -> [kept, *dropped] across splits, labels agree
     label_conflicts: dict[str, list[Path]]  # hash -> paths whose labels disagree
+    duplicates: dict[str, list[Path]]       # hash -> identical paths within one split, labels agree
 
     def __bool__(self) -> bool:
-        return bool(self.corrupt or self.incompatible or self.leaks or self.label_conflicts)
+        return bool(
+            self.corrupt or self.incompatible or self.leaks or self.label_conflicts or self.duplicates
+        )
 
 
 def find_integrity_issues(src: Path, progress: Callable[[int], None] | None = None) -> IntegrityIssues:
@@ -205,7 +208,16 @@ def find_integrity_issues(src: Path, progress: Callable[[int], None] | None = No
         for h, paths in groups.items()
         if h not in conflicts and (leak := _split_leak(paths))
     }
-    return IntegrityIssues(sorted(corrupt), sorted(incompatible), leaks, conflicts)
+    duplicates = {}
+    for h, paths in groups.items():
+        if h in conflicts:
+            continue
+        members = sorted(paths)
+        if leak := leaks.get(h):
+            members = [p for p in members if _split_of(p) == _split_of(leak[0])]
+        if len(members) > 1:
+            duplicates[h] = members
+    return IntegrityIssues(sorted(corrupt), sorted(incompatible), leaks, conflicts, duplicates)
 
 
 def build_plan(

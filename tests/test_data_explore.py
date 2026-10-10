@@ -117,3 +117,46 @@ def test_tf_incompatible_image_flagged(clean_root):
     assert "bmp_as.jpg" in result.output
     assert "Input size should match" in result.output
     assert "No unreadable images found" in result.output  # it is not corrupt, just incompatible
+
+
+def test_within_split_duplicates_listed(clean_root):
+    shutil.copyfile(clean_root / "train" / "cat" / "1.png", clean_root / "train" / "cat" / "copy.png")
+    result = CliRunner().invoke(explore, [str(clean_root)])
+    assert result.exit_code == 1
+    assert "1 within-split duplicate group(s)" in result.output
+    assert "train/cat/copy.png" in result.output
+    assert "data prep" in result.output
+    assert "more than one split" not in result.output
+
+
+def test_counts_agree_and_unreadable_noted(clean_root):
+    (clean_root / "train" / "cat" / "bad.jpg").write_bytes(b"not an image")
+    result = CliRunner().invoke(explore, [str(clean_root), "--split", "train"])
+    assert "(1 unreadable, excluded from brightness)" in result.output
+    cat_rows = [ln.split() for ln in result.output.splitlines() if ln.split()[:1] == ["cat"]]
+    assert len(cat_rows) == 2 and all(r[1] == "2" for r in cat_rows)  # brightness and distribution agree
+
+
+def test_integrity_block_printed_once_for_all_splits(clean_root):
+    result = CliRunner().invoke(explore, [str(clean_root)])
+    assert result.exit_code == 0, result.output
+    assert result.output.count("Data integrity") == 1
+    assert str(clean_root / "train") in result.output and str(clean_root / "val") in result.output
+
+
+def test_imbalance_ratio_decimal_with_threshold(tmp_path):
+    root = tmp_path / "ds"
+    for i in range(6):
+        _save(root / "train" / "cat" / f"c{i}.png", i)
+    _save(root / "train" / "dog" / "d0.png", 100)
+    result = CliRunner().invoke(explore, [str(root)])
+    assert "Imbalance ratio 6.0:1 (threshold 3.0:1)" in result.output
+
+
+def test_near_equal_classes_not_flagged_imbalanced(tmp_path):
+    root = tmp_path / "ds"
+    for cls, n in (("a", 5), ("b", 5), ("c", 4)):
+        for i in range(n):
+            _save(root / "train" / cls / f"{i}.png", hash((cls, i)) % 1000)
+    result = CliRunner().invoke(explore, [str(root)])
+    assert "Imbalance ratio" not in result.output
