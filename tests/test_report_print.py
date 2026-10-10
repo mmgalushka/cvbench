@@ -102,3 +102,32 @@ def test_detection_body_skips_outcomes_table_without_breakdown(capsys):
     out = capsys.readouterr().out
     assert "Per-class outcomes" not in out
     assert "Detection quality" in out
+
+
+def test_classification_body_shows_val_accuracy_beside_test(capsys):
+    print_classification_body(_classification_report(), val_accuracy=0.934)
+    assert "(val 93.4%)" in capsys.readouterr().out
+
+
+def test_detection_body_prints_threshold_legend(capsys):
+    print_detection_body(_detection_report())
+    out = capsys.readouterr().out
+    assert out.count("conf ≥ 0.25, IoU ≥ 0.5") == 3  # outcomes, quality, TP/FP/FN footer
+
+
+def test_detection_body_warns_on_many_false_positives_per_image(capsys):
+    report = _detection_report()
+    report["detection"]["counts"]["fp"] = 1117
+    report["n_images"] = 15
+    print_detection_body(report)
+    assert "74.5 false positives per image" in capsys.readouterr().out
+
+
+def test_detection_body_quiet_on_few_false_positives(capsys):
+    print_detection_body(_detection_report())
+    assert "false positives per image" not in capsys.readouterr().out
+
+
+def test_detection_body_prints_extra_advisories(capsys):
+    print_detection_body(_detection_report(), advisories=["train longer please"])
+    assert "train longer please" in capsys.readouterr().out

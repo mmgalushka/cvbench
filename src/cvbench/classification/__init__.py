@@ -58,7 +58,7 @@ class ClassificationTask(Task):
             "val_loss": final_metrics.get("val_loss"),
         }
 
-    def evaluate(self, model, eval_ds, cfg, spec: DatasetSpec, run_dir, output_dir=None) -> dict:
+    def evaluate(self, model, eval_ds, cfg, spec: DatasetSpec, run_dir, output_dir=None, conf=None) -> dict:
         return _evaluate(
             model=model,
             test_ds=eval_ds,
@@ -66,6 +66,7 @@ class ClassificationTask(Task):
             run_dir=run_dir,
             test_dir=cfg.data.test_dir,
             output_dir=output_dir,
+            val_accuracy=cfg.run.val_accuracy,
         )
 
     def test_score(self, report: dict) -> tuple[str, float | None]:

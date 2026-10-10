@@ -88,3 +88,28 @@ def test_scan_experiments_surfaces_the_detection_run(yolo_project):
     assert entries[0]["task"] == "detection"
     assert entries[0]["test_metric"] == "map50"
     assert entries[0]["test_accuracy"] is not None
+
+
+@pytest.mark.slow
+def test_detector_learns_synthetic_shapes(tmp_path, monkeypatch):
+    """Quality guard: a from-scratch detector must clear a minimum mAP@50 on generated shapes."""
+    from cvbench.services.evaluation import run_evaluation
+    from cvbench.services.training import run_training
+
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(
+        generate,
+        ["data/yolo", "--format", "yolo", "--train", "150", "--val", "30", "--test", "30",
+         "--image-size", "96", "--max-objects", "2", "--seed", "1"],
+    )
+    assert result.exit_code == 0, result.output
+
+    exp_dir = run_training(
+        "data/yolo", backbone="efficientnet_b0", weights="imagenet", epochs=60, batch_size=16,
+        input_size=96, seed=1,
+    )
+    report = run_evaluation(exp_dir)
+
+    # Seeded run reaches ~0.30; the floor leaves headroom for platform noise but fails if
+    # the detector stops learning (an undertrained one sits near 0.01-0.05).
+    assert report["detection"]["map50"] >= 0.15

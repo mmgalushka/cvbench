@@ -190,6 +190,34 @@ def epochs_done_live(exp_dir: Path | str, cfg: CVBenchConfig) -> int:
         return cfg.run.epochs_run
 
 
+def loss_still_falling(exp_dir: Path | str, window: int = 3, min_drop: float = 0.02) -> bool:
+    """True when a run's validation loss was still improving when training stopped.
+
+    Reads training_log.csv (``val_loss``, falling back to ``loss``): the run is
+    "still falling" when its best epoch is within the last ``window`` epochs and the
+    final loss is at least ``min_drop`` (fractional) below the loss ``window`` epochs
+    earlier. Missing/unreadable logs and runs shorter than ``window + 1`` epochs
+    return False.
+    """
+    import csv
+
+    try:
+        with open(Path(exp_dir) / "training_log.csv", newline="") as f:
+            rows = list(csv.DictReader(f))
+    except OSError:
+        return False
+    column = "val_loss" if rows and "val_loss" in rows[0] else "loss"
+    try:
+        losses = [float(r[column]) for r in rows]
+    except (KeyError, ValueError):
+        return False
+    if len(losses) <= window:
+        return False
+    best_epoch = losses.index(min(losses))
+    earlier = losses[-1 - window]
+    return best_epoch >= len(losses) - window and earlier > 0 and losses[-1] <= earlier * (1 - min_drop)
+
+
 def _read_entry(exp_dir: Path) -> dict | None:
     """Read config.yaml from an experiment dir and return a flat summary dict.
     Returns None if config.yaml is missing or unreadable.

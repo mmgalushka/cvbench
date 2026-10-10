@@ -19,14 +19,45 @@ import numpy as np
 from cvbench.core import _console
 from cvbench.core._confusion import print_confusion_matrix
 
+TRAIN_LONGER = "Validation loss was still falling when training stopped — train longer (more --epochs)."
 
-def print_classification_body(report: dict) -> None:
-    """Print the accuracy / per-class / confusion-matrix body of a classification report."""
+# More than this many false positives per image means the detector is firing on
+# background, which almost always points at an undertrained model or a conf that is too low.
+_FP_PER_IMAGE_ADVISORY = 2.0
+
+
+def detection_advisories(report: dict) -> list[str]:
+    """Advisories derivable from a detection report alone (shared with `runs show`)."""
+    det = report["detection"]
+    n_images = report["n_images"]
+    fp = det["counts"]["fp"]
+    if n_images and fp / n_images >= _FP_PER_IMAGE_ADVISORY:
+        return [
+            f"{fp / n_images:.1f} false positives per image at conf ≥ {det['conf_threshold']} — "
+            "the detector is likely undertrained; train longer or raise --conf."
+        ]
+    return []
+
+
+def print_advisories(advisories) -> None:
+    for line in advisories:
+        _console.warning(line)
+    if advisories:
+        print()
+
+
+def print_classification_body(report: dict, val_accuracy: float | None = None, advisories=()) -> None:
+    """Print the accuracy / per-class / confusion-matrix body of a classification report.
+
+    ``val_accuracy`` is the run's validation accuracy, shown beside the test score
+    so an overfit gap is visible at a glance; it lives in config.yaml, not the report.
+    """
     n_images = report["n_images"]
     overall_acc = f"{report['overall_accuracy'] * 100:.1f}%"
+    val_note = f"  {_console.dim(f'(val {val_accuracy * 100:.1f}%)')}" if val_accuracy is not None else ""
     print(_console.dim(" Split             : test"))
     print(_console.dim(f" Images evaluated  : {n_images}"))
-    print(f" {_console.bold('Overall accuracy')}  : {_console.bold(overall_acc)}")
+    print(f" {_console.bold('Overall accuracy')}  : {_console.bold(overall_acc)}{val_note}")
     if report["top3_accuracy"] is not None:
         top3_acc = f"{report['top3_accuracy'] * 100:.1f}%"
         print(f" {_console.bold('Top-3 accuracy')}    : {_console.bold(top3_acc)}")
@@ -43,13 +74,14 @@ def print_classification_body(report: dict) -> None:
     confusion_matrix = report.get("confusion_matrix")
     if confusion_matrix:
         print_confusion_matrix(np.array(confusion_matrix["matrix"]), confusion_matrix["classes"])
+    print_advisories(advisories)
 
 
 def _pct(v: float | None) -> str:
     return f"{v * 100:.1f}%" if v is not None else "n/a"
 
 
-def _print_class_outcomes(breakdown: dict, counts: dict) -> None:
+def _print_class_outcomes(breakdown: dict, counts: dict, legend: str) -> None:
     """Per-class outcome table + FP/FN reconciliation + extra-prediction strips.
 
     Mirrors the WebUI's 'Per-class outcomes' card so the terminal and the
@@ -91,7 +123,8 @@ def _print_class_outcomes(breakdown: dict, counts: dict) -> None:
         for c in classes
     ]
 
-    print(f" {_console.bold('Per-class outcomes')}  {_console.dim('(what happened to every ground-truth box)')}")
+    note = f"(what happened to every ground-truth box, {legend})"
+    print(f" {_console.bold('Per-class outcomes')}  {_console.dim(note)}")
     _console.table(columns, table_rows)
     print()
 
@@ -120,7 +153,7 @@ def _print_class_outcomes(breakdown: dict, counts: dict) -> None:
     print()
 
 
-def print_detection_body(report: dict) -> None:
+def print_detection_body(report: dict, advisories=()) -> None:
     """Print the localization / outcomes / per-class / confusion-matrix body of a detection report."""
     n_images = report["n_images"]
     det = report["detection"]
@@ -142,11 +175,15 @@ def print_detection_body(report: dict) -> None:
     print()
 
     counts = det["counts"]
+    legend = f"conf ≥ {det['conf_threshold']}, IoU ≥ {det['iou_threshold']}"
     breakdown = det.get("class_breakdown")
     if breakdown:
-        _print_class_outcomes(breakdown, counts)
+        _print_class_outcomes(breakdown, counts, legend)
 
-    print(f" {_console.bold('Detection quality')}  {_console.dim('(per-class AP / precision / recall)')}")
+    print(
+        f" {_console.bold('Detection quality')}  "
+        f"{_console.dim(f'(AP over all scores; P / R / F1 at {legend})')}"
+    )
     per_class = report["per_class"]
     _console.table(
         [
@@ -179,6 +216,7 @@ def print_detection_body(report: dict) -> None:
     print_confusion_matrix(cm, cm_classes, title="")
     print(_console.dim(
         f" TP {counts['tp']} · FP {counts['fp']} · FN {counts['fn']}"
-        f"  (class-agnostic, conf ≥ {det['conf_threshold']}, IoU ≥ {det['iou_threshold']})"
+        f"  (class-agnostic, {legend})"
     ))
     print()
+    print_advisories([*detection_advisories(report), *advisories])

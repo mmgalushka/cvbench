@@ -7,10 +7,14 @@ import numpy as np
 import tqdm
 
 from cvbench.core import _console
+from cvbench.core.exp_store import loss_still_falling
 from cvbench.core.report import report_envelope, write_report
+from cvbench.core.report_print import TRAIN_LONGER
 from cvbench.core.report_print import print_classification_body as print_body
 
 _MAX_SAMPLES_PER_CELL = 20
+# Top-3 only says something once there are clearly more than three classes to pick from.
+_TOP3_MIN_CLASSES = 6
 
 
 def _collect_test_paths(test_dir: str, class_names: list[str]) -> list[tuple[str, int]]:
@@ -69,8 +73,11 @@ def evaluate(
     run_dir: str,
     test_dir: str,
     output_dir: str | None = None,
+    val_accuracy: float | None = None,
 ) -> dict:
     """Run evaluation, print report, write eval_report.json.
+
+    ``val_accuracy`` (the run's validation score) is only printed beside the test score.
 
     Returns the report dict.
     """
@@ -94,9 +101,9 @@ def evaluate(
     n = len(y_true)
     overall_acc = float(np.mean(y_true == y_pred))
 
-    # Top-3 accuracy (if num_classes >= 3)
+    # Top-3 accuracy (only when there are more than 5 classes)
     top3_acc = None
-    if model.output_shape[-1] >= 3:
+    if model.output_shape[-1] >= _TOP3_MIN_CLASSES:
         top3 = np.argsort(all_preds_np, axis=1)[:, -3:]
         top3_acc = float(np.mean([y_true[i] in top3[i] for i in range(n)]))
 
@@ -152,16 +159,16 @@ def evaluate(
 
     write_report(report, out_dir)
 
-    _print_report(report, run_dir, out_dir)
+    _print_report(report, run_dir, out_dir, val_accuracy)
     return report
 
 
-def _print_report(report: dict, run_dir: str, out_dir: Path) -> None:
+def _print_report(report: dict, run_dir: str, out_dir: Path, val_accuracy: float | None = None) -> None:
     run_name = Path(run_dir).name
     print(_console.rule())
     print(f" {_console.bold('CVBench — evaluate')}  {_console.dim('|')}  {_console.dim('run: ' + run_name)}")
     print(_console.rule())
-    print_body(report)
+    print_body(report, val_accuracy, [TRAIN_LONGER] if loss_still_falling(run_dir) else [])
     print(f" {_console.bold('Saved:')}")
     print(f"   {_console.dim(str(out_dir / 'eval_report.json'))}")
     print(_console.rule())

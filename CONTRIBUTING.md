@@ -51,6 +51,10 @@ The CI pipeline runs `pytest -m 'not tf'` automatically in two situations:
 - **When you open or update a pull request** targeting `main`
 - **When a commit lands directly on `main`** (e.g. the version bump commit from a release)
 
+It then runs `pytest -m slow`, which trains a small detector on generated shapes and
+fails if its mAP@50 drops below a floor (about 30 s). Run it locally with
+`./helper.sh test -m slow`.
+
 A green CI check is required before a PR can be merged. CI does **not** run on every
 push to a feature branch — only when the PR is opened or updated against `main`.
 
