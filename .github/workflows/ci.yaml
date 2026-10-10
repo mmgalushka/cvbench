@@ -28,7 +28,7 @@ jobs:
         run: mypy src
 
       - name: Run tests
-        run: pytest -m "not tf" --cov --cov-report=xml
+        run: pytest -m "not slow" --cov --cov-report=xml
 
       - name: Detection quality gate
         run: pytest -m slow --no-cov

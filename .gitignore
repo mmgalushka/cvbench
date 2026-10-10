@@ -53,3 +53,6 @@
 !README.md
 !CONTRIBUTING.md
 !.dockerignore
+
+# Except Codecov config
+!codecov.yml
