@@ -94,3 +94,88 @@ def test_reused_calibration_set_warns_when_smaller(tmp_path, capsys):
     out = capsys.readouterr().out
     assert meta["calib_set_images"] == 4
     assert "existing calib_set.npy has 4 images" in out
+
+
+def _stub_run_export(monkeypatch, tmp_path):
+    """Point run_export at a fake run dir with converters stubbed out."""
+    import json
+    from types import SimpleNamespace
+
+    import cvbench.services.export as export
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "best.keras").write_bytes(b"x")
+    cfg = SimpleNamespace(
+        data=SimpleNamespace(classes=["a", "b"]),
+        model=SimpleNamespace(input_size=8, backbone="stub"),
+        run=SimpleNamespace(val_accuracy=0.9, val_loss=0.1),
+    )
+    monkeypatch.setattr(export, "resolve_run_dir", lambda _name: str(run_dir))
+    monkeypatch.setattr(export, "load_config", lambda _path: cfg)
+    monkeypatch.setattr(export.keras.saving, "load_model", lambda _path: object())
+    monkeypatch.setattr(export, "_export_tflite", lambda _m, p, quantize: p.write_bytes(b"t"))
+    monkeypatch.setattr(export, "_export_onnx", lambda _m, p, _size: p.write_bytes(b"o"))
+    return export, run_dir, json
+
+
+def test_run_export_tflite_int8_prints_dynamic_range_note(monkeypatch, tmp_path, capsys):
+    export, run_dir, json = _stub_run_export(monkeypatch, tmp_path)
+
+    out_dir = export.run_export("r", format="tflite", quantize="int8")
+
+    assert out_dir == run_dir / "export" / "tflite_int8"
+    assert (out_dir / "model_int8.tflite").exists()
+    info = json.loads((out_dir / "export_info.json").read_text())
+    assert info["quantize"] == "int8" and "jetson_trtexec" not in info
+    assert "dynamic-range quantization" in capsys.readouterr().out
+
+
+def test_run_export_onnx_writes_info_and_snippet(monkeypatch, tmp_path, capsys):
+    export, _, json = _stub_run_export(monkeypatch, tmp_path)
+
+    out_dir = export.run_export("r", format="onnx", output_dir=str(tmp_path / "out"))
+
+    assert out_dir == tmp_path / "out" / "onnx"
+    info = json.loads((out_dir / "export_info.json").read_text())
+    assert info["quantize"] is None and "trtexec" in info["jetson_trtexec"]
+    assert "onnxruntime" in capsys.readouterr().out
+
+
+def test_run_export_requires_checkpoint(monkeypatch, tmp_path):
+    import pytest
+
+    export, run_dir, _ = _stub_run_export(monkeypatch, tmp_path)
+    (run_dir / "best.keras").unlink()
+
+    for fmt in ("tflite", "plan", "hailo"):
+        with pytest.raises(FileNotFoundError, match="best.keras"):
+            export.run_export("r", format=fmt)
+
+
+def test_run_export_hailo_records_hw_arch(monkeypatch, tmp_path, capsys):
+    export, run_dir, json = _stub_run_export(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        export,
+        "_prepare_hailo_package",
+        lambda rd, cfg, calib_total, calib_strategy: (rd / "export" / "hailo", {"calib_set_images": 4}),
+    )
+    (run_dir / "export" / "hailo").mkdir(parents=True)
+
+    out_dir = export.run_export("r", format="hailo", hw_arch="hailo8")
+
+    info = json.loads((out_dir / "export_info.json").read_text())
+    assert info["hw_arch"] == "hailo8" and info["calib_set_images"] == 4
+    assert "--hw-arch hailo8 " in capsys.readouterr().out
+
+
+def test_run_export_plan_writes_package_info(monkeypatch, tmp_path, capsys):
+    export, run_dir, json = _stub_run_export(monkeypatch, tmp_path)
+    monkeypatch.setattr(export, "_prepare_plan_package", lambda rd, cfg: rd / "export" / "plan")
+    (run_dir / "export" / "plan").mkdir(parents=True)
+
+    out_dir = export.run_export("r", format="plan")
+
+    info = json.loads((out_dir / "export_info.json").read_text())
+    assert info["format"] == "plan" and info["input_shape"] == [1, 8, 8, 3]
+    assert "predict run --format plan" in capsys.readouterr().out

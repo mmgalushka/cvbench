@@ -100,3 +100,14 @@ markers = [
     "tf: marks tests that require TensorFlow (deselect with '-m \"not tf\"')",
     "slow: trains a real model for minutes; run on its own with '-m slow'",
 ]
+
+[tool.coverage.run]
+source = ["src/cvbench"]  # measure the package only, not the tests themselves
+relative_files = true  # report src/cvbench/... paths so Codecov maps files to the repo
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
