@@ -1,7 +1,12 @@
+from pathlib import Path
+
 import click
+import numpy as np
 
 from cvbench.cli import _help
 from cvbench.core import _console
+
+_MODEL_SUFFIXES = {".keras": "keras", ".onnx": "onnx", ".tflite": "tflite"}
 
 
 @_help.command(
@@ -12,6 +17,10 @@ from cvbench.core import _console
          "Run a folder through the exported TFLite model"),
         ("predict cls_effnet_b0_2026_01_21 images/ --format all",
          "Compare every exported format side by side to spot conversion drift"),
+        ("predict cls_effnet_b0_2026_01_21 photo.jpg --top-k 3",
+         "Show the three most likely classes per image"),
+        ("predict cls_effnet_b0_2026_01_21 images/ --model out/model_int8.tflite",
+         "Run a specific model file, e.g. a quantized or relocated export"),
         ("predict det_yolo_2026_01_21 photo.jpg --conf 0.4",
          "Detect objects, keeping only boxes scoring at least 0.4"),
         ("predict --format plan",
@@ -40,7 +49,28 @@ from cvbench.core import _console
     help="Detection runs only: minimum score to report a box "
     "(default: the run's detection.conf_threshold).",
 )
-def predict(experiment, input_path, fmt, conf):
+@click.option(
+    "--top-k",
+    "top_k",
+    type=click.IntRange(min=1),
+    default=1,
+    show_default=True,
+    help="Classification runs only: classes to show per image.",
+)
+@click.option(
+    "--probs",
+    is_flag=True,
+    help="Classification runs only: show the full probability of every class.",
+)
+@click.option(
+    "--model",
+    "model_path",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Run this model file instead of the run's default export "
+    "(format is taken from its extension: .keras, .onnx, .tflite).",
+)
+def predict(experiment, input_path, fmt, conf, top_k, probs, model_path):
     """Run inference on INPUT using a trained EXPERIMENT.
 
     EXPERIMENT is a run name or full path to a run directory.
@@ -48,7 +78,8 @@ def predict(experiment, input_path, fmt, conf):
 
     Both arguments are optional when --format plan is used.
 
-    Classification runs print the top class per image. Detection runs print
+    Classification runs print the top class per image (--top-k N or --probs
+    for more). Unreadable files are skipped and listed. Detection runs print
     every decoded box (class, score, normalized x y w h); use --conf to
     change the score threshold.
 
@@ -70,8 +101,31 @@ def predict(experiment, input_path, fmt, conf):
     if not input_path:
         raise click.UsageError("INPUT is required.")
 
+    if model_path is not None:
+        source = click.get_current_context().get_parameter_source("fmt")
+        suffix_fmt = _MODEL_SUFFIXES.get(Path(model_path).suffix.lower())
+        if fmt == "all":
+            raise click.UsageError("--model cannot be combined with --format all.")
+        if suffix_fmt is None:
+            raise click.UsageError(
+                "--model must end in .keras, .onnx or .tflite "
+                f"(got {Path(model_path).name})."
+            )
+        if source is not click.core.ParameterSource.DEFAULT and fmt != suffix_fmt:
+            raise click.UsageError(
+                f"--model is a {suffix_fmt} file but --format is {fmt}."
+            )
+        fmt = suffix_fmt
+
     try:
-        result = run_experiment_prediction(experiment, input_path, fmt, conf)
+        result = run_experiment_prediction(
+            experiment,
+            input_path,
+            fmt,
+            conf,
+            top_k=None if probs else top_k,
+            model_path=model_path,
+        )
     except (ValueError, FileNotFoundError) as e:
         raise click.ClickException(str(e)) from e
 
@@ -100,8 +154,16 @@ def predict(experiment, input_path, fmt, conf):
     print()
 
     print(_console.rule())
-    n = sum(len(f["results"]) for f in formats_run[:1])
-    print(f" {n} image{'s' if n != 1 else ''}")
+    if formats_run:
+        n = len(formats_run[0]["results"])
+        print(f" {n} image{'s' if n != 1 else ''}")
+        for f in formats_run:
+            print(f" {_console.dim('model:')}   {f['format']:<8}  {f['model_path']}")
+    for s in result["inputs_skipped"]:
+        print(
+            f" {_console.dim('unreadable:')} {s['filename']}  "
+            f"Cannot read image ({s['reason']})"
+        )
     if formats_skipped:
         print()
         for s in formats_skipped:
@@ -117,9 +179,15 @@ def predict(experiment, input_path, fmt, conf):
 
 def _print_single_format(results: list[dict]) -> None:
     for r in results:
-        print(
-            f" {r['filename']:<40} {r['class_name']:<20} {r['confidence'] * 100:5.1f}%"
-        )
+        if len(r["top_k"]) <= 1:
+            print(
+                f" {r['filename']:<40} {r['class_name']:<20} "
+                f"{r['confidence'] * 100:5.1f}%"
+            )
+            continue
+        print(f" {r['filename']}")
+        for e in r["top_k"]:
+            print(f"   {e['class_name']:<20} {e['confidence'] * 100:5.1f}%")
 
 
 def _print_single_format_detection(results: list[dict]) -> None:
@@ -172,7 +240,11 @@ def _print_all_formats(formats_run: list[dict]) -> None:
     fmt_names = [f["format"] for f in formats_run]
     col_w = 20
 
-    header = f" {'image':<38}" + "".join(f"  {n:<{col_w}}" for n in fmt_names)
+    header = (
+        f" {'image':<38}"
+        + "".join(f"  {n:<{col_w}}" for n in fmt_names)
+        + "  max|diff|"
+    )
     print(header)
     print(_console.dim(" " + "─" * (len(header) - 1)))
 
@@ -199,7 +271,28 @@ def _print_all_formats(formats_run: list[dict]) -> None:
                     label = f"{label}  ⚠️"
                 cell = label
             row += f"  {cell:<{col_w}}"
+        ref = next(r for r in formats_run[0]["results"] if r["filename"] == filename)
+        diffs = [
+            float(np.max(np.abs(np.array(r["probs"]) - np.array(ref["probs"]))))
+            for fd in formats_run[1:]
+            for r in fd["results"]
+            if r["filename"] == filename
+        ]
+        row += f"  {max(diffs):.4f}" if diffs else "  —"
         print(row)
+
+    ref_rows = formats_run[0]["results"]
+    n_classes = len(ref_rows[0]["probs"])
+    mean_top = sum(r["confidence"] for r in ref_rows) / len(ref_rows)
+    if mean_top <= 1.5 / n_classes:
+        print()
+        print(
+            _console.yellow(
+                f" ⚠ near-chance model: mean top-1 confidence {mean_top * 100:.1f}% "
+                f"(chance is {100 / n_classes:.1f}%). Matching class names are weak "
+                "evidence — compare max|diff| instead."
+            )
+        )
 
 
 def _print_plan_predict(run_name: str) -> None:

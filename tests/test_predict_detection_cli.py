@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from click.testing import CliRunner
+from PIL import Image
 
 from cvbench.cli.predict import predict
 from cvbench.services import prediction
@@ -43,7 +44,7 @@ def _head(grid: int, cell=None, cls=0):
 @pytest.fixture
 def det_run(tmp_path, monkeypatch):
     img = tmp_path / "a.jpg"
-    img.write_bytes(b"")
+    Image.new("RGB", (8, 8)).save(img, format="JPEG")
     monkeypatch.setattr(prediction, "resolve_run_dir", lambda name: str(tmp_path))
     monkeypatch.setattr(prediction, "load_config", lambda path: _cfg())
     monkeypatch.setattr(prediction, "_collect_images", lambda p: [str(img)])
