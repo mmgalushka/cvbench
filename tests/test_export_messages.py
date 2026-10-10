@@ -62,3 +62,35 @@ def test_calibration_set_warns_when_smaller_than_requested(tmp_path, capsys):
     n, _ = _build_calibration_set(_Cfg, tmp_path / "c.npy", total=50, strategy="equal")
     assert n == 3
     assert "fewer than the 50 requested" in capsys.readouterr().out
+
+
+def test_plan_instructions_note_missing_onnx(capsys):
+    _print_plan_instructions("r", onnx_exists=False)
+    out = capsys.readouterr().out
+    assert "runs export r --format onnx" in out
+
+
+def test_run_export_rejects_unknown_hw_arch():
+    import pytest
+
+    from cvbench.services.export import run_export
+
+    with pytest.raises(RuntimeError, match="Unknown --hw-arch 'hailo99'"):
+        run_export("r", format="hailo", hw_arch="hailo99")
+
+
+def test_reused_calibration_set_warns_when_smaller(tmp_path, capsys):
+    import numpy as np
+
+    from cvbench.services.export import _prepare_hailo_package
+
+    export_dir = tmp_path / "export" / "hailo"
+    export_dir.mkdir(parents=True)
+    (export_dir / "model.tflite").write_bytes(b"x")
+    np.save(str(export_dir / "calib_set.npy"), np.zeros((4, 8, 8, 3), dtype=np.float32))
+
+    _, meta = _prepare_hailo_package(tmp_path, cfg=None, calib_total=100)
+
+    out = capsys.readouterr().out
+    assert meta["calib_set_images"] == 4
+    assert "existing calib_set.npy has 4 images" in out
