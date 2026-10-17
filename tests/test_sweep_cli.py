@@ -372,3 +372,11 @@ def test_unsplit_dataset_exits_2_and_points_at_data_split(tmp_path, workdir, mon
     assert "data split" in result.output
     assert not (workdir / "experiments").exists()
     assert calls == []
+
+
+def test_missing_augmentation_file_exits_2(data_dir, workdir, monkeypatch):
+    calls = _install_fake(monkeypatch)
+    result = _run(data_dir, "--lr", "1e-3,1e-4", "--augmentation", "nope.yaml", "--name", "s1")
+    assert result.exit_code == 2, result.output
+    assert "--augmentation" in result.output
+    assert calls == []

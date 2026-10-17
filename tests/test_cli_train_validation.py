@@ -156,3 +156,25 @@ def test_detection_layout_requires_train_and_val(tmp_path):
     errors = detection_layout_errors(tmp_path)
     assert any("images/train" in e for e in errors)
     assert any("images/val" in e for e in errors)
+
+
+def test_class_weight_parser_accepts_valid_specs():
+    assert train_mod._parse_class_weight("auto") == "auto"
+    assert train_mod._parse_class_weight("null") is None
+    assert train_mod._parse_class_weight('{"cat": 1.0, "dog": 2.5}') == {"cat": 1.0, "dog": 2.5}
+
+
+def test_layout_errors_dispatches_on_task(data_dir):
+    from cvbench.datasets.layout import layout_errors
+
+    assert layout_errors(data_dir) == []  # sniffed: classification
+    assert any("images/train" in e for e in layout_errors(data_dir, "detection"))
+
+
+def test_classification_task_validate_config(data_dir):
+    from cvbench.classification import ClassificationTask
+    from cvbench.core.config import build_config
+
+    task = ClassificationTask()
+    assert task.validate_config(build_config(str(data_dir))) == []
+    assert task.validate_config(build_config(str(data_dir / "missing")))
