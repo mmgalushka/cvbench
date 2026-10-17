@@ -282,3 +282,21 @@ def test_loss_still_falling_falls_back_to_train_loss(tmp_path):
     from cvbench.core.exp_store import loss_still_falling
     _write_log(tmp_path, [5.0, 4.0, 3.0, 2.0], column="loss")
     assert loss_still_falling(tmp_path) is True
+
+
+def test_check_output_dir(tmp_path):
+    from cvbench.core.exp_store import check_output_dir
+
+    check_output_dir(str(tmp_path / "fresh"))
+    with pytest.raises(ValueError, match="letters, digits"):
+        check_output_dir(str(tmp_path / "x --lr 1e-3"))
+
+    run = tmp_path / "run"
+    run.mkdir()
+    with pytest.raises(ValueError, match="already exists"):
+        check_output_dir(str(run))
+    check_output_dir(str(run), resume=True)
+    with pytest.raises(ValueError, match="not a run directory"):
+        check_output_dir(str(run), overwrite=True)
+    (run / "config.yaml").write_text("x: 1\n")
+    check_output_dir(str(run), overwrite=True)

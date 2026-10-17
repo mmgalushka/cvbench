@@ -115,7 +115,10 @@ def _parse_loss(value: str | None) -> LossConfig | None:
 )
 @click.argument("data_dir")
 @click.option("--output", "output_dir", default=None,
-              help="Experiment output directory (default: experiments/<auto-name>/).")
+              help="Experiment output directory; its last component is the run name "
+                   "(default: experiments/<auto-name>/).")
+@click.option("--overwrite", is_flag=True, default=False,
+              help="Replace the --output run if it already exists (default: refuse).")
 @click.option("--from", "from_dir", default=None, type=click.Path(exists=True),
               help="Load config from an existing experiment as baseline (default: none).")
 @click.option("--backbone", default=None,
@@ -159,7 +162,7 @@ def _parse_loss(value: str | None) -> LossConfig | None:
               help="Random seed for reproducibility, sets Python, NumPy and TensorFlow seeds "
                    "(default: none, not seeded).")
 def train(
-    data_dir, output_dir, from_dir, backbone, weights, epochs, lr,
+    data_dir, output_dir, overwrite, from_dir, backbone, weights, epochs, lr,
     batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
     loss_raw, optimizer_raw, lr_scheduler_raw, fine_tune_from_layer, val_split, seed,
 ):
@@ -179,9 +182,15 @@ def train(
     data.
     """
     from cvbench.core.data_store import resolve_data_dir
+    from cvbench.core.exp_store import check_output_dir
     from cvbench.services.training import run_training  # deferred: pulls in TensorFlow
 
     data_dir = resolve_data_dir(data_dir)
+    if output_dir is not None:
+        try:
+            check_output_dir(output_dir, resume=bool(resume), overwrite=overwrite)
+        except ValueError as e:
+            raise click.BadParameter(str(e), param_hint="--output") from e
 
     class_weight = _parse_class_weight(class_weight_raw)
     loss = _parse_loss(loss_raw)
@@ -207,4 +216,5 @@ def train(
         fine_tune_from_layer=fine_tune_from_layer,
         val_split=val_split,
         seed=seed,
+        overwrite=overwrite,
     )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from datetime import date
 
@@ -14,7 +15,7 @@ from cvbench.core.config import (
     save_config,
     update_run_status,
 )
-from cvbench.core.exp_store import EXPERIMENTS_DIR, make_run_name, make_unique_dir
+from cvbench.core.exp_store import EXPERIMENTS_DIR, check_output_dir, make_run_name, make_unique_dir
 from cvbench.datasets.layout import detect_task_name
 from cvbench.services._runtime import print_device_banner
 from cvbench.tasks import get_task
@@ -61,6 +62,7 @@ def run_training(
     val_split: float | None = None,
     seed: int | None = None,
     interrupt_enabled: bool | None = None,
+    overwrite: bool = False,
 ) -> str:
     """Orchestrate a full training run.
 
@@ -73,6 +75,9 @@ def run_training(
     KeyboardInterrupt immediately instead of only stopping the current run.
     """
     from cvbench.core import _console
+
+    if output_dir is not None:
+        check_output_dir(output_dir, resume=bool(resume), overwrite=overwrite)
 
     print_device_banner("training")
 
@@ -129,6 +134,17 @@ def run_training(
         run_name = make_run_name(cfg)
         exp_dir = str(make_unique_dir(EXPERIMENTS_DIR, run_name))
 
+    # Build datasets and model before touching the filesystem, so a bad dataset,
+    # model or resume checkpoint leaves experiments/ unchanged.
+    if resume and not os.path.isfile(resume):
+        raise FileNotFoundError(f"Resume checkpoint not found: {resume}")
+    train_ds, val_ds, num_train = task.build_datasets(cfg, spec)
+    train_ds = apply_augmentation(train_ds, task.filter_transforms(cfg.augmentation.transforms))
+    model = task.build_model(cfg)
+
+    if overwrite and not resume and os.path.isdir(exp_dir):
+        shutil.rmtree(exp_dir)  # fresh start: no stale checkpoints or history
+
     cfg.run.name = exp_dir.rstrip("/").split("/")[-1]
     cfg.run.date = date.today().strftime("%Y-%m-%d")
     cfg.run.status = "running"
@@ -140,11 +156,6 @@ def run_training(
     # If anything below raises (dataset/model build, or the training loop itself),
     # record it as "failed" instead of leaving status stuck at "running" forever.
     try:
-        train_ds, val_ds, num_train = task.build_datasets(cfg, spec)
-        train_ds = apply_augmentation(train_ds, task.filter_transforms(cfg.augmentation.transforms))
-
-        model = task.build_model(cfg)
-
         _trainer.train(
             cfg=cfg,
             exp_dir=exp_dir,
