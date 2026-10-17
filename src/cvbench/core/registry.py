@@ -11,6 +11,8 @@ base directory, labels, and mode (directory vs. file).
 """
 from __future__ import annotations
 
+import difflib
+from collections.abc import Callable
 from pathlib import Path
 
 import click
@@ -37,12 +39,16 @@ class Registry:
         entity_name: str = "entry",
         param_hint: str = "NAME",
         ext: str | None = None,
+        list_hint: str | None = None,
+        extra_entries: Callable[[], list[str]] | None = None,
     ) -> None:
         self.base_dir = base_dir
         self.not_found_label = not_found_label
         self.entity_name = entity_name
         self.param_hint = param_hint
         self.ext = ext
+        self.list_hint = list_hint
+        self.extra_entries = extra_entries
 
     def _exists(self, path: Path) -> bool:
         return path.is_file() if self.ext else path.exists()
@@ -72,10 +78,26 @@ class Registry:
                 return str(with_ext)
             tried = with_ext
 
-        raise click.BadParameter(
-            f"{self.not_found_label} not found: '{name_or_path}' (also tried '{tried}')",
-            param_hint=self.param_hint,
-        )
+        raise click.BadParameter(self._not_found_message(name_or_path, tried), param_hint=self.param_hint)
+
+    def suggest(self, name: str) -> str | None:
+        """Return the closest existing entry name to `name`, if any is close enough."""
+        entries = self.list_entries()
+        if self.extra_entries:
+            entries = entries + self.extra_entries()
+        matches = difflib.get_close_matches(name, entries, n=1, cutoff=0.6)
+        return matches[0] if matches else None
+
+    def _not_found_message(self, name_or_path: str, tried: Path) -> str:
+        msg = f"{self.not_found_label} not found: '{name_or_path}'."
+        match = self.suggest(Path(name_or_path).name)
+        if match:
+            msg += f" Did you mean '{match}'?"
+        if self.list_hint:
+            msg += f" See `{self.list_hint}`."
+        elif self.ext:
+            msg += f" Also tried '{tried}'."
+        return msg
 
     def assert_available(self, new_name: str, current_dir: Path | None = None) -> None:
         """Raise ValueError if new_name conflicts with an existing directory entry."""

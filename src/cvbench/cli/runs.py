@@ -208,10 +208,7 @@ def show(experiment):
 
     from cvbench.core.exp_store import _read_entry
 
-    try:
-        run_dir = Path(resolve_run_dir(experiment, allow_sweep=True))
-    except Exception as e:
-        raise click.ClickException(str(e)) from e
+    run_dir = Path(resolve_run_dir(experiment, allow_sweep=True))
 
     if is_sweep_dir(run_dir):
         _show_sweep(run_dir)
@@ -314,10 +311,7 @@ def rename(experiment, new_name):
     """
     from pathlib import Path
 
-    try:
-        run_dir = Path(resolve_run_dir(experiment, allow_sweep=True))
-    except Exception as e:
-        raise click.ClickException(str(e)) from e
+    run_dir = Path(resolve_run_dir(experiment, allow_sweep=True))
 
     try:
         assert_renamable(run_dir)
@@ -455,10 +449,7 @@ def delete(experiment, export_subfolder, yes):
     """
     from pathlib import Path
 
-    try:
-        run_dir = Path(resolve_run_dir(experiment, allow_sweep=True))
-    except Exception as e:
-        raise click.ClickException(str(e)) from e
+    run_dir = Path(resolve_run_dir(experiment, allow_sweep=True))
 
     if export_subfolder:
         export_base = run_dir / "export"

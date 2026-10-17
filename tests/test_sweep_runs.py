@@ -186,3 +186,20 @@ def test_resolve_run_dir_rejects_sweep_unless_allowed(exps):
     with pytest.raises(click.BadParameter, match="is a sweep"):
         resolve_run_dir("sw")
     assert resolve_run_dir("sw", allow_sweep=True).endswith("sw")
+
+
+@pytest.mark.parametrize("args", [["show", "nosuch"], ["rename", "nosuch", "x"], ["delete", "nosuch", "--yes"]])
+def test_runs_unknown_run_exits_2_and_points_to_runs_list(exps, args):
+    result = CliRunner().invoke(runs, args)
+    assert result.exit_code == 2
+    assert "Run not found: 'nosuch'" in result.output
+    assert "runs list" in result.output
+    assert "also tried" not in result.output.lower()
+
+
+def test_runs_unknown_run_suggests_close_run_and_trial(exps):
+    _write_exp(exps, "resnet_run")
+    sweep = _sweep(exps)
+    _write_exp(sweep, "sw_001")
+    assert "Did you mean 'resnet_run'?" in CliRunner().invoke(runs, ["show", "resnet_rum"]).output
+    assert "Did you mean 'sw_001'?" in CliRunner().invoke(runs, ["show", "sw_01"]).output
