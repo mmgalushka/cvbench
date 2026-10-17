@@ -130,8 +130,6 @@ def train(
 
     run_dir = Path(exp_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
-    if not resume_checkpoint:
-        (run_dir / "best_history.jsonl").unlink(missing_ok=True)  # fresh start
 
     val_images = task.count_images(cfg.data.val_dir) if cfg.data.val_dir else None
     _print_header(exp_dir, cfg, val_images)
