@@ -176,7 +176,7 @@ def train(
             factor=lrs.factor,
             patience=lrs.patience,
             min_lr=lrs.min_lr,
-            verbose=1,
+            verbose=1 if _console.is_tty() else 2,
         ))
 
     # Graceful interrupt
@@ -215,7 +215,7 @@ def train(
         validation_data=val_ds,
         callbacks=callbacks,
         class_weight=class_weight,
-        verbose=1,
+        verbose=1 if _console.is_tty() else 2,
     )
 
     interrupted = _stop_flag["value"]

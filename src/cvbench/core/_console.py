@@ -21,6 +21,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any, Literal
@@ -36,6 +37,31 @@ def _color_enabled() -> bool:
     if os.environ.get("NO_COLOR"):
         return False
     return sys.stdout.isatty()
+
+
+def is_tty() -> bool:
+    """True when stdout is an interactive terminal (progress bars and live updates make sense)."""
+    return sys.stdout.isatty()
+
+
+@contextmanager
+def quiet_native_stderr() -> Iterator[None]:
+    """Capture fd 2 (native converter / TensorFlow noise); replay it only if the body raises."""
+    sys.stderr.flush()
+    saved = os.dup(2)
+    with tempfile.TemporaryFile() as tmp:
+        os.dup2(tmp.fileno(), 2)
+        try:
+            yield
+        except BaseException:
+            os.dup2(saved, 2)
+            tmp.seek(0)
+            sys.stderr.write(tmp.read().decode(errors="replace"))
+            sys.stderr.flush()
+            raise
+        finally:
+            os.dup2(saved, 2)
+            os.close(saved)
 
 
 def _make_console(
