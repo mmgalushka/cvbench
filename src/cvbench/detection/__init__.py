@@ -8,7 +8,7 @@ from pathlib import Path
 
 from cvbench.core.config import TransformConfig
 from cvbench.core.task import DatasetSpec, Task
-from cvbench.datasets.layout import list_images, yolo_class_names
+from cvbench.datasets.layout import detection_layout_errors, list_images, yolo_class_names
 from cvbench.detection.anchors import resolve_anchors
 from cvbench.detection.data import build_detection_dataset
 from cvbench.detection.losses import YoloLoss
@@ -57,16 +57,7 @@ class DetectionTask(Task):
         )
 
     def validate_config(self, cfg) -> list[str]:
-        root = Path(cfg.data.data_dir)
-        errors = []
-        if not (root / "images" / "train").is_dir():
-            errors.append(f"No images/train found under {root}")
-        if not (root / "images" / "val").is_dir():
-            errors.append(
-                f"No images/val found under {root} — detection requires an explicit "
-                "val split (auto-splitting is not yet supported for object detection)."
-            )
-        return errors
+        return detection_layout_errors(Path(cfg.data.data_dir))
 
     def count_images(self, directory: str) -> int:
         d = Path(directory)

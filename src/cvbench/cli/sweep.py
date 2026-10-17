@@ -15,7 +15,14 @@ from typing import Any
 import click
 
 from cvbench.cli import _help
-from cvbench.cli.train import _parse_class_weight, _parse_loss, _parse_lr_scheduler, _parse_optimizer
+from cvbench.cli.train import (
+    FLAG_TYPES,
+    _parse_class_weight,
+    _parse_loss,
+    _parse_lr_scheduler,
+    _parse_optimizer,
+    validate_dataset,
+)
 from cvbench.core import _console
 from cvbench.core.exp_store import EXPERIMENTS_DIR, assert_name_available, make_unique_dir
 from cvbench.core.sweep_store import (
@@ -40,45 +47,28 @@ from cvbench.core.sweep_store import (
 # the functions that need them — they pull in TensorFlow, and importing them at module
 # scope would slow down every `--help` and the `commands` overview.
 
-_INT_FLAGS = ("epochs", "batch_size", "input_size", "fine_tune_from_layer", "seed")
-_FLOAT_FLAGS = ("lr", "dropout", "val_split")
 _METRICS = ("val_loss", "val_accuracy", "map50")
 
 
 def _convert(flag: str, raw: str) -> Any:
     """Convert one string value of a sweepable flag to the type `run_training` expects."""
     opt = f"--{flag.replace('_', '-')}"
-    try:
-        if flag in _INT_FLAGS:
-            return int(raw)
-        if flag in _FLOAT_FLAGS:
-            return float(raw)
-    except ValueError:
-        kind = "an integer" if flag in _INT_FLAGS else "a number"
-        raise click.BadParameter(f"{raw!r} is not {kind}", param_hint=opt) from None
-    if flag == "weights":
-        if raw not in ("imagenet", "none"):
-            raise click.BadParameter(f"{raw!r} is not one of imagenet, none", param_hint=opt)
-        return raw
+    if flag in FLAG_TYPES:  # same range / choice checks as `train`
+        try:
+            return FLAG_TYPES[flag].convert(raw, None, None)
+        except click.BadParameter as e:
+            raise click.BadParameter(e.message, param_hint=opt) from None
     if flag == "augmentation":
         if not os.path.isfile(raw):
             raise click.BadParameter(f"augmentation file not found: {raw!r}", param_hint=opt)
         return raw
-    try:
-        if flag == "optimizer":
-            return _parse_optimizer(raw)
-        if flag == "loss":
-            return _parse_loss(raw)
-        if flag == "lr_scheduler":
-            return _parse_lr_scheduler(raw)
-        if flag == "class_weight":
-            return _parse_class_weight(raw)
-    except click.BadParameter as e:
-        e.param_hint = opt
-        raise
-    except ValueError as e:
-        raise click.BadParameter(f"invalid value {raw!r}: {e}", param_hint=opt) from None
-    return raw  # backbone
+    if flag == "optimizer":
+        return _parse_optimizer(raw)
+    if flag == "loss":
+        return _parse_loss(raw)
+    if flag == "lr_scheduler":
+        return _parse_lr_scheduler(raw)
+    return _parse_class_weight(raw)  # class_weight
 
 
 # `run_training` keyword for each sweep flag (only the ones that differ from the flag name).
@@ -284,6 +274,7 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
         trial_values = [{f: _convert(f, v) for f, v in t.items()} for t in trials]
 
         data_dir = resolve_data_dir(data_dir)
+        validate_dataset(data_dir, from_dir)
         task = load_config(from_dir).task if from_dir is not None else detect_task_name(data_dir)
         if metric is None:
             metric, direction = default_metric(task)

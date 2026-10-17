@@ -9,6 +9,15 @@ from typing import Any
 
 import yaml
 
+# Backbone names accepted by --backbone. Kept here, not derived from
+# core/backbone.py's presets, because that module imports keras_hub and the CLI
+# must validate the flag without paying for it (tests keep the two in sync).
+BACKBONE_NAMES = (
+    "efficientnet_b0", "efficientnet_b1", "efficientnet_b2",
+    "efficientnet_b3", "efficientnet_b4", "efficientnet_b5",
+    "resnet_18", "resnet_50",
+)
+
 # ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------

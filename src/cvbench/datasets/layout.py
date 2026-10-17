@@ -136,3 +136,77 @@ def write_data_yaml(output_root: Path, splits: list[str], class_names: list[str]
 def detect_task_name(data_dir: str | Path) -> str:
     """'detection' for a YOLO-layout data dir, else 'classification'."""
     return "detection" if is_yolo_dataset(Path(data_dir)) else "classification"
+
+
+def _class_dirs(split_dir: Path) -> list[Path]:
+    return sorted(p for p in split_dir.iterdir() if p.is_dir())
+
+
+def _has_images(directory: Path) -> bool:
+    return any(f.is_file() and f.suffix.lower() in IMAGE_EXTS for f in directory.iterdir())
+
+
+def _count_images(directory: Path) -> int:
+    return sum(1 for f in directory.iterdir() if f.is_file() and f.suffix.lower() in IMAGE_EXTS)
+
+
+def classification_layout_errors(root: Path) -> list[str]:
+    """Human-readable problems that stop `root` from training as a classification dataset.
+
+    Needs ``<root>/train/<class>/*.jpg`` with at least two non-empty classes; ``val/``
+    is optional (``--val-split`` then carves one out of train) but must be well formed
+    when present. An unsplit dataset gets a message pointing at ``data split``.
+    """
+    if not root.is_dir():
+        return [f"'{root}' is not a directory."]
+    train = root / "train"
+    if not train.is_dir():
+        return [
+            f"No train/ folder found in '{root}'. Training needs train/ (and optionally "
+            "val/ and test/) subfolders, each holding one folder per class. If your images "
+            f"are not split yet, run: data split {root} <output_dir>"
+        ]
+    classes = _class_dirs(train)
+    if not classes:
+        return [f"'{train}' has no class subfolders (expected train/<class>/<image>)."]
+    empty = [c.name for c in classes if not _has_images(c)]
+    if empty:
+        return [f"Class folder(s) in '{train}' contain no images: {', '.join(empty)}."]
+    errors = []
+    if len(classes) < 2:
+        errors.append(f"'{train}' has only one class ({classes[0].name}); need at least two.")
+    val = root / "val"
+    if val.is_dir():
+        if not _class_dirs(val):
+            errors.append(f"'{val}' has no class subfolders (expected val/<class>/<image>). "
+                          "Remove val/ to split it off train/ with --val-split.")
+    else:
+        small = [c.name for c in classes if _count_images(c) < 2]
+        if small:
+            errors.append(
+                f"No val/ folder, so train/ is split in two, which needs at least 2 images per "
+                f"class; too few in: {', '.join(small)}."
+            )
+    return errors
+
+
+def detection_layout_errors(root: Path) -> list[str]:
+    """Human-readable problems that stop `root` from training as a YOLO detection dataset."""
+    errors = []
+    if not (root / IMAGES_DIRNAME / "train").is_dir():
+        errors.append(f"No images/train found under {root}")
+    if not (root / IMAGES_DIRNAME / "val").is_dir():
+        errors.append(
+            f"No images/val found under {root} — detection requires an explicit "
+            "val split (auto-splitting is not yet supported for object detection)."
+        )
+    return errors
+
+
+def layout_errors(data_dir: str | Path, task_name: str | None = None) -> list[str]:
+    """Layout problems for DATA_DIR under TASK_NAME (sniffed from the layout when omitted)."""
+    root = Path(data_dir)
+    task_name = task_name or detect_task_name(root)
+    if task_name == "detection":
+        return detection_layout_errors(root)
+    return classification_layout_errors(root)
