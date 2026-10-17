@@ -13,9 +13,9 @@ def print_device_banner(verb: str) -> None:
     gpus = tf.config.list_physical_devices("GPU")
     if gpus:
         if platform.system() == "Darwin" and platform.machine() == "arm64":
-            print(_console.green(f"🟢 Apple Silicon GPU (Metal) detected — {verb} on {len(gpus)} device(s)"))
+            print(_console.dim(f"🟢 Apple Silicon GPU (Metal) detected — {verb} on {len(gpus)} device(s)"))
         else:
             names = ", ".join(g.name for g in gpus)
-            print(_console.green(f"🟢 GPU detected: {len(gpus)} device(s) — {names}"))
+            print(_console.dim(f"🟢 GPU detected: {len(gpus)} device(s) — {names}"))
     else:
         _console.warning(f"GPU not available, {verb} on CPU")

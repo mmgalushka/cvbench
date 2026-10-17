@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import json
 import os
 import random
@@ -25,6 +26,17 @@ def _subfolder_name(format: str, quantize: str) -> str:
     return format
 
 
+def _quiet_converter(fn):
+    """Mute native converter stderr (TensorSpec/LLVM chatter); it is replayed if the call fails."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with _console.quiet_native_stderr():
+            return fn(*args, **kwargs)
+
+    return wrapper
+
+
+@_quiet_converter
 def _export_tflite(model, output_path: Path, quantize: str) -> None:
     import tempfile
 
@@ -35,7 +47,16 @@ def _export_tflite(model, output_path: Path, quantize: str) -> None:
     # convert from that.
     with tempfile.TemporaryDirectory() as tmp_dir:
         saved_model_path = Path(tmp_dir) / "saved_model"
-        model.export(str(saved_model_path))
+        # Keras prints the SavedModel signature (~50 TensorSpec lines) via print_msg.
+        import keras
+
+        was_enabled = keras.config.is_interactive_logging_enabled()
+        keras.config.disable_interactive_logging()
+        try:
+            model.export(str(saved_model_path))
+        finally:
+            if was_enabled:
+                keras.config.enable_interactive_logging()
 
         converter = tf.lite.TFLiteConverter.from_saved_model(
             str(saved_model_path)
@@ -50,6 +71,7 @@ def _export_tflite(model, output_path: Path, quantize: str) -> None:
     output_path.write_bytes(tflite_model)
 
 
+@_quiet_converter
 def _export_onnx(model, output_path: Path, input_size: int) -> None:
     try:
         import tensorflow as tf

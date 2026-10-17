@@ -60,7 +60,8 @@ def evaluate(
     all_preds: list[list] = [[] for _ in strides]
     n_batches = test_ds.cardinality().numpy()
     total = int(n_batches) if n_batches > 0 else None
-    for images, _targets in tqdm.tqdm(test_ds, total=total, desc=" Evaluating", unit="batch"):
+    batches = tqdm.tqdm(test_ds, total=total, desc=" Evaluating", unit="batch", disable=not _console.is_tty())
+    for images, _targets in batches:
         batch_preds = model.predict(images, verbose=0)
         for scale_preds, acc in zip(batch_preds, all_preds, strict=True):
             acc.append(scale_preds)

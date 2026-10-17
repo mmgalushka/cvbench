@@ -144,3 +144,20 @@ def test_progress_under_no_color_has_no_colour_codes(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "2/2" in out
     assert not any(f"{ESC}{c}" in out for c in ("3", "9", "38;", "48;"))
+
+
+def test_quiet_native_stderr_swallows_output_on_success(capfd):
+    import os
+
+    with _console.quiet_native_stderr():
+        os.write(2, b"noise\n")
+    assert "noise" not in capfd.readouterr().err
+
+
+def test_quiet_native_stderr_replays_output_on_failure(capfd):
+    import os
+
+    with pytest.raises(RuntimeError), _console.quiet_native_stderr():
+        os.write(2, b"converter detail\n")
+        raise RuntimeError("boom")
+    assert "converter detail" in capfd.readouterr().err
