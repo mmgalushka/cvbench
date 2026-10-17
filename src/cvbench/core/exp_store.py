@@ -21,9 +21,11 @@ SWEEP_MANIFEST = "sweep.yaml"
 
 EXP_REG = Registry(
     EXPERIMENTS_DIR,
-    not_found_label="Run directory",
+    not_found_label="Run",
     entity_name="experiment",
     param_hint="EXPERIMENT",
+    list_hint="runs list",
+    extra_entries=lambda: _trial_names(),
 )
 
 
@@ -44,6 +46,16 @@ def sweep_dirs(parent_dir: str = EXPERIMENTS_DIR) -> list[Path]:
     if not parent.is_dir():
         return []
     return [d for d in sorted(parent.iterdir()) if d.is_dir() and is_sweep_dir(d)]
+
+
+def _trial_names() -> list[str]:
+    """Names of all sweep trials, which are addressable by bare name like runs."""
+    return [
+        t.name
+        for sweep in sweep_dirs(EXPERIMENTS_DIR)
+        for t in sorted(sweep.iterdir())
+        if (t / "config.yaml").is_file()
+    ]
 
 
 def resolve_experiments_dir(name_or_path: str) -> str:

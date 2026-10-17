@@ -13,9 +13,10 @@ DATA_DIR = "data"
 
 DATA_REG = Registry(
     DATA_DIR,
-    not_found_label="Dataset directory",
+    not_found_label="Dataset",
     entity_name="dataset",
     param_hint="DATA_DIR",
+    list_hint="data list",
 )
 
 
