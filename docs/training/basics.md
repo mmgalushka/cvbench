@@ -23,7 +23,8 @@ bare name is resolved under `data/`, and a literal path is used as-is.
 
 | Option | Description |
 |---|---|
-| `--output <dir>` | Experiment output directory (default: `experiments/<auto-name>/`) |
+| `--output <dir>` | Experiment output directory; its last component is the run name (letters, digits, `_`, `-`). Refused if it already exists (default: `experiments/<auto-name>/`) |
+| `--overwrite` | Replace the `--output` run if it already exists. Not needed with `--resume` |
 | `--from <dir>` | Load config from an existing experiment as baseline |
 | `--backbone` | Backbone name (`efficientnet_b0`..`b5`, `resnet_18`, `resnet_50`; see [Keras Applications](https://keras.io/api/applications/)). Detection defaults to `resnet_18` unless passed explicitly |
 | `--weights` | Backbone weight init: `imagenet` (pretrained on [ImageNet](https://www.image-net.org/), default) or `none` (random/scratch) |

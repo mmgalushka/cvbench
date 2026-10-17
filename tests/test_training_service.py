@@ -38,7 +38,7 @@ class _CrashingTask:
         raise AssertionError("should not be reached — build_datasets crashes first")
 
 
-def test_run_training_marks_status_failed_on_crash(tmp_path, monkeypatch):
+def test_run_training_leaves_no_run_dir_on_dataset_crash(tmp_path, monkeypatch):
     exp_dir = tmp_path / "crashed_run"
     monkeypatch.setattr(training_service, "detect_task_name", lambda data_dir: "classification")
     monkeypatch.setattr(training_service, "get_task", lambda name: _CrashingTask())
@@ -46,8 +46,8 @@ def test_run_training_marks_status_failed_on_crash(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="simulated crash"):
         training_service.run_training(data_dir=str(tmp_path / "data"), output_dir=str(exp_dir))
 
-    cfg = load_config(str(exp_dir))
-    assert cfg.run.status == "failed"
+    # Dataset build runs before the run dir is created: nothing left behind.
+    assert not exp_dir.exists()
 
 
 class _InterruptingTask(_CrashingTask):
@@ -57,7 +57,7 @@ class _InterruptingTask(_CrashingTask):
         raise KeyboardInterrupt()
 
 
-def test_run_training_marks_status_interrupted_on_keyboard_interrupt(tmp_path, monkeypatch):
+def test_run_training_leaves_no_run_dir_on_keyboard_interrupt(tmp_path, monkeypatch):
     exp_dir = tmp_path / "interrupted_run"
     monkeypatch.setattr(training_service, "detect_task_name", lambda data_dir: "classification")
     monkeypatch.setattr(training_service, "get_task", lambda name: _InterruptingTask())
@@ -65,8 +65,7 @@ def test_run_training_marks_status_interrupted_on_keyboard_interrupt(tmp_path, m
     with pytest.raises(KeyboardInterrupt):
         training_service.run_training(data_dir=str(tmp_path / "data"), output_dir=str(exp_dir))
 
-    cfg = load_config(str(exp_dir))
-    assert cfg.run.status == "interrupted"
+    assert not exp_dir.exists()
 
 
 def test_run_training_interrupt_enabled_overrides_config(tmp_path, monkeypatch):
@@ -87,3 +86,44 @@ def test_run_training_interrupt_enabled_overrides_config(tmp_path, monkeypatch):
         )
 
     assert seen_cfg["enabled"] is False
+
+
+class _TrainingCrashTask(_CrashingTask):
+    """Datasets and model build fine; only the training loop itself fails."""
+
+    def build_datasets(self, cfg, spec):
+        return None, None, 10
+
+    def build_model(self, cfg):
+        return None
+
+
+def test_run_training_marks_status_failed_when_training_loop_crashes(tmp_path, monkeypatch):
+    exp_dir = tmp_path / "crashed_run"
+    monkeypatch.setattr(training_service, "detect_task_name", lambda data_dir: "classification")
+    monkeypatch.setattr(training_service, "get_task", lambda name: _TrainingCrashTask())
+    monkeypatch.setattr(training_service, "apply_augmentation", lambda ds, t: ds)
+
+    def _boom(**kwargs):
+        raise RuntimeError("simulated crash in training loop")
+
+    monkeypatch.setattr(training_service._trainer, "train", _boom)
+    with pytest.raises(RuntimeError, match="training loop"):
+        training_service.run_training(data_dir=str(tmp_path / "data"), output_dir=str(exp_dir))
+
+    assert load_config(str(exp_dir)).run.status == "failed"
+
+
+def test_run_training_rejects_existing_run_without_overwrite(tmp_path):
+    exp_dir = tmp_path / "existing"
+    exp_dir.mkdir()
+    with pytest.raises(ValueError, match="already exists"):
+        training_service.run_training(data_dir=str(tmp_path / "data"), output_dir=str(exp_dir))
+
+
+def test_run_training_rejects_unsafe_run_name(tmp_path):
+    with pytest.raises(ValueError, match="letters, digits"):
+        training_service.run_training(
+            data_dir=str(tmp_path / "data"), output_dir=str(tmp_path / "x --lr 1e-3"),
+        )
+    assert list(tmp_path.iterdir()) == []

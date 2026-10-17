@@ -34,6 +34,23 @@ def validate_run_name(name: str) -> str:
     return EXP_REG.validate_name(name, what="Name")
 
 
+def check_output_dir(output_dir: str, *, resume: bool = False, overwrite: bool = False) -> None:
+    """Validate a user-supplied `train --output` path; no filesystem changes.
+
+    Raises ValueError if the run name (last path component) is unsafe, or if the
+    path already exists and neither `resume` nor `overwrite` allows reusing it.
+    """
+    path = Path(output_dir)
+    validate_run_name(path.name)
+    if path.exists() and not (resume or overwrite):
+        raise ValueError(
+            f"Run '{path.name}' already exists at '{output_dir}' — "
+            "use --overwrite to replace it, or pick another --output."
+        )
+    if path.exists() and overwrite and not resume and not (path / "config.yaml").is_file():
+        raise ValueError(f"'{output_dir}' exists but is not a run directory; refusing to overwrite it.")
+
+
 def is_sweep_dir(path: Path | str) -> bool:
     """True for a sweep directory: has a `sweep.yaml` manifest and is not itself an experiment."""
     p = Path(path)
