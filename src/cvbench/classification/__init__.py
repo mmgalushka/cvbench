@@ -15,6 +15,7 @@ from cvbench.classification.data import get_class_names as _get_class_names
 from cvbench.classification.evaluator import evaluate as _evaluate
 from cvbench.classification.model import build_model as _build_model
 from cvbench.core.task import DatasetSpec, Task
+from cvbench.datasets.layout import classification_layout_errors
 from cvbench.datasets.stats import get_class_distribution, print_imbalance_warning, resolve_class_weights
 
 
@@ -32,6 +33,9 @@ class ClassificationTask(Task):
             test_dir=cfg.data.test_dir,
             num_train_images=self.count_images(cfg.data.train_dir),
         )
+
+    def validate_config(self, cfg) -> list[str]:
+        return classification_layout_errors(Path(cfg.data.data_dir))
 
     def count_images(self, directory: str) -> int:
         return sum(1 for _ in Path(directory).glob("*/*"))

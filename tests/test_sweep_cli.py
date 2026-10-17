@@ -95,7 +95,8 @@ def test_import_does_not_pull_tensorflow():
 
 def test_show_prints_trials_and_creates_nothing(data_dir, workdir, monkeypatch):
     calls = _install_fake(monkeypatch)
-    result = _run(data_dir, "--lr", "1e-3,1e-4", "--backbone", "a,b,c", "--name", "s1", "--show")
+    result = _run(data_dir, "--lr", "1e-3,1e-4", "--backbone", "efficientnet_b0,resnet_18,resnet_50",
+                  "--name", "s1", "--show")
     assert result.exit_code == 0, result.output
     assert "6" in result.output  # trial count
     assert not (workdir / "experiments").exists()
@@ -175,6 +176,7 @@ def test_interrupted_trial_skips_map50_eval_and_stops(data_dir, workdir, monkeyp
     # the trial's best.keras) must never run for it.
     calls = _install_fake(monkeypatch, interrupt_lr=1e-4)
     monkeypatch.setattr("cvbench.datasets.layout.detect_task_name", lambda d: "detection")
+    monkeypatch.setattr("cvbench.cli.sweep.validate_dataset", lambda *a: None)  # data_dir is not YOLO
     eval_calls = []
     monkeypatch.setattr("cvbench.cli.sweep._evaluate_on_val", lambda trial_dir: eval_calls.append(trial_dir))
 
@@ -194,6 +196,7 @@ def test_map50_eval_failure_does_not_mark_training_failed(data_dir, workdir, mon
     # sweep must still continue to the remaining trials (this isn't a Ctrl-C).
     calls = _install_fake(monkeypatch)
     monkeypatch.setattr("cvbench.datasets.layout.detect_task_name", lambda d: "detection")
+    monkeypatch.setattr("cvbench.cli.sweep.validate_dataset", lambda *a: None)  # data_dir is not YOLO
 
     def _boom(trial_dir):
         raise ValueError(f"File not found: filepath={trial_dir}/best.keras")
@@ -333,4 +336,39 @@ def test_unknown_metric(data_dir, workdir, monkeypatch):
     calls = _install_fake(monkeypatch)
     result = _run(data_dir, "--lr", "1e-3,1e-4", "--metric", "f1", "--name", "s1")
     assert result.exit_code != 0
+    assert calls == []
+
+
+# ---------------------------------------------------------------------------
+# invalid axis values / dataset: exit 2, nothing created, nothing trained
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("args, fragment", [
+    (["--backbone", "resnet_18,nope"], "--backbone"),
+    (["--epochs", "5,0"], "--epochs"),
+    (["--lr", "1e-3,-1"], "--lr"),
+    (["--dropout", "0.2,1.5"], "--dropout"),
+    (["--loss", "crossentropy,focal:bogus=1"], "--loss"),
+    (["--optimizer", "adam,rmsprop"], "--optimizer"),
+    (["--lr-scheduler", "patience=x,patience=3"], "--lr-scheduler"),
+])
+def test_invalid_axis_value_exits_2(data_dir, workdir, monkeypatch, args, fragment):
+    calls = _install_fake(monkeypatch)
+    base = ["--lr", "1e-3,1e-4"] if "--lr" not in args else []
+    result = _run(data_dir, *base, *args, "--name", "s1")
+    assert result.exit_code == 2, result.output
+    assert fragment in result.output
+    assert "Traceback" not in result.output
+    assert not (workdir / "experiments").exists()
+    assert calls == []
+
+
+def test_unsplit_dataset_exits_2_and_points_at_data_split(tmp_path, workdir, monkeypatch):
+    calls = _install_fake(monkeypatch)
+    flat = tmp_path / "flat"
+    (flat / "cat").mkdir(parents=True)
+    result = _run(flat, "--lr", "1e-3,1e-4", "--name", "s1")
+    assert result.exit_code == 2, result.output
+    assert "data split" in result.output
+    assert not (workdir / "experiments").exists()
     assert calls == []
