@@ -32,7 +32,7 @@ def test_runs_list_empty(tmp_path):
     runner = CliRunner()
     result = runner.invoke(runs, ["list", str(tmp_path)])
     assert result.exit_code == 0
-    assert "No experiments found" in result.output
+    assert "No runs found" in result.output
 
 
 def test_runs_list_shows_entries(tmp_path):
@@ -58,8 +58,8 @@ def test_runs_list_shows_val_acc_and_test_columns(tmp_path):
     assert result.exit_code == 0
     assert "Val Acc" in result.output
     assert "Test" in result.output
-    assert "0.9123" in result.output
-    assert "0.8765" in result.output
+    assert "91.2%" in result.output
+    assert "87.6%" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +89,8 @@ def test_runs_show(tmp_path):
     result = runner.invoke(runs, ["show", str(exp_a)])
     assert result.exit_code == 0
     assert "exp_a" in result.output
-    assert "val_accuracy" in result.output
+    assert "Val accuracy" in result.output
+    assert "90.0%" in result.output
     assert "None" in result.output  # Exports section, no export/ dir yet
 
 
@@ -171,7 +172,7 @@ def test_runs_show_detection_report_dispatches_to_dedicated_renderer(tmp_path):
     assert result.exit_code == 0
     assert "Localization" in result.output
     assert "AP@50" in result.output and "AP@75" in result.output
-    assert "0.5500" in result.output  # cat's per-class AP@75
+    assert "55.0%" in result.output  # cat's per-class AP@75
 
 
 def test_runs_show_no_config(tmp_path):

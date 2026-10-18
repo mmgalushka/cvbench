@@ -7,8 +7,10 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
+from cvbench.core import present
 from cvbench.core.config import load_config
 from cvbench.core.exp_store import EXPERIMENTS_DIR, resolve_run_dir, scan_experiments
+from cvbench.datasets import catalog as dataset_catalog
 from cvbench.datasets import layout as dataset_layout
 
 router = APIRouter()
@@ -40,9 +42,6 @@ def _assert_safe(path: Path, root: Path) -> None:
 
 DATA_DIR = Path("data")
 
-SPLIT_NAMES = ('train', 'val', 'test')
-
-
 # ── YOLO datasets ───────────────────────────────────────────────────────────
 #
 # Layout rules and parsing live in cvbench.datasets.layout; this module only
@@ -67,99 +66,39 @@ def _yolo_item(img_path: Path, root: Path, label_dir: Path, names: list[str]) ->
     }
 
 
-def _yolo_dataset_entry(data_dir: Path) -> dict:
-    splits: dict[str, dict] = {}
-    for split_name in SPLIT_NAMES:
-        sp = (data_dir / 'images' / split_name).resolve()
-        if sp.is_dir():
-            splits[split_name] = {'id': _encode_dir(sp)}
-    classes = dataset_layout.yolo_class_names(data_dir)
-    return {
-        'id':          _encode_dir(data_dir),
-        'name':        data_dir.name,
-        'path':        str(data_dir),
-        'format':      'yolo',
-        'num_classes': len(classes),
-        'classes':     classes,
-        'splits':      splits,
-    }
+def _dataset_entry(data_dir: Path) -> dict:
+    """``datasets.catalog.dataset_info`` plus the WebUI's directory ids and display strings.
 
-
-def _dataset_entry(data_dir: Path, classes: list[str] | None = None) -> dict:
-    if dataset_layout.is_yolo_dataset(data_dir):
-        return _yolo_dataset_entry(data_dir)
-
-    splits: dict[str, dict] = {}
-    for split_name in SPLIT_NAMES:
-        sp = (data_dir / split_name).resolve()
-        if sp.is_dir():
-            splits[split_name] = {'id': _encode_dir(sp)}
-    if classes is None:
-        classes = sorted(
-            p.name for p in data_dir.iterdir()
-            if p.is_dir() and p.name not in SPLIT_NAMES
-        )
-    return {
-        'id':          _encode_dir(data_dir),
-        'name':        data_dir.name,
-        'path':        str(data_dir),
-        'format':      'classification',
-        'num_classes': len(classes),
-        'classes':     classes,
-        'splits':      splits,
-    }
+    The scan itself is shared with `data list`, so both show the same counts and labels.
+    """
+    info = dataset_catalog.dataset_info(data_dir)
+    info["id"] = _encode_dir(data_dir)
+    for split in info["splits"].values():
+        split["id"] = _encode_dir(Path(split.pop("dir")).resolve())
+    info["display"] = present.present_dataset(info)
+    return info
 
 
 @router.get("/datasets")
 def list_datasets():
     seen: dict[str, dict] = {}
 
+    # Datasets used by a run come first, then anything else under data/.
     for run in scan_experiments(EXPERIMENTS_DIR):
         try:
-            run_dir = resolve_run_dir(run['name'])
-            cfg = load_config(run_dir)
+            cfg = load_config(resolve_run_dir(run['name']))
         except Exception:
             continue
 
         data_dir = Path(cfg.data.data_dir).resolve()
-        if not data_dir.is_dir() or str(data_dir) in seen:
-            continue
+        if data_dir.is_dir() and str(data_dir) not in seen:
+            seen[str(data_dir)] = _dataset_entry(data_dir)
 
-        if dataset_layout.is_yolo_dataset(data_dir):
-            seen[str(data_dir)] = _yolo_dataset_entry(data_dir)
-            continue
-
-        splits: dict[str, dict] = {}
-        for split_name, raw_path in [
-            ('train', cfg.data.train_dir),
-            ('val',   cfg.data.val_dir),
-            ('test',  cfg.data.test_dir),
-        ]:
-            if not raw_path:
-                continue
-            sp = Path(raw_path).resolve()
-            if sp.is_dir():
-                splits[split_name] = {'id': _encode_dir(sp)}
-
-        seen[str(data_dir)] = {
-            'id':          _encode_dir(data_dir),
-            'name':        data_dir.name,
-            'path':        str(data_dir),
-            'format':      'classification',
-            'num_classes': len(cfg.data.classes),
-            'classes':     cfg.data.classes,
-            'splits':      splits,
-        }
-
-    # Also include any dataset folders in data/ not referenced by any run
     if DATA_DIR.is_dir():
         for candidate in sorted(DATA_DIR.iterdir()):
-            if not candidate.is_dir():
-                continue
             resolved = candidate.resolve()
-            if str(resolved) in seen:
-                continue
-            seen[str(resolved)] = _dataset_entry(resolved)
+            if candidate.is_dir() and str(resolved) not in seen:
+                seen[str(resolved)] = _dataset_entry(resolved)
 
     return list(seen.values())
 

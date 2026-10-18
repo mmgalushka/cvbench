@@ -18,11 +18,12 @@ function fmtClassWeight(cw) {
 async function showRunsList() {
   setActive('nav-runs');
   const page = document.getElementById('page');
-  page.innerHTML = '<p aria-busy="true">Loading experiments…</p>';
+  page.innerHTML = '<p aria-busy="true">Loading runs…</p>';
   try {
     const [runs, sweeps] = await Promise.all([
       api('/runs'),
       api('/sweeps').catch(() => []),  // degrade to runs only
+      loadPresent(),
     ]);
     page.innerHTML = buildRunsList(runs, sweeps);
   } catch (e) {
@@ -32,80 +33,60 @@ async function showRunsList() {
 
 /* ── Type icons: one flask = a run, three flasks = a sweep ─────────────────── */
 
-const RUN_ICON = '<i class="fas fa-flask type-icon" role="img" title="Experiment" aria-label="Experiment"></i>';
+const RUN_ICON = '<i class="fas fa-flask type-icon" role="img" title="Run" aria-label="Run"></i>';
 const SWEEP_ICON = `<svg class="type-icon" width="20" height="16" viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Sweep"><title>Sweep</title><path d="M12 3h6M13.5 3v6L9 19a1.5 1.5 0 0 0 1.4 2h9.2a1.5 1.5 0 0 0 1.4-2l-4.5-10V3"/><path d="M6 10h-3M4.5 10v3.5L2 19.5a1 1 0 0 0 1 1.5h3"/><path d="M24 10h3M25.5 10v3.5L28 19.5a1 1 0 0 1-1 1.5h-3"/></svg>`;
 const trialCount = n => n ? ` <small class="trial-count" title="${n} trial${n !== 1 ? 's' : ''}">×${n}</small>` : '';
 
-// Val/Test cells shared by run and sweep rows. "Test" adapts to the row's own
-// test_metric, since the list can mix classification (accuracy) and detection
-// (mAP@50) entries.
-function valCell(r) {
-  return r.val_accuracy != null ? (r.val_accuracy * 100).toFixed(1) + '%' : '—';
-}
-
-function testCell(r) {
-  if (r.test_accuracy == null) return '—';
-  const label = r.test_metric && r.test_metric !== 'accuracy'
-    ? (r.test_metric === 'map50' ? 'mAP@50' : r.test_metric)
-    : null;
-  return (r.test_accuracy * 100).toFixed(1) + '%' + (label ? ` <small class="ds-metric-label">${label}</small>` : '');
-}
-
-function buildSweepRow(sw) {
-  const taskShort = sw.task === 'detection' ? 'det' : 'cls';
-  return `
-    <tr onclick="navigate('#/sweeps/${encodeURIComponent(sw.name)}')">
-      <td><span class="type-name">${SWEEP_ICON}<strong>${escHtml(sw.name)}</strong>${trialCount(sw.n_trials)}</span></td>
-      <td><span class="badge badge-task-${sw.task || 'classification'}">${taskShort}</span></td>
-      <td>—</td>
-      <td>${sw.date || '—'}</td>
-      <td><span class="badge badge-${sw.status}">${sw.status}</span></td>
-      <td>${valCell(sw)}</td>
-      <td>${testCell(sw)}</td>
-      <td>${sw.epochs_run ?? '—'}</td>
-    </tr>
-  `;
+// One cell of a run or sweep row. Every value is preformatted by the server
+// (`r.display`, from core/present.py) — the same strings `runs list` prints.
+function runCell(col, r) {
+  const d = r.display;
+  const isSweep = !!r.is_sweep;
+  switch (col.key) {
+    case 'name':
+      return isSweep
+        ? `<span class="type-name">${SWEEP_ICON}<strong>${escHtml(d.name)}</strong>${trialCount(r.n_trials)}</span>`
+        : `<span class="type-name">${RUN_ICON}<strong>${escHtml(d.name)}</strong></span>`;
+    case 'task':
+      return `<span class="badge badge-task-${r.task || 'classification'}">${escHtml(d.task)}</span>`;
+    case 'status':
+      return `<span class="badge badge-${r.status}">${escHtml(d.status)}</span>`;
+    case 'test':
+      return escHtml(d.test) + (d.test_label && d.test !== '—' ? ` <small class="ds-metric-label">${escHtml(d.test_label)}</small>` : '');
+    default:
+      return escHtml(d[col.key] ?? '—');
+  }
 }
 
 function buildRunsList(runs, sweeps = []) {
   if (runs.length === 0 && sweeps.length === 0) {
     return `
-      <div class="page-header"><h2>Experiments</h2></div>
-      <article><p>No experiments found. Run <kbd>train</kbd> to create one.</p></article>
+      <div class="page-header"><h2>Runs</h2></div>
+      <article><p>${escHtml(emptyText('runs', 'experiments'))}</p></article>
     `;
   }
 
+  const columns = _present.run_columns;
   const items = [
-    ...runs.map(r => ({ date: r.date || '', html: null, r })),
-    ...sweeps.map(sw => ({ date: sw.date || '', html: buildSweepRow(sw) })),
+    ...runs.map(r => ({ date: r.date || '', r })),
+    ...sweeps.map(r => ({ date: r.date || '', r })),
   ].sort((a, b) => b.date.localeCompare(a.date));  // newest first, like `runs list`
 
-  const rows = items.map(({ html, r }) => {
-    if (html) return html;
-    const taskShort = r.task === 'detection' ? 'det' : 'cls';
+  const rows = items.map(({ r }) => {
+    const href = r.is_sweep ? `#/sweeps/${encodeURIComponent(r.name)}` : `#/runs/${encodeURIComponent(r.name)}`;
     return `
-    <tr onclick="navigate('#/runs/${encodeURIComponent(r.name)}')">
-      <td><span class="type-name">${RUN_ICON}<strong>${r.name}</strong></span></td>
-      <td><span class="badge badge-task-${r.task || 'classification'}">${taskShort}</span></td>
-      <td>${r.backbone}</td>
-      <td>${r.date || '—'}</td>
-      <td><span class="badge badge-${r.status}">${r.status}</span></td>
-      <td>${valCell(r)}</td>
-      <td>${testCell(r)}</td>
-      <td>${r.epochs_run} / ${r.epochs}</td>
+    <tr onclick="navigate('${href}')">
+      ${columns.map(col => `<td${alignStyle(col)}>${runCell(col, r)}</td>`).join('')}
     </tr>
   `;
   }).join('');
 
   return `
-    <div class="page-header"><h2>Experiments <small style="font-size:0.85rem;font-weight:400;color:var(--muted-color)">${runs.length} run${runs.length !== 1 ? 's' : ''}${sweeps.length ? ` · ${sweeps.length} sweep${sweeps.length !== 1 ? 's' : ''}` : ''}</small></h2></div>
+    <div class="page-header"><h2>Runs <small style="font-size:0.85rem;font-weight:400;color:var(--muted-color)">${runs.length} run${runs.length !== 1 ? 's' : ''}${sweeps.length ? ` · ${sweeps.length} sweep${sweeps.length !== 1 ? 's' : ''}` : ''}</small></h2></div>
     <div class="overflow-x">
       <table class="runs-table">
         <thead>
-          <tr>
-            <th>Name</th><th>Task</th><th>Backbone</th><th>Date</th><th>Status</th>
-            <th>Val Acc</th><th>Test</th><th>Epochs</th>
-          </tr>
+          <tr>${columns.map(col => `<th${alignStyle(col)}>${escHtml(col.label)}</th>`).join('')}</tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
@@ -135,7 +116,6 @@ function sweepStatus(trials) {
 function buildSweepDetail(sw) {
   const axisNames = Object.keys(sw.axes);
   const best = sw.trials.find(t => t.is_best);
-  const fmtVal = v => v != null ? v.toFixed(4) : '—';
   const status = sweepStatus(sw.trials);
   const testMetric = (sw.trials.find(t => t.test_metric) || {}).test_metric;
   const testHeader = testMetric ? `test ${testMetric}` : 'test';
@@ -150,8 +130,8 @@ function buildSweepDetail(sw) {
         <td>${t.index}</td>
         <td>${nameCell}${t.is_best ? ' <span class="badge badge-best">best</span>' : ''}</td>
         ${axisNames.map(a => `<td>${escHtml(t.params[a] ?? '—')}</td>`).join('')}
-        <td>${fmtVal(t.value)}${t.is_best ? ' <span class="best-star">★</span>' : ''}</td>
-        <td title="${t.is_best_test ? 'Best test score (indicator only; the sweep picks on val)' : ''}">${fmtVal(t.test_value)}${t.is_best_test ? ' <span class="best-star">★</span>' : ''}</td>
+        <td>${escHtml(t.display.value)}${t.is_best ? ' <span class="best-star">★</span>' : ''}</td>
+        <td title="${t.is_best_test ? 'Best test score (indicator only; the sweep picks on val)' : ''}">${escHtml(t.display.test)}${t.is_best_test ? ' <span class="best-star">★</span>' : ''}</td>
         <td><span class="badge badge-${t.status}">${t.status}</span></td>
       </tr>`;
   }).join('');
@@ -160,7 +140,7 @@ function buildSweepDetail(sw) {
   return `
     <div class="page-header">
       <div>
-        <a href="#/" class="back-link" onclick="setActive('nav-runs')">← Experiments</a>
+        <a href="#/" class="back-link" onclick="setActive('nav-runs')">← Runs</a>
         <h2><span class="type-name">${SWEEP_ICON}<span>${escHtml(sw.name)}</span>${trialCount(sw.trials.length)}</span> <span class="badge badge-${status}">${status}</span></h2>
       </div>
       <div class="run-actions-menu" id="run-actions-menu">
@@ -203,6 +183,7 @@ async function showRunDetail(name) {
   const page = document.getElementById('page');
   page.innerHTML = '<p aria-busy="true">Loading run…</p>';
   try {
+    await loadPresent();
     const run = await api(`/runs/${encodeURIComponent(name)}`);
     currentRun = run;
     page.innerHTML = buildRunDetail(run);
@@ -216,34 +197,23 @@ function isDetectionRun(run) {
   return run.task === 'detection';
 }
 
-// Label + value for a run's primary test-score metric card, whatever the
-// task — "Test Accuracy" for classification, "Test mAP@50" (etc.) for
-// anything with its own test_metric.
-function testScoreCard(run) {
-  const label = run.test_metric && run.test_metric !== 'accuracy'
-    ? `Test ${run.test_metric === 'map50' ? 'mAP@50' : run.test_metric}`
-    : 'Test Accuracy';
-  return card(label, fmtAcc(run.test_accuracy));
-}
-
 function buildRunDetail(run) {
   const hasEval = run.eval_report != null;
   const detection = isDetectionRun(run);
 
-  // Detection has no classification accuracy — the training headline stays
-  // val_loss, with mAP surfaced as the post-hoc test score instead.
-  const primaryCards = detection
-    ? `${card('Val Loss', run.val_loss != null ? run.val_loss.toFixed(4) : '—')}
-       ${testScoreCard(run)}`
-    : `${card('Val Accuracy', fmtAcc(run.val_accuracy))}
-       ${testScoreCard(run)}`;
+  // Same facts, labels and values as `runs show` (core/present.py run_fields);
+  // the status is the badge in the title, not a card.
+  const factCards = run.display.fields
+    .filter(([label]) => label !== 'Status')
+    .map(([label, value]) => card(label, escHtml(value)))
+    .join('');
 
   return `
     <div class="page-header">
       <div>
         ${run.sweep
           ? `<a href="#/sweeps/${encodeURIComponent(run.sweep)}" class="back-link">← ${escHtml(run.sweep)}</a>`
-          : `<a href="#/" class="back-link" onclick="setActive('nav-runs')">← Experiments</a>`}
+          : `<a href="#/" class="back-link" onclick="setActive('nav-runs')">← Runs</a>`}
         <h2><span class="type-name">${RUN_ICON}<span>${run.name}</span></span> <span class="badge badge-${run.status}">${run.status}</span>${detection ? ' <span class="badge badge-format">detection</span>' : ''}</h2>
       </div>
       <div class="run-actions-menu" id="run-actions-menu">
@@ -256,11 +226,7 @@ function buildRunDetail(run) {
     </div>
 
     <div class="metric-cards">
-      ${primaryCards}
-      ${card('Backbone',      run.backbone)}
-      ${card('Epochs',        run.epochs_run + ' / ' + run.epochs)}
-      ${card('Learning Rate', run.lr)}
-      ${card('Date',          run.date || '—')}
+      ${factCards}
     </div>
 
     <div class="tabs">
@@ -341,8 +307,8 @@ function buildTrainingTab(run) {
       <article>
         <h4>Training</h4>
         <dl>
-          <dt>Epochs</dt>         <dd>${run.epochs_run} / ${run.epochs}</dd>
-          <dt>Learning rate</dt>  <dd>${run.config.training.learning_rate}</dd>
+          <dt>Epochs</dt>         <dd>${run.display.epochs}</dd>
+          <dt>Learning rate</dt>  <dd>${run.display.lr}</dd>
           <dt>Batch size</dt>     <dd>${run.config.data.batch_size}</dd>
           <dt>Seed</dt>           <dd>${run.config.training.seed != null ? run.config.training.seed : '—'}</dd>
           <dt>Class weight</dt>   <dd>${fmtClassWeight(run.config.training.class_weight)}</dd>
@@ -415,46 +381,46 @@ function renderChart(run) {
 function buildEvalTab(run) {
   const report = run.eval_report;
   if (!report) return '<p class="error-msg">No evaluation report. Run <kbd>evaluate</kbd> first.</p>';
+  if (!run.eval_display) return '<p class="error-msg">This evaluation report predates the current format. Run <kbd>evaluate</kbd> again.</p>';
 
-  return report.task === 'detection' ? buildDetectionEvalTab(run, report) : buildClassificationEvalTab(run, report);
+  const body = report.task === 'detection' ? buildDetectionEvalTab(run, report) : buildClassificationEvalTab(run, report);
+  return advisoriesHtml(run.advisories) + body;
+}
+
+// Same advisories `evaluate` and `runs show` print (core/present.py run_advisories).
+function advisoriesHtml(advisories) {
+  return (advisories || []).map(a => `<article class="advisory" role="note">⚠ ${escHtml(a)}</article>`).join('');
+}
+
+// Headline numbers of an eval report, preformatted by the server.
+function summaryCards(run) {
+  return run.eval_display.summary.map(([label, value]) => card(label, escHtml(value))).join('');
+}
+
+// A per-class table from the server's {columns, rows}.
+function perClassTable(table) {
+  const head = table.columns.map(c => `<th>${escHtml(c)}</th>`).join('');
+  const body = table.rows.map(r => `<tr>${r.map(v => `<td>${escHtml(v)}</td>`).join('')}</tr>`).join('');
+  return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
 function buildClassificationEvalTab(run, report) {
-  const classes = Object.keys(report.per_class);
-  const perClassRows = classes.map(cls => {
-    const m = report.per_class[cls];
-    return `
-      <tr>
-        <td>${cls}</td>
-        <td>${(m.precision * 100).toFixed(1)}%</td>
-        <td>${(m.recall    * 100).toFixed(1)}%</td>
-        <td>${(m.f1        * 100).toFixed(1)}%</td>
-        <td>${m.support}</td>
-      </tr>
-    `;
-  }).join('');
-
+  const sections = _present.sections;
   return `
     <div class="metric-cards">
-      ${card('Overall Accuracy', fmtAcc(report.overall_accuracy))}
-      ${card('Top-3 Accuracy',   fmtAcc(report.top3_accuracy))}
-      ${card('Test Images',      report.n_images)}
-      ${card('Classes',          classes.length)}
+      ${summaryCards(run)}
     </div>
 
     <article class="eval-table-card">
-      <h4>Per-Class Metrics</h4>
+      <h4>${escHtml(sections.per_class)}</h4>
       <div class="overflow-x">
-        <table>
-          <thead><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr></thead>
-          <tbody>${perClassRows}</tbody>
-        </table>
+        ${perClassTable(run.eval_display.per_class)}
       </div>
     </article>
 
     <div class="cm-gallery-layout">
       <article class="cm-card">
-        <h4>Confusion Matrix <small class="cm-hint">— click a cell to explore images</small></h4>
+        <h4>${escHtml(sections.confusion)} <small class="cm-hint">— click a cell to explore images</small></h4>
         ${buildConfusionMatrix(report, run.name)}
       </article>
       <div id="gallery-panel" class="gallery-panel" style="display:none"></div>
@@ -496,7 +462,6 @@ function toggleDetLayer(which, on) {
 function fmtPct(v) { return v == null ? 'n/a' : (v * 100).toFixed(1) + '%'; }
 
 function buildDetectionEvalTab(run, report) {
-  const classes = Object.keys(report.per_class);
   const det = report.detection || {};
   const counts = det.counts || { tp: 0, fp: 0, fn: 0 };
   const loc = det.localization || {};
@@ -509,23 +474,6 @@ function buildDetectionEvalTab(run, report) {
   const breakdownReady = (det.class_breakdown || {}).duplicate !== undefined
     && rawSamples.some(s => Array.isArray(s.tags));
 
-  const perClassRows = classes.map(cls => {
-    const m = report.per_class[cls];
-    const apStr = m.ap != null ? (m.ap * 100).toFixed(1) + '%' : 'n/a';
-    const ap75Str = m.ap75 != null ? (m.ap75 * 100).toFixed(1) + '%' : 'n/a';
-    return `
-      <tr>
-        <td>${cls}</td>
-        <td>${apStr}</td>
-        <td>${ap75Str}</td>
-        <td>${(m.precision * 100).toFixed(1)}%</td>
-        <td>${(m.recall    * 100).toFixed(1)}%</td>
-        <td>${(m.f1        * 100).toFixed(1)}%</td>
-        <td>${m.support}</td>
-      </tr>
-    `;
-  }).join('');
-
   let galleryCard;
   if (staleSamples) {
     galleryCard = `
@@ -537,12 +485,12 @@ function buildDetectionEvalTab(run, report) {
     galleryCard = `
       <div class="cm-gallery-layout">
         <article class="cm-card">
-          <h4>Per-class outcomes
+          <h4>${escHtml(_present.sections.outcomes)}
             <small class="cm-hint">— what happened to every ground-truth box; click a number to browse those images</small>
           </h4>
           ${buildDetClassBreakdown(report, run.name)}
           <div class="det-cm-block">
-            <h5 class="det-cm-heading">Class-confusion matrix
+            <h5 class="det-cm-heading">${escHtml(_present.sections.class_confusion)}
               <small class="cm-hint">— rows = true, columns = predicted; <code>background</code> = missed GT / spurious prediction</small>
             </h5>
             ${buildConfusionMatrix(report, run.name)}
@@ -566,15 +514,12 @@ function buildDetectionEvalTab(run, report) {
 
   return `
     <div class="metric-cards">
-      ${card('Mean IoU',       fmtPct(loc.mean_iou), 'matched boxes')}
-      ${card('AP@50 / AP@75',  `${fmtPct(loc.ap50)} / ${fmtPct(loc.ap75)}`)}
-      ${card('mAP@50',         fmtAcc(report.overall.value), 'benchmark')}
-      ${card('Test Images',    report.n_images)}
+      ${summaryCards(run)}
       ${card('conf ≥ / IoU ≥', `${det.conf_threshold} / ${det.iou_threshold}`)}
     </div>
 
     <article class="eval-table-card">
-      <h4>Localization <small class="cm-hint">— recall vs IoU threshold (are the boxes tight?)</small></h4>
+      <h4>${escHtml(_present.sections.localization)} <small class="cm-hint">— recall vs IoU threshold (are the boxes tight?)</small></h4>
       <div class="det-recall-sweep">
         <span>IoU ≥ 0.5 <strong>${fmtPct(sweep['0.5'])}</strong></span>
         <span>IoU ≥ 0.75 <strong>${fmtPct(sweep['0.75'])}</strong></span>
@@ -583,14 +528,11 @@ function buildDetectionEvalTab(run, report) {
     </article>
 
     <article class="eval-table-card">
-      <h4>Per-Class Metrics
+      <h4>${escHtml(_present.sections.detection_quality)}
         <small class="cm-hint">— AP / precision / recall per class · ${counts.tp} TP · ${counts.fp} FP · ${counts.fn} FN, class-agnostic at IoU ≥ ${det.iou_threshold} (the outcome table below splits FP / FN by cause)</small>
       </h4>
       <div class="overflow-x">
-        <table>
-          <thead><tr><th>Class</th><th>AP@50</th><th>AP@75</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr></thead>
-          <tbody>${perClassRows}</tbody>
-        </table>
+        ${perClassTable(run.eval_display.per_class)}
       </div>
     </article>
 
@@ -1608,7 +1550,7 @@ function closeRunMenu() {
 const _VALID_RUN_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_\-]*$/;
 
 async function renameRun(runName) {
-  const newName = prompt(`Rename experiment "${runName}" to:`, runName);
+  const newName = prompt(`Rename run "${runName}" to:`, runName);
   if (newName === null || newName === runName) return;
   if (!newName || !_VALID_RUN_NAME.test(newName) || newName.length > 100) {
     alert('Invalid name. Use only letters, digits, underscores, and hyphens (max 100 chars), starting with a letter or digit.');
@@ -1673,8 +1615,8 @@ function buildCompareSideBySide(a, b) {
     ['Backbone',       a.backbone,         b.backbone],
     ['Val Accuracy',   fmtAcc(a.val_accuracy),  fmtAcc(b.val_accuracy)],
     ['Test Accuracy',  fmtAcc(a.test_accuracy), fmtAcc(b.test_accuracy)],
-    ['Learning Rate',  a.lr,               b.lr],
-    ['Epochs (done/total)', `${a.epochs_run}/${a.epochs}`, `${b.epochs_run}/${b.epochs}`],
+    ['Learning rate',  a.display.lr,       b.display.lr],
+    ['Epochs',          a.display.epochs,   b.display.epochs],
     ['Batch Size',     a.config.data.batch_size,       b.config.data.batch_size],
     ['Input Size',     a.config.data.input_size + 'px',b.config.data.input_size + 'px'],
     ['Dropout',        a.config.model.dropout,         b.config.model.dropout],

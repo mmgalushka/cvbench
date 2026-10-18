@@ -86,7 +86,7 @@ Jetson) — plus the full CLI reference.
 ```
 train          Train a model on DATA_DIR.
 evaluate       Evaluate a trained model on the held-out test split.
-predict        Run inference on INPUT using a trained EXPERIMENT.
+predict        Run inference on INPUT using a trained RUN.
 serve          Start the CVBench WebUI server.
 sweep          Grid-search training flags and report the best trial.
 
@@ -100,10 +100,10 @@ sweep          Grid-search training flags and report the best trial.
    data split     Split a flat dataset into train/val/test, stratified by class.
    data upsample  Grow a class folder to TARGET images via augmentation.
 
-   Manage and inspect experiment runs.
+   Manage and inspect runs.
    runs delete    Delete a run, or just one of its exports.
    runs export    Export a run to TFLite / ONNX / Hailo, or print Jetson steps.
-   runs list      List experiment runs (default: experiments/).
+   runs list      List runs (default: experiments/).
    runs rename    Rename a run directory and update its config.
    runs show      Show full details for a single run.
 ```

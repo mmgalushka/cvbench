@@ -21,7 +21,7 @@ from cvbench.cli import _help
 def serve(host, port):
     """Start the CVBench WebUI server.
 
-    Browse experiments, metrics, confusion matrices and predictions in a
+    Browse runs, metrics, confusion matrices and predictions in a
     browser. Needs the [web] extras: pip install cvbench[web]
 
     Set the CVBENCH_URL environment variable to override the URL printed at

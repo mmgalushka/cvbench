@@ -73,6 +73,47 @@ function setActive(id) {
   }
 }
 
+/* ── Canonical labels ──────────────────────────────────────────────────────── */
+//
+// Column headers, section titles and empty-state texts come from the server
+// (core/present.py), the same source the CLI prints from — so the two cannot drift.
+// The fallback only matters if /api/present is unreachable.
+
+let _present = null;
+
+const _PRESENT_FALLBACK = {
+  run_columns: [
+    ['name', 'Run'], ['task', 'Task'], ['backbone', 'Backbone'], ['date', 'Date'], ['status', 'Status'],
+    ['val_loss', 'Val Loss'], ['val_accuracy', 'Val Acc'], ['test', 'Test'], ['epochs', 'Epochs'],
+  ].map(([key, label]) => ({ key, label, align: ['val_loss', 'val_accuracy', 'test', 'epochs'].includes(key) ? 'right' : 'left' })),
+  dataset_columns: [
+    ['name', 'Dataset'], ['task', 'Task'], ['train', 'Train'], ['val', 'Val'], ['test', 'Test'], ['classes', 'Classes'],
+  ].map(([key, label]) => ({ key, label, align: ['train', 'val', 'test', 'classes'].includes(key) ? 'right' : 'left' })),
+  sections: {
+    per_class: 'Per-class metrics', confusion: 'Confusion matrix', detection_quality: 'Detection quality',
+    outcomes: 'Per-class outcomes', class_confusion: 'Class-confusion matrix',
+  },
+  empty: { runs: "No runs found in '{dir}'.", datasets: "No datasets found in '{dir}'." },
+};
+
+async function loadPresent() {
+  if (_present) return _present;
+  try {
+    _present = await api('/present');
+  } catch (_) {
+    _present = _PRESENT_FALLBACK;
+  }
+  return _present;
+}
+
+function emptyText(kind, dir) {
+  return _present.empty[kind].replace('{dir}', dir);
+}
+
+function alignStyle(col) {
+  return col.align === 'right' ? ' style="text-align:right"' : '';
+}
+
 /* ── Shared formatters ─────────────────────────────────────────────────────── */
 
 function fmtAcc(v) {

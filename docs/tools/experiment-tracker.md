@@ -10,12 +10,23 @@ It starts automatically when the container starts (set its advertised URL
 with the `CVBENCH_URL` environment variable) and is reachable at
 `http://<server-ip>:8000`.
 
-<!-- IMAGE PLACEHOLDER: WebUI runs list screenshot — see design spec for capture instructions. Suggested alt text: "CVBench WebUI runs table showing name, backbone, date, status, and validation accuracy for each experiment" -->
+<!-- IMAGE PLACEHOLDER: WebUI runs list screenshot — see design spec for capture instructions. Suggested alt text: "CVBench WebUI runs table showing run, task, backbone, date, status, validation loss and accuracy, test score, and epochs for each run" -->
 
 ## Runs (home page)
 
-A table of every experiment: name, backbone, date, status, and validation
-accuracy. Sortable and filterable. Click a row to open its run detail page.
+A table of every run and sweep with the same columns `runs list` prints: Run,
+Task, Backbone, Date, Status, Val Loss, Val Acc, Test and Epochs (shown as
+`done / total`). Click a row to open its run detail page.
+
+!!! note "One set of numbers"
+    The terminal and the WebUI format values from one shared presentation
+    layer, so for any run, sweep, evaluation report or dataset they show the
+    same fields, labels and values: scores in `[0, 1]` appear as percentages
+    with one decimal (`93.5%`), losses as plain decimals. In a terminal
+    narrower than 110 columns, `runs list` drops Backbone and Date rather than
+    truncating run names. Advisories (for example "train longer" or "many false
+    positives per image") appear in `evaluate`, `runs show` and the Evaluation
+    tab.
 
 ## Run detail
 
@@ -29,7 +40,7 @@ and augmentations.
 
 ### Evaluation
 
-Overall accuracy and a per-class
+Overall accuracy (with the run's validation accuracy beside it) and a per-class
 [precision/recall/F1](https://scikit-learn.org/stable/modules/model_evaluation.html#precision-recall-and-f-measures)
 table, plus an interactive
 [confusion matrix](https://scikit-learn.org/stable/modules/model_evaluation.html#confusion-matrix). For detection runs, a per-class outcome table
@@ -106,14 +117,23 @@ see [Export Formats (TFLite/ONNX)](../deployment/export.md).
 
 ## Datasets page
 
-Lists every dataset under `data/`, labeling each one's format
-(classification or YOLO). For YOLO datasets it draws the bounding boxes over
-every thumbnail:
+Lists every dataset under `data/` with the columns `data list` prints:
+Dataset, Task, Train, Val, Test (image counts per split) and Classes. Click a
+split count to browse it. For YOLO datasets the gallery draws the bounding
+boxes over every thumbnail:
 
 - **Show boxes** toggles the bounding-box overlay.
 - The class filter keeps only images containing a given class.
 
 See [Generating Synthetic Data](../data/synthetic.md) for the folder layouts
 this page reads.
+
+## Inference page
+
+Pick a run, drop an image and press **Run** to see its prediction, optionally
+after a stack of augmentations. Two controls mirror `predict`: **Top-K classes**
+(`--top-k`, classification runs) and **Min confidence** (`--conf`, detection
+runs; blank uses the run's own threshold). Classification bars show each
+class's confidence on a 0–100% scale.
 
 Next: [Export Formats (TFLite/ONNX)](../deployment/export.md).

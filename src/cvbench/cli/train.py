@@ -183,12 +183,12 @@ def validate_dataset(data_dir: str, from_dir: str | None = None) -> None:
 )
 @click.argument("data_dir")
 @click.option("--output", "output_dir", default=None,
-              help="Experiment output directory; its last component is the run name "
+              help="Run output directory; its last component is the run name "
                    "(default: experiments/<auto-name>/).")
 @click.option("--overwrite", is_flag=True, default=False,
               help="Replace the --output run if it already exists (default: refuse).")
 @click.option("--from", "from_dir", default=None, type=click.Path(exists=True),
-              help="Load config from an existing experiment as baseline (default: none).")
+              help="Load config from an existing run as baseline (default: none).")
 @click.option("--backbone", default=None, type=FLAG_TYPES["backbone"],
               help="Backbone name (efficientnet_b0..b5, resnet_18, resnet_50). "
                    f"(default: {_MODEL.backbone}; detection defaults to resnet_18 "

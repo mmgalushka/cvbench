@@ -299,7 +299,7 @@ def test_cli_conf_rejected_for_classification(cls_run, images):
 
 
 @pytest.mark.parametrize("args, missing", [
-    ([], "EXPERIMENT"),
+    ([], "RUN"),
     (["run"], "INPUT"),
 ])
 def test_cli_requires_experiment_and_input(args, missing):
@@ -435,8 +435,8 @@ def test_build_results_names_classes_and_falls_back_to_index():
     assert bare[0]["class_name"] == "2"
 
 
-def test_build_result_sorts_top_k():
-    result = prediction._build_result(np.array([0.2, 0.5, 0.3]), CLASSES)
+def test_build_classification_result_sorts_top_k():
+    result = prediction.build_classification_result(np.array([0.2, 0.5, 0.3]), CLASSES, None)
 
     assert result["class_name"] == "dog" and result["class_index"] == 1
     assert [e["class_name"] for e in result["top_k"]] == ["dog", "bird", "cat"]
@@ -541,6 +541,12 @@ def test_predict_from_input_dispatches_on_task():
 
     assert result["class_name"] == "dog" and len(result["top_k"]) == 3
 
+    top1 = prediction._predict_from_input(_cfg(), Model(), arr, top_k=1)
+    assert len(top1["top_k"]) == 1
+
+    with pytest.raises(ValueError, match="only applies to detection"):
+        prediction._predict_from_input(_cfg(), Model(), arr, conf=0.3)
+
 
 def test_detection_result_for_web_picks_top_box():
     det = SimpleNamespace(
@@ -553,14 +559,22 @@ def test_detection_result_for_web_picks_top_box():
     head[0, 1, 2, 4] = 10.0
     head[0, 1, 2, 5 + 2] = 10.0
 
-    result = prediction._build_detection_result([head], cfg)
+    class Model:
+        def __init__(self, out):
+            self.out = out
+
+        def predict(self, arr, verbose=0):
+            return self.out
+
+    arr = np.zeros((1, 4, 4, 3), dtype=np.float32)
+    result = prediction._predict_from_input(cfg, Model(head), arr)
 
     assert result["task"] == "detection" and len(result["detections"]) == 1
     assert result["class_name"] == "bird" and result["class_index"] == 2
 
-    empty = prediction._build_detection_result([np.full_like(head, -10.0)], cfg)
+    empty = prediction._predict_from_input(cfg, Model(np.full_like(head, -10.0)), arr)
     assert empty["detections"] == [] and empty["class_name"] is None
 
     det.anchors = None
     with pytest.raises(ValueError, match="predates anchor-based decoding"):
-        prediction._build_detection_result([head], cfg)
+        prediction._predict_from_input(cfg, Model(head), arr)

@@ -690,3 +690,11 @@
 /* ── Sweeps ────────────────────────────────────────────────────────────────── */
 
 .runs-table tbody tr.row-best td { background: rgba(46, 160, 67, 0.10); }
+
+/* Advisories under the Evaluation tab — the same warnings `evaluate` prints. */
+.advisory {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border-left: 3px solid #e0a100;
+  font-size: 0.9rem;
+}

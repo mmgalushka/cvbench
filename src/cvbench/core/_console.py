@@ -171,6 +171,11 @@ def info(msg: str) -> None:
     print(f" {dim(msg)}")
 
 
+def width() -> int:
+    """Current terminal width in columns (80 when stdout is not a terminal)."""
+    return _make_console().width
+
+
 def table(
     columns: Sequence[str | tuple[str, Literal["left", "center", "right"]]],
     rows: Iterable[Iterable[Any]],

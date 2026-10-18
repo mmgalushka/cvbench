@@ -429,6 +429,8 @@ def sweep_entry(sweep_dir: str | Path) -> dict[str, Any] | None:
         "name": manifest.name or sweep.name,
         "dir": str(sweep),
         "task": task,
+        "backbone": best_entry["backbone"] if best_entry else None,
+        "epochs": best_entry["epochs"] if best_entry else None,
         "status": "running" if any(e["status"] == "running" for e in entries) else "done",
         "val_loss": best_entry["val_loss"] if best_entry else None,
         "val_accuracy": best_entry["val_accuracy"] if best_entry else None,

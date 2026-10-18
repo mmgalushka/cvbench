@@ -147,46 +147,52 @@ def _infer_tflite(model_path: Path, images: list[str], size: int) -> list[list[n
     return results
 
 
+def _class_name(class_names: list[str] | None, idx: int) -> str:
+    return class_names[idx] if class_names and idx < len(class_names) else str(idx)
+
+
+def build_classification_result(
+    probs, class_names: list[str] | None, top_k: int | None = 1
+) -> dict:
+    """Shape one image's class probabilities; ``top_k=None`` keeps every class.
+
+    The single classification result builder — `predict` and the WebUI both use it,
+    so a given image yields the same fields from either.
+    """
+    order = [int(i) for i in np.argsort(-np.asarray(probs), kind="stable")]
+    top_idx = order[0]
+    return {
+        "class_index": top_idx,
+        "confidence": float(probs[top_idx]),
+        "class_name": _class_name(class_names, top_idx),
+        "top_k": [
+            {"class_name": _class_name(class_names, i), "confidence": float(probs[i])}
+            for i in order[: top_k or len(order)]
+        ],
+        "probs": [float(x) for x in probs],
+    }
+
+
 def _build_results(
     images: list[str],
     probs_list: list[np.ndarray],
     class_names: list[str] | None,
     top_k: int | None = 1,
 ) -> list[dict]:
-    """Shape per-image probabilities; ``top_k=None`` keeps every class."""
-
-    def name_of(idx: int) -> str:
-        return class_names[idx] if class_names and idx < len(class_names) else str(idx)
-
-    results = []
-    for img_path, probs in zip(images, probs_list, strict=True):
-        order = [int(i) for i in np.argsort(-np.asarray(probs), kind="stable")]
-        top_idx = order[0]
-        results.append({
-            "filename": Path(img_path).name,
-            "class_index": top_idx,
-            "confidence": float(probs[top_idx]),
-            "class_name": name_of(top_idx),
-            "top_k": [
-                {"class_name": name_of(i), "confidence": float(probs[i])}
-                for i in order[: top_k or len(order)]
-            ],
-            "probs": [float(x) for x in probs],
-        })
-    return results
+    """Per-image classification results, tagged with the file name."""
+    return [
+        {"filename": Path(img_path).name, **build_classification_result(probs, class_names, top_k)}
+        for img_path, probs in zip(images, probs_list, strict=True)
+    ]
 
 
-def _build_detection_results(
-    images: list[str],
-    outputs_list: list[list[np.ndarray]],
-    cfg,
-    conf: float | None,
-) -> list[dict]:
-    """Decode each image's raw head outputs into detections.
+def build_detection_result(outputs: list[np.ndarray], cfg, conf: float | None) -> dict:
+    """Decode one image's raw head outputs (no batch axis) into detections.
 
-    Exported models don't guarantee output order (TFLite sorts tensors by
-    name), so scales are re-ordered to match ``cfg.detection.strides`` —
-    finest stride first means largest grid first.
+    The single detection result builder. Exported models don't guarantee output
+    order (TFLite sorts tensors by name), so scales are re-ordered to match
+    ``cfg.detection.strides`` — finest stride first means largest grid first.
+    ``conf`` overrides the run's ``detection.conf_threshold``.
     """
     from cvbench.detection.decode import decode_batch
 
@@ -197,39 +203,43 @@ def _build_detection_results(
             "used for inference — retrain with the current detection head."
         )
     class_names = cfg.data.classes
-    threshold = det.conf_threshold if conf is None else conf
-    results = []
-    for img_path, outs in zip(images, outputs_list, strict=True):
-        scales = sorted(outs, key=lambda o: o.shape[0], reverse=True)
-        dets = decode_batch(
-            [o[None] for o in scales],
-            num_classes=len(class_names),
-            anchors=det.anchors,
-            strides=det.strides,
-            conf_threshold=threshold,
-            max_detections=det.max_detections,
-            nms_iou_threshold=det.iou_threshold,
-        )[0]
-        results.append({
-            "filename": Path(img_path).name,
-            "detections": [
-                {
-                    "class_index": d["class_id"],
-                    "class_name": (
-                        class_names[d["class_id"]]
-                        if d["class_id"] < len(class_names)
-                        else str(d["class_id"])
-                    ),
-                    "confidence": d["confidence"],
-                    "x": d["x"],
-                    "y": d["y"],
-                    "w": d["w"],
-                    "h": d["h"],
-                }
-                for d in dets
-            ],
-        })
-    return results
+    scales = sorted(outputs, key=lambda o: o.shape[0], reverse=True)
+    dets = decode_batch(
+        [o[None] for o in scales],
+        num_classes=len(class_names),
+        anchors=det.anchors,
+        strides=det.strides,
+        conf_threshold=det.conf_threshold if conf is None else conf,
+        max_detections=det.max_detections,
+        nms_iou_threshold=det.iou_threshold,
+    )[0]
+    return {
+        "detections": [
+            {
+                "class_index": d["class_id"],
+                "class_name": _class_name(class_names, d["class_id"]),
+                "confidence": d["confidence"],
+                "x": d["x"],
+                "y": d["y"],
+                "w": d["w"],
+                "h": d["h"],
+            }
+            for d in dets
+        ],
+    }
+
+
+def _build_detection_results(
+    images: list[str],
+    outputs_list: list[list[np.ndarray]],
+    cfg,
+    conf: float | None,
+) -> list[dict]:
+    """Per-image detection results, tagged with the file name."""
+    return [
+        {"filename": Path(img_path).name, **build_detection_result(outs, cfg, conf)}
+        for img_path, outs in zip(images, outputs_list, strict=True)
+    ]
 
 
 def run_experiment_prediction(
@@ -391,22 +401,52 @@ def _load_run_model(run_name: str):
     return cfg, model, model.input_shape[1]
 
 
-def _predict_from_input(cfg, model, arr: np.ndarray) -> dict:
+WEB_TOP_K = 5  # classes the WebUI lists by default
+
+
+def _check_options(task: str, conf: float | None) -> None:
+    if conf is not None and task != "detection":
+        raise ValueError("--conf only applies to detection runs")
+
+
+def _predict_from_input(
+    cfg, model, arr: np.ndarray, conf: float | None = None, top_k: int | None = WEB_TOP_K
+) -> dict:
     """Run the model on a batched ``(1, H, W, 3)`` float array and shape the
-    result according to the run's task."""
+    result with the same builders the CLI uses."""
+    task = getattr(cfg, "task", "classification")
+    _check_options(task, conf)
     preds = model.predict(arr, verbose=0)
-    if getattr(cfg, "task", "classification") == "detection":
-        return _build_detection_result(preds, cfg)
-    return _build_result(preds[0], cfg.data.classes)
+    outputs = [np.asarray(o[0], dtype=np.float32) for o in (preds if isinstance(preds, (list, tuple)) else [preds])]
+    if task == "detection":
+        result = build_detection_result(outputs, cfg, conf)
+        # Boxes are normalized top-left xywh in [0, 1] — what shared.js::buildBoxLayer() consumes.
+        top = max(result["detections"], key=lambda d: d["confidence"], default=None)
+        return {
+            "task": "detection",
+            **result,
+            "class_name": top["class_name"] if top else None,
+            "class_index": top["class_index"] if top else None,
+            "confidence": top["confidence"] if top else None,
+        }
+    return {"task": "classification", **build_classification_result(outputs[0], cfg.data.classes, top_k)}
 
 
-def predict_image(run_name: str, image_bytes: bytes) -> dict:
+def predict_image(
+    run_name: str, image_bytes: bytes, conf: float | None = None, top_k: int | None = WEB_TOP_K
+) -> dict:
     cfg, model, size = _load_run_model(run_name)
     arr = _bytes_to_input(image_bytes, size)
-    return _predict_from_input(cfg, model, arr)
+    return _predict_from_input(cfg, model, arr, conf, top_k)
 
 
-def predict_augmented(run_name: str, image_bytes: bytes, augmentations: list[dict]) -> dict:
+def predict_augmented(
+    run_name: str,
+    image_bytes: bytes,
+    augmentations: list[dict],
+    conf: float | None = None,
+    top_k: int | None = WEB_TOP_K,
+) -> dict:
     import cvbench.augmentations as aug_mod
 
     cfg, model, size = _load_run_model(run_name)
@@ -422,78 +462,12 @@ def predict_augmented(run_name: str, image_bytes: bytes, augmentations: list[dic
     augmented_b64 = _numpy_to_base64_png(img_arr)
 
     arr = img_arr.astype(np.float32)[None]
-    result = _predict_from_input(cfg, model, arr)
+    result = _predict_from_input(cfg, model, arr, conf, top_k)
     result["augmented_image_b64"] = augmented_b64
     return result
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _build_detection_result(preds, cfg) -> dict:
-    """Decode raw YOLO head output into a list of detections for the WebUI.
-
-    Boxes are normalized top-left xywh in [0, 1] — the shape
-    ``shared.js::buildBoxLayer()`` consumes.
-    """
-    from cvbench.detection.decode import decode_batch
-
-    det = cfg.detection
-    if not det.anchors or not det.strides:
-        raise ValueError(
-            "This detection run predates anchor-based decoding and cannot be "
-            "used for inference — retrain with the current detection head."
-        )
-
-    class_names = cfg.data.classes
-    scales = preds if isinstance(preds, (list, tuple)) else [preds]
-    dets = decode_batch(
-        [np.asarray(s) for s in scales],
-        num_classes=len(class_names),
-        anchors=det.anchors,
-        strides=det.strides,
-        conf_threshold=det.conf_threshold,
-        max_detections=det.max_detections,
-        nms_iou_threshold=det.iou_threshold,
-    )[0]
-
-    detections = [
-        {
-            "class_index": d["class_id"],
-            "class_name": (
-                class_names[d["class_id"]]
-                if d["class_id"] < len(class_names)
-                else str(d["class_id"])
-            ),
-            "confidence": d["confidence"],
-            "x": d["x"],
-            "y": d["y"],
-            "w": d["w"],
-            "h": d["h"],
-        }
-        for d in dets
-    ]
-    top = max(detections, key=lambda d: d["confidence"], default=None)
-    return {
-        "task": "detection",
-        "detections": detections,
-        "class_name": top["class_name"] if top else None,
-        "class_index": top["class_index"] if top else None,
-        "confidence": top["confidence"] if top else None,
-    }
-
-
-def _build_result(probs: np.ndarray, class_names: list[str]) -> dict:
-    entries: list[dict[str, str | float]] = [
-        {"class_name": class_names[i], "confidence": float(probs[i])} for i in range(len(probs))
-    ]
-    top_k = sorted(entries, key=lambda x: x["confidence"], reverse=True)
-    return {
-        "class_name": top_k[0]["class_name"],
-        "class_index": int(np.argmax(probs)),
-        "confidence": top_k[0]["confidence"],
-        "top_k": top_k,
-    }
-
 
 def _bytes_to_input(image_bytes: bytes, size: int) -> np.ndarray:
     from PIL import Image

@@ -30,7 +30,7 @@ _MODEL_SUFFIXES = {".keras": "keras", ".onnx": "onnx", ".tflite": "tflite"}
         ("runs export <run> --format tflite", "create the tflite/onnx model first"),
     ],
 )
-@click.argument("experiment", required=False, default=None)
+@click.argument("experiment", metavar="RUN", required=False, default=None)
 @click.argument(
     "input_path", metavar="INPUT", type=click.Path(exists=True), required=False
 )
@@ -71,9 +71,9 @@ _MODEL_SUFFIXES = {".keras": "keras", ".onnx": "onnx", ".tflite": "tflite"}
     "(format is taken from its extension: .keras, .onnx, .tflite).",
 )
 def predict(experiment, input_path, fmt, conf, top_k, probs, model_path):
-    """Run inference on INPUT using a trained EXPERIMENT.
+    """Run inference on INPUT using a trained RUN.
 
-    EXPERIMENT is a run name or full path to a run directory.
+    RUN is a run name or full path to a run directory.
     INPUT is an image file or folder of images.
 
     Both arguments are optional when --format plan is used.
@@ -97,7 +97,7 @@ def predict(experiment, input_path, fmt, conf, top_k, probs, model_path):
         return
 
     if not experiment:
-        raise click.UsageError("EXPERIMENT is required.")
+        raise click.UsageError("RUN is required.")
     if not input_path:
         raise click.UsageError("INPUT is required.")
 

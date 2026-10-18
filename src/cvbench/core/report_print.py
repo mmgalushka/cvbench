@@ -16,27 +16,8 @@ from typing import Literal
 
 import numpy as np
 
-from cvbench.core import _console
+from cvbench.core import _console, present
 from cvbench.core._confusion import print_confusion_matrix
-
-TRAIN_LONGER = "Validation loss was still falling when training stopped — train longer (more --epochs)."
-
-# More than this many false positives per image means the detector is firing on
-# background, which almost always points at an undertrained model or a conf that is too low.
-_FP_PER_IMAGE_ADVISORY = 2.0
-
-
-def detection_advisories(report: dict) -> list[str]:
-    """Advisories derivable from a detection report alone (shared with `runs show`)."""
-    det = report["detection"]
-    n_images = report["n_images"]
-    fp = det["counts"]["fp"]
-    if n_images and fp / n_images >= _FP_PER_IMAGE_ADVISORY:
-        return [
-            f"{fp / n_images:.1f} false positives per image at conf ≥ {det['conf_threshold']} — "
-            "the detector is likely undertrained; train longer or raise --conf."
-        ]
-    return []
 
 
 def print_advisories(advisories) -> None:
@@ -52,24 +33,10 @@ def print_classification_body(report: dict, val_accuracy: float | None = None, a
     ``val_accuracy`` is the run's validation accuracy, shown beside the test score
     so an overfit gap is visible at a glance; it lives in config.yaml, not the report.
     """
-    n_images = report["n_images"]
-    overall_acc = f"{report['overall_accuracy'] * 100:.1f}%"
-    val_note = f"  {_console.dim(f'(val {val_accuracy * 100:.1f}%)')}" if val_accuracy is not None else ""
-    print(_console.dim(" Split             : test"))
-    print(_console.dim(f" Images evaluated  : {n_images}"))
-    print(f" {_console.bold('Overall accuracy')}  : {_console.bold(overall_acc)}{val_note}")
-    if report["top3_accuracy"] is not None:
-        top3_acc = f"{report['top3_accuracy'] * 100:.1f}%"
-        print(f" {_console.bold('Top-3 accuracy')}    : {_console.bold(top3_acc)}")
+    _print_summary(report, val_accuracy, task="classification")
     print()
-    print(f" {_console.bold('Per-class breakdown:')}")
-    _console.table(
-        ["class", ("P", "right"), ("R", "right"), ("F1", "right"), ("support", "right")],
-        [
-            (cls, f"{m['precision']:.4f}", f"{m['recall']:.4f}", f"{m['f1']:.4f}", f"{m['support']} samples")
-            for cls, m in report["per_class"].items()
-        ],
-    )
+    print(f" {_console.bold(present.SECTIONS['per_class'] + ':')}")
+    _print_per_class(report, "classification")
     print()
     confusion_matrix = report.get("confusion_matrix")
     if confusion_matrix:
@@ -77,8 +44,30 @@ def print_classification_body(report: dict, val_accuracy: float | None = None, a
     print_advisories(advisories)
 
 
-def _pct(v: float | None) -> str:
-    return f"{v * 100:.1f}%" if v is not None else "n/a"
+def _print_summary(
+    report: dict, val_accuracy: float | None = None, heading: str | None = None, task: str | None = None
+) -> None:
+    """Split / images lines, then the report's headline scores (indented under HEADING when given)."""
+    rows = present.eval_summary(report, val_accuracy, task)
+    for label, value in rows[:2]:
+        print(_console.dim(f" {label:<22}: {value}"))
+    if heading:
+        print()
+        print(heading)
+    for label, value in rows[2:]:
+        if heading:
+            print(f"   {label:<22} : {value}")
+        else:
+            print(f" {_console.bold(f'{label:<22}')}: {_console.bold(value)}")
+
+
+def _print_per_class(report: dict, task: str | None = None) -> None:
+    table = present.per_class_table(report, task)
+    columns: list[str | tuple[str, Literal["left", "center", "right"]]] = [
+        table["columns"][0],
+        *((c, "right") for c in table["columns"][1:]),
+    ]
+    _console.table(columns, table["rows"])
 
 
 def _print_class_outcomes(breakdown: dict, counts: dict, legend: str) -> None:
@@ -124,7 +113,7 @@ def _print_class_outcomes(breakdown: dict, counts: dict, legend: str) -> None:
     ]
 
     note = f"(what happened to every ground-truth box, {legend})"
-    print(f" {_console.bold('Per-class outcomes')}  {_console.dim(note)}")
+    print(f" {_console.bold(present.SECTIONS['outcomes'])}  {_console.dim(note)}")
     _console.table(columns, table_rows)
     print()
 
@@ -140,7 +129,7 @@ def _print_class_outcomes(breakdown: dict, counts: dict, legend: str) -> None:
     ))
     print()
 
-    print(f" {_console.bold('Extra predictions')}  {_console.dim('(boxes matched to no ground truth)')}")
+    print(f" {_console.bold(present.SECTIONS['extra'])}  {_console.dim('(boxes matched to no ground truth)')}")
     dup_line = " · ".join(f"{c} {dup.get(c, 0)}" for c in classes)
     print(f"   duplicate {sum(dup.values()):<5} {dup_line}")
     n_sup, thr = sum(dup_sup.values()), breakdown.get("dup_suppress_iou", 0.5)
@@ -155,23 +144,16 @@ def _print_class_outcomes(breakdown: dict, counts: dict, legend: str) -> None:
 
 def print_detection_body(report: dict, advisories=()) -> None:
     """Print the localization / outcomes / per-class / confusion-matrix body of a detection report."""
-    n_images = report["n_images"]
     det = report["detection"]
-    loc = det.get("localization", {})
-    sweep = loc.get("recall_sweep", {})
 
-    print(_console.dim(" Split             : test"))
-    print(_console.dim(f" Images evaluated  : {n_images}"))
-    print()
-
-    print(f" {_console.bold('Localization')}  {_console.dim('(how well-placed are the boxes)')}")
-    print(f"   Mean IoU (matched)     : {_console.bold(_pct(loc.get('mean_iou')))}")
-    print(f"   AP@50 / AP@75          : {_pct(loc.get('ap50'))} / {_pct(loc.get('ap75'))}")
-    print(
-        "   Recall @ IoU .5/.75/.9 : "
-        f"{_pct(sweep.get('0.5'))} / {_pct(sweep.get('0.75'))} / {_pct(sweep.get('0.9'))}"
+    _print_summary(
+        report,
+        heading=(
+            f" {_console.bold(present.SECTIONS['localization'])}  "
+            f"{_console.dim('(how well-placed are the boxes)')}"
+        ),
+        task="detection",
     )
-    print(_console.dim(f"   mAP@50                 : {_pct(det['map50'])}"))
     print()
 
     counts = det["counts"]
@@ -181,42 +163,19 @@ def print_detection_body(report: dict, advisories=()) -> None:
         _print_class_outcomes(breakdown, counts, legend)
 
     print(
-        f" {_console.bold('Detection quality')}  "
+        f" {_console.bold(present.SECTIONS['detection_quality'])}  "
         f"{_console.dim(f'(AP over all scores; P / R / F1 at {legend})')}"
     )
-    per_class = report["per_class"]
-    _console.table(
-        [
-            "class",
-            ("AP@50", "right"),
-            ("AP@75", "right"),
-            ("P", "right"),
-            ("R", "right"),
-            ("F1", "right"),
-            ("support", "right"),
-        ],
-        [
-            (
-                cls,
-                f"{m['ap']:.4f}" if m["ap"] is not None else "n/a",
-                f"{m['ap75']:.4f}" if m.get("ap75") is not None else "n/a",
-                f"{m['precision']:.4f}",
-                f"{m['recall']:.4f}",
-                f"{m['f1']:.4f}",
-                f"{m['support']} instances",
-            )
-            for cls, m in per_class.items()
-        ],
-    )
+    _print_per_class(report, "detection")
     print()
 
     cm = np.array(det["confusion_matrix"]["matrix"])
     cm_classes = det["confusion_matrix"]["classes"]
-    print(f" {_console.bold('Class-confusion matrix')}  {_console.dim('(rows = true, cols = predicted)')}")
+    print(f" {_console.bold(present.SECTIONS['class_confusion'])}  {_console.dim('(rows = true, cols = predicted)')}")
     print_confusion_matrix(cm, cm_classes, title="")
     print(_console.dim(
         f" TP {counts['tp']} · FP {counts['fp']} · FN {counts['fn']}"
         f"  (class-agnostic, {legend})"
     ))
     print()
-    print_advisories([*detection_advisories(report), *advisories])
+    print_advisories(advisories)

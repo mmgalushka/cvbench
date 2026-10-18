@@ -10,7 +10,7 @@ runs export my_run --format hailo                       # prepare a Hailo compil
 runs export my_run --format plan                        # print Jetson TensorRT build instructions
 ```
 
-`EXPERIMENT` is a run name or full path to a run directory.
+`RUN` is a run name or full path to a run directory.
 
 | Option | Description |
 |---|---|

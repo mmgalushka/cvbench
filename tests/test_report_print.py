@@ -5,6 +5,7 @@ Mirrors test_confusion_printer.py's style: build a synthetic report dict
 and assert the printed output surfaces the right numbers, without needing a
 real model or dataset.
 """
+from cvbench.core import present
 from cvbench.core.report_print import print_classification_body, print_detection_body
 
 
@@ -80,7 +81,7 @@ def test_detection_body_prints_localization_and_per_class_ap(capsys):
     assert "82.0%" in out  # mean IoU
     assert "75.0% / 60.0%" in out  # AP@50 / AP@75
     assert "AP@50" in out and "AP@75" in out
-    assert "0.5500" in out  # cat's per-class AP@75
+    assert "55.0%" in out  # cat's per-class AP@75
     assert "Per-class outcomes" in out
     assert "→dog 1" in out  # cat's confused_as note
     assert "Class-confusion matrix" in out
@@ -119,7 +120,7 @@ def test_detection_body_warns_on_many_false_positives_per_image(capsys):
     report = _detection_report()
     report["detection"]["counts"]["fp"] = 1117
     report["n_images"] = 15
-    print_detection_body(report)
+    print_detection_body(report, present.detection_advisories(report))
     assert "74.5 false positives per image" in capsys.readouterr().out
 
 

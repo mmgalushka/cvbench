@@ -6,7 +6,7 @@
 evaluate cls_effnet_b0_2026_01_21
 ```
 
-`EXPERIMENT` is the run name (e.g. `effnet_b3_lr5e5_cutmix_trial_2024_01_21`)
+`RUN` is the run name (e.g. `effnet_b3_lr5e5_cutmix_trial_2024_01_21`)
 or a full path to the run directory. If a bare name is given, it is resolved
 under `experiments/`.
 

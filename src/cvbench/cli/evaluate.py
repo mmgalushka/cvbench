@@ -27,7 +27,7 @@ from cvbench.core.sweep_store import summarize
         ("runs export <run> --format tflite", "package the model for a device"),
     ],
 )
-@click.argument("experiment")
+@click.argument("experiment", metavar="RUN")
 @click.option("--output-dir", default=None, help="Where to write eval outputs (default: run dir).")
 @click.option(
     "--conf",
@@ -39,11 +39,11 @@ from cvbench.core.sweep_store import summarize
 def evaluate(experiment, output_dir, conf):
     """Evaluate a trained model on the held-out test split.
 
-    EXPERIMENT is the run name (e.g. effnet_b3_lr5e5_cutmix_trial_2024_01_21)
+    RUN is the run name (e.g. effnet_b3_lr5e5_cutmix_trial_2024_01_21)
     or a full path to the run directory. If a bare name is given, it is resolved
     under experiments/.
 
-    If EXPERIMENT is a sweep, every finished trial is evaluated and a table of the
+    If RUN is a sweep, every finished trial is evaluated and a table of the
     test scores is printed. This is informational: the sweep's best trial is
     chosen on validation and is not changed.
 

@@ -1,12 +1,12 @@
 # Running Predictions
 
-`predict` runs inference on `INPUT` using a trained `EXPERIMENT`.
+`predict` runs inference on `INPUT` using a trained `RUN`.
 
 ```bash
 predict cls_effnet_b0_2026_01_21 photo.jpg
 ```
 
-`EXPERIMENT` is a run name or full path to a run directory. `INPUT` is an
+`RUN` is a run name or full path to a run directory. `INPUT` is an
 image file or a folder of images. Both arguments are optional when
 `--format plan` is used.
 

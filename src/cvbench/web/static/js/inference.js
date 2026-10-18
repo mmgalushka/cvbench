@@ -20,6 +20,7 @@ async function showInference() {
     [_inferRuns, _inferAugSchema] = await Promise.all([
       api('/runs'),
       api('/augmentations'),
+      loadPresent(),
     ]);
   } catch (e) {
     page.innerHTML = `<p class="error-msg">Failed to load: ${e.message}</p>`;
@@ -34,12 +35,13 @@ async function showInference() {
 
   page.innerHTML = buildInferencePage();
   _initDropZone();
+  onInferRunChanged();
 }
 
 function buildInferencePage() {
   const runOptions = _inferRuns.length
     ? _inferRuns.map(r =>
-        `<option value="${escHtml(r.name)}">${escHtml(r.name)} (${escHtml(r.backbone)}, ${fmtAcc(r.val_accuracy)})</option>`
+        `<option value="${escHtml(r.name)}" data-task="${escHtml(r.task || 'classification')}">${escHtml(r.name)} (${escHtml(r.display.backbone)}, ${escHtml(r.display.val_accuracy)})</option>`
       ).join('')
     : '<option value="">No runs available</option>';
 
@@ -52,9 +54,21 @@ function buildInferencePage() {
 
         <div class="inference-section">
           <p class="section-label">Model</p>
-          <select id="inference-run-select" style="margin:0">
+          <select id="inference-run-select" style="margin:0" onchange="onInferRunChanged()">
             ${runOptions}
           </select>
+        </div>
+
+        <!-- Same knobs as predict --top-k / --conf; only the one that fits the run's task shows. -->
+        <div class="inference-section" id="infer-opt-topk">
+          <p class="section-label">Top-K classes</p>
+          <select id="infer-top-k" style="margin:0">
+            ${[1, 3, 5, 10].map(k => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k}</option>`).join('')}
+          </select>
+        </div>
+        <div class="inference-section" id="infer-opt-conf" style="display:none">
+          <p class="section-label">Min confidence</p>
+          <input type="number" id="infer-conf" min="0" max="1" step="0.05" placeholder="run default" style="margin:0">
         </div>
 
         <div class="inference-section">
@@ -233,6 +247,30 @@ function _renderAugStack() {
   }).join('');
 }
 
+/* ── Prediction options ────────────────────────────────────────────────────── */
+
+function _inferTask() {
+  const sel = document.getElementById('inference-run-select');
+  return sel?.selectedOptions[0]?.dataset.task || 'classification';
+}
+
+function onInferRunChanged() {
+  const detection = _inferTask() === 'detection';
+  const topk = document.getElementById('infer-opt-topk');
+  const conf = document.getElementById('infer-opt-conf');
+  if (topk) topk.style.display = detection ? 'none' : '';
+  if (conf) conf.style.display = detection ? '' : 'none';
+}
+
+// Options as sent to the API, only the ones that apply to the selected run's task.
+function _inferOptions() {
+  if (_inferTask() === 'detection') {
+    const raw = document.getElementById('infer-conf')?.value;
+    return raw === '' || raw == null ? {} : { conf: raw };
+  }
+  return { top_k: document.getElementById('infer-top-k')?.value || '5' };
+}
+
 /* ── Run prediction ────────────────────────────────────────────────────────── */
 
 async function runInference() {
@@ -245,7 +283,8 @@ async function runInference() {
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
 
   const hasAug = _inferAugments.length > 0;
-  const origKey = `${run}::${_inferFile.name}::${_inferFile.size}`;
+  const options = _inferOptions();
+  const origKey = `${run}::${_inferFile.name}::${_inferFile.size}::${JSON.stringify(options)}`;
   const origCached = _inferOrigResult && _inferOrigKey === origKey;
 
   _inferAugResult = null;
@@ -257,6 +296,7 @@ async function runInference() {
       const fd = new FormData();
       fd.append('file', _inferFile);
       fd.append('run', run);
+      Object.entries(options).forEach(([k, v]) => fd.append(k, v));
 
       const origRes = await fetch('/api/predict/single', { method: 'POST', body: fd });
       if (!origRes.ok) {
@@ -274,6 +314,7 @@ async function runInference() {
       fd2.append('file', _inferFile);
       fd2.append('run', run);
       fd2.append('augmentations', JSON.stringify(augPayload));
+      Object.entries(options).forEach(([k, v]) => fd2.append(k, v));
 
       const augRes = await fetch('/api/predict/augmented', { method: 'POST', body: fd2 });
       if (!augRes.ok) {
@@ -385,11 +426,11 @@ function buildResultPanel(panelId, result, augImageB64) {
     `;
   }
 
-  const topK = (result.top_k || []).slice(0, 5);
-  const maxConf = topK.length ? topK[0].confidence : 1;
+  const topK = result.top_k || [];
 
   const bars = topK.map((item, i) => {
-    const pct = (item.confidence / maxConf * 100).toFixed(1);
+    // Bar length is the confidence itself (0-100%), not relative to the top class.
+    const pct = (item.confidence * 100).toFixed(1);
     const isTop = i === 0;
     return `
       <div class="topk-row">

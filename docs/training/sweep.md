@@ -195,7 +195,7 @@ ordinary runs for every command, except that `runs rename` refuses them
 
 ## In the WebUI
 
-The **Experiments** page lists a sweep as one row (tagged `sweep`) alongside
+The **Runs** page lists a sweep as one row (tagged `sweep`) alongside
 ordinary runs, with the best trial's validation accuracy and test score. Click it to open the sweep
 page: its settings, the axes, and a trial table with the best trial highlighted.
 Click a trial to open it as a normal run; its back link returns to the sweep.
