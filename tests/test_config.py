@@ -231,13 +231,47 @@ def test_detection_config_round_trips(tmp_path):
     assert reloaded.detection.max_detections == 50
 
 
-def test_test_metric_round_trips(tmp_path):
+def test_run_metrics_round_trip(tmp_path):
     cfg = build_config("data")
-    cfg.run.test_metric = "map50"
+    cfg.run.primary_metric = "map50"
+    cfg.run.primary_value = 0.5
+    cfg.run.val_loss = 0.25
     save_config(cfg, str(tmp_path))
 
     reloaded = load_config(str(tmp_path))
-    assert reloaded.run.test_metric == "map50"
+    assert reloaded.run.primary_metric == "map50"
+    assert reloaded.run.metrics == {"map50": 0.5, "val_loss": 0.25}
+    assert reloaded.run.primary_value == 0.5
+
+
+def test_legacy_run_keys_migrate_to_metrics(tmp_path):
+    cfg = build_config("data")
+    save_config(cfg, str(tmp_path))
+    path = tmp_path / "config.yaml"
+    raw = yaml.safe_load(path.read_text())
+    raw["run"] = {
+        "name": "old", "val_accuracy": 0.9, "val_loss": 0.3,
+        "test_accuracy": 0.5, "test_metric": "map50",
+    }
+    path.write_text(yaml.safe_dump(raw))
+
+    run = load_config(str(tmp_path)).run
+    assert run.metrics == {"val_accuracy": 0.9, "val_loss": 0.3, "map50": 0.5}
+    assert run.primary_metric == "map50"
+    assert run.primary_value == 0.5
+    assert run.val_accuracy == 0.9
+
+
+def test_update_run_status_merges_metrics(tmp_path):
+    cfg = build_config("data")
+    cfg.run.val_loss = 0.4
+    save_config(cfg, str(tmp_path))
+
+    update_run_status(str(tmp_path), metrics={"map50": 0.6}, primary_metric="map50")
+
+    run = load_config(str(tmp_path)).run
+    assert run.metrics == {"val_loss": 0.4, "map50": 0.6}
+    assert run.primary_metric == "map50"
 
 
 def test_val_split_round_trips(tmp_path):

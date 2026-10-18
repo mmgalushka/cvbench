@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from cvbench.core.exp_store import loss_still_falling
+from cvbench.core.task import MetricSpec
 
 EMPTY = "—"
 
@@ -34,8 +35,10 @@ def fmt_loss(value: float | None) -> str:
 
 
 def fmt_metric(metric: str | None, value: float | None) -> str:
-    """A selection/score metric by name: losses as decimals, everything else as a percentage."""
-    return fmt_loss(value) if metric and metric.endswith("loss") else fmt_pct(value)
+    """A selection/score metric by name, formatted the way its task's schema says."""
+    spec = _metric_spec(metric)
+    is_loss = spec.fmt == "loss" if spec else bool(metric and metric.endswith("loss"))
+    return fmt_loss(value) if is_loss else fmt_pct(value)
 
 
 def fmt_lr(value: float | None) -> str:
@@ -57,10 +60,24 @@ def fmt_count(value: int | None) -> str:
 # Names
 # ---------------------------------------------------------------------------
 
-TASK_SHORT = {"classification": "cls", "detection": "det"}
+def _metric_spec(metric: str | None) -> MetricSpec | None:
+    from cvbench.tasks import all_metrics
 
-# A run's "test" score is task specific; its label travels with the value.
-TEST_METRIC_LABELS = {"accuracy": "Accuracy", "map50": "mAP@50"}
+    return all_metrics().get(metric or "")
+
+
+def _default_primary_metric() -> str:
+    """The primary metric of the default task — the one shown without a label."""
+    from cvbench.tasks import task_or_default
+
+    return task_or_default(None).primary_metric.name
+
+
+def metric_labels() -> dict[str, str]:
+    """``{metric name: display label}`` for every metric of every task."""
+    from cvbench.tasks import all_metrics
+
+    return {name: spec.label for name, spec in all_metrics().items()}
 
 # Section titles shared by `runs show` / `evaluate` and the WebUI Evaluation tab.
 SECTIONS = {
@@ -81,18 +98,17 @@ EMPTY_DATASETS = "No datasets found in '{dir}'."
 
 TRAIN_LONGER = "Validation loss was still falling when training stopped — train longer (more --epochs)."
 
-# More than this many false positives per image means the detector is firing on
-# background, which almost always points at an undertrained model or a conf that is too low.
-_FP_PER_IMAGE_ADVISORY = 2.0
-
-
 def task_short(task: str | None, *, is_sweep: bool = False) -> str:
-    short = TASK_SHORT.get(task or "classification", "cls")
+    from cvbench.tasks import task_or_default
+
+    short = task_or_default(task).short_name
     return f"{short}·sweep" if is_sweep else short
 
 
-def test_metric_label(metric: str | None) -> str:
-    return TEST_METRIC_LABELS.get(metric or "accuracy", metric or "Accuracy")
+def metric_label(metric: str | None) -> str:
+    metric = metric or _default_primary_metric()
+    spec = _metric_spec(metric)
+    return spec.label if spec else metric
 
 
 # ---------------------------------------------------------------------------
@@ -129,11 +145,11 @@ def run_columns(width: int | None = None) -> list[tuple[str, str, str]]:
 def present_run(entry: dict[str, Any]) -> dict[str, str]:
     """Display strings for one run or sweep entry (``scan_experiments`` / ``sweep_entry`` shape).
 
-    ``test`` is the bare value; ``test_label`` names its metric ('' for plain accuracy,
-    which is the default), so the terminal can append it and the WebUI can badge it.
+    ``test`` is the bare primary value; ``test_label`` names its metric ('' for the default
+    task's, which needs no name), so the terminal can append it and the WebUI can badge it.
     """
-    metric = entry.get("test_metric")
-    label = test_metric_label(metric) if metric and metric != "accuracy" else ""
+    metric = entry.get("primary_metric")
+    label = metric_label(metric) if metric and metric != _default_primary_metric() else ""
     return {
         "name": str(entry.get("name", "")),
         "task": task_short(entry.get("task"), is_sweep=bool(entry.get("is_sweep"))),
@@ -142,7 +158,7 @@ def present_run(entry: dict[str, Any]) -> dict[str, str]:
         "status": str(entry.get("status") or "?"),
         "val_loss": fmt_loss(entry.get("val_loss")),
         "val_accuracy": fmt_pct(entry.get("val_accuracy")),
-        "test": fmt_pct(entry.get("test_accuracy")),
+        "test": fmt_metric(metric, entry.get("primary_value")),
         "test_label": label,
         "epochs": fmt_epochs(entry.get("epochs_run"), entry.get("epochs")),
         "lr": fmt_lr(entry.get("lr")),
@@ -155,7 +171,9 @@ def run_detail_display(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def _test_field_label(metric: str | None) -> str:
-    return "Test accuracy" if not metric or metric == "accuracy" else f"Test {test_metric_label(metric)}"
+    if not metric or metric == _default_primary_metric():
+        return f"Test {metric_label(metric).lower()}"
+    return f"Test {metric_label(metric)}"
 
 
 def run_fields(entry: dict[str, Any]) -> list[tuple[str, str]]:
@@ -167,7 +185,7 @@ def run_fields(entry: dict[str, Any]) -> list[tuple[str, str]]:
         ("Epochs", d["epochs"]),
         ("Val loss", d["val_loss"]),
         ("Val accuracy", d["val_accuracy"]),
-        (_test_field_label(entry.get("test_metric")), d["test"]),
+        (_test_field_label(entry.get("primary_metric")), d["test"]),
         ("Status", d["status"]),
         ("Date", d["date"]),
     ]
@@ -184,85 +202,28 @@ def run_cell(display: dict[str, str], key: str) -> str:
 # Eval reports
 # ---------------------------------------------------------------------------
 
-_CLS_CLASS_COLUMNS = ["Class", "Precision", "Recall", "F1", "Support"]
-_DET_CLASS_COLUMNS = ["Class", "AP@50", "AP@75", "Precision", "Recall", "F1", "Support"]
+def _report_task(report: dict, task: str | None):
+    """The task a report belongs to — an unnamed or unregistered one reads as the default task."""
+    from cvbench.tasks import task_or_default
+
+    return task_or_default(task or report.get("task"))
 
 
 def eval_summary(report: dict, val_accuracy: float | None = None, task: str | None = None) -> list[tuple[str, str]]:
     """Ordered (label, value) headline facts of an eval report, for any task."""
-    rows: list[tuple[str, str]] = [
-        ("Split", str(report.get("split") or "test")),
-        ("Images evaluated", str(report["n_images"])),
-    ]
-    if (task or report.get("task")) == "detection":
-        det = report["detection"]
-        loc = det.get("localization", {})
-        sweep = loc.get("recall_sweep", {})
-        rows += [
-            ("Mean IoU (matched)", fmt_pct(loc.get("mean_iou"), empty="n/a")),
-            ("AP@50 / AP@75", f"{fmt_pct(loc.get('ap50'), empty='n/a')} / {fmt_pct(loc.get('ap75'), empty='n/a')}"),
-            (
-                "Recall @ IoU .5/.75/.9",
-                " / ".join(fmt_pct(sweep.get(k), empty="n/a") for k in ("0.5", "0.75", "0.9")),
-            ),
-            ("mAP@50", fmt_pct(det.get("map50"), empty="n/a")),
-        ]
-        return rows
-
-    acc = report.get("overall_accuracy")
-    if acc is None:
-        acc = (report.get("overall") or {}).get("value")
-    overall = fmt_pct(acc)
-    if val_accuracy is not None:
-        overall += f"  (val {fmt_pct(val_accuracy)})"
-    rows.append(("Overall accuracy", overall))
-    if report.get("top3_accuracy") is not None:
-        rows.append(("Top-3 accuracy", fmt_pct(report["top3_accuracy"])))
-    return rows
+    return _report_task(report, task).eval_summary(report, val_accuracy)
 
 
 def per_class_table(report: dict, task: str | None = None) -> dict[str, list]:
     """Columns and formatted rows of the per-class metrics table, for any task."""
-    per_class = report["per_class"]
-    if (task or report.get("task")) == "detection":
-        rows = [
-            [
-                cls,
-                fmt_pct(m.get("ap"), empty="n/a"),
-                fmt_pct(m.get("ap75"), empty="n/a"),
-                fmt_pct(m["precision"]),
-                fmt_pct(m["recall"]),
-                fmt_pct(m["f1"]),
-                str(m["support"]),
-            ]
-            for cls, m in per_class.items()
-        ]
-        return {"columns": _DET_CLASS_COLUMNS, "rows": rows}
-    rows = [
-        [cls, fmt_pct(m["precision"]), fmt_pct(m["recall"]), fmt_pct(m["f1"]), str(m["support"])]
-        for cls, m in per_class.items()
-    ]
-    return {"columns": _CLS_CLASS_COLUMNS, "rows": rows}
-
-
-def detection_advisories(report: dict) -> list[str]:
-    """Advisories derivable from a detection report alone."""
-    det = report["detection"]
-    n_images = report["n_images"]
-    fp = det["counts"]["fp"]
-    if n_images and fp / n_images >= _FP_PER_IMAGE_ADVISORY:
-        return [
-            f"{fp / n_images:.1f} false positives per image at conf ≥ {det['conf_threshold']} — "
-            "the detector is likely undertrained; train longer or raise --conf."
-        ]
-    return []
+    return _report_task(report, task).per_class_table(report)
 
 
 def run_advisories(run_dir: Path | str, report: dict | None) -> list[str]:
     """Every advisory that applies to a run's evaluation — shown by `evaluate`, `runs show` and the WebUI."""
     advisories: list[str] = []
-    if report is not None and report.get("task") == "detection":
-        advisories += detection_advisories(report)
+    if report is not None:
+        advisories += _report_task(report, None).report_advisories(report)
     if loss_still_falling(run_dir):
         advisories.append(TRAIN_LONGER)
     return advisories
@@ -313,10 +274,14 @@ def present_dataset(info: dict[str, Any]) -> dict[str, str]:
 
 def labels() -> dict[str, Any]:
     """Everything the WebUI needs to label itself, served once at ``/api/present``."""
+    from cvbench.tasks import DEFAULT_TASK, task_meta
+
     return {
         "run_columns": [{"key": k, "label": label, "align": a} for k, label, a in RUN_COLUMNS],
         "dataset_columns": [{"key": k, "label": label, "align": a} for k, label, a in DATASET_COLUMNS],
         "sections": SECTIONS,
         "empty": {"runs": EMPTY_RUNS, "datasets": EMPTY_DATASETS},
-        "test_metrics": TEST_METRIC_LABELS,
+        "test_metrics": metric_labels(),
+        "tasks": task_meta(),
+        "default_task": DEFAULT_TASK,
     }

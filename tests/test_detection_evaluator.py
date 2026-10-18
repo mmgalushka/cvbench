@@ -70,8 +70,8 @@ def test_train_then_evaluate_produces_a_valid_envelope(yolo_project):
     from cvbench.core.config import load_config
     cfg = load_config(exp_dir)
     assert cfg.task == "detection"
-    assert cfg.run.test_metric == "map50"
-    assert cfg.run.test_accuracy == report["overall"]["value"]
+    assert cfg.run.primary_metric == "map50"
+    assert cfg.run.primary_value == report["overall"]["value"]
     assert cfg.run.val_accuracy is None  # detection never sets this
 
 
@@ -86,8 +86,8 @@ def test_scan_experiments_surfaces_the_detection_run(yolo_project):
     entries = scan_experiments("experiments")
     assert len(entries) == 1
     assert entries[0]["task"] == "detection"
-    assert entries[0]["test_metric"] == "map50"
-    assert entries[0]["test_accuracy"] is not None
+    assert entries[0]["primary_metric"] == "map50"
+    assert entries[0]["primary_value"] is not None
 
 
 @pytest.mark.slow

@@ -6,9 +6,9 @@ import keras
 import numpy as np
 import tqdm
 
+from cvbench.classification.view import render_report as print_body
 from cvbench.core import _console, present
 from cvbench.core.report import report_envelope, write_report
-from cvbench.core.report_print import print_classification_body as print_body
 
 _MAX_SAMPLES_PER_CELL = 20
 # Top-3 only says something once there are clearly more than three classes to pick from.

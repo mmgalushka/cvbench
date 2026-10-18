@@ -19,3 +19,8 @@ def validate_slug(name: str, what: str = "Name") -> str:
             "and must start with a letter or digit."
         )
     return name
+
+
+def class_label(class_names: list[str] | None, idx: int) -> str:
+    """The name of class IDX, falling back to the bare index when unnamed or out of range."""
+    return class_names[idx] if class_names and idx < len(class_names) else str(idx)

@@ -53,7 +53,7 @@ def test_runs_list_sort_by_val_accuracy(tmp_path):
 
 
 def test_runs_list_shows_val_acc_and_test_columns(tmp_path):
-    _write_exp(tmp_path, "exp_a", val_accuracy=0.9123, test_accuracy=0.8765)
+    _write_exp(tmp_path, "exp_a", val_accuracy=0.9123, primary_value=0.8765)
     result = CliRunner().invoke(runs, ["list", str(tmp_path), "--sort", "val_accuracy"])
     assert result.exit_code == 0
     assert "Val Acc" in result.output

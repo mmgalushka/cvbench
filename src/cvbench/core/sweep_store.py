@@ -28,6 +28,7 @@ import yaml
 
 from cvbench.core.config import CVBenchConfig, load_config
 from cvbench.core.exp_store import SWEEP_MANIFEST, _read_entry, sweep_dirs, validate_run_name
+from cvbench.tasks import task_for_metric
 
 MANIFEST_VERSION = 1
 
@@ -71,12 +72,8 @@ _SPEC_FLAGS = ("optimizer", "loss", "lr_scheduler")
 # Numeric flags where `a:b` would be a range (not supported yet).
 _RANGE_FLAGS = ("epochs", "lr", "batch_size", "input_size", "dropout", "fine_tune_from_layer", "val_split", "seed")
 
-_METRIC_DIRECTIONS = {
-    "val_loss": "min",
-    "val_accuracy": "max",
-    "test_accuracy": "max",
-    "map50": "max",
-}
+# Names older manifests used for a metric, mapped to the name runs record it under.
+_METRIC_ALIASES = {"test_accuracy": "accuracy"}
 
 
 class SweepError(ValueError):
@@ -203,18 +200,22 @@ def validate_sweep_name(name: str) -> None:
 
 def default_metric(task: str) -> tuple[str, str]:
     """Default selection (metric, direction) for a task."""
-    if task == "detection":
-        return "map50", "max"
-    return "val_loss", "min"
+    from cvbench.tasks import get_task
+
+    metric = get_task(task).sweep_metric
+    return metric, metric_direction(metric)
 
 
 def metric_direction(metric: str) -> str:
     """Return "min" or "max" for a known selection metric."""
+    from cvbench.tasks import all_metrics
+
+    known = all_metrics()
     try:
-        return _METRIC_DIRECTIONS[metric]
+        return known[_METRIC_ALIASES.get(metric, metric)].direction
     except KeyError:
         raise SweepError(
-            f"Unknown metric '{metric}'. Valid metrics: {', '.join(_METRIC_DIRECTIONS)}"
+            f"Unknown metric '{metric}'. Valid metrics: {', '.join([*known, *_METRIC_ALIASES])}"
         ) from None
 
 
@@ -316,10 +317,11 @@ def _test_result(tdir: Path) -> tuple[str | None, float | None]:
 
 
 def _metric_value(entry: dict[str, Any], metric: str) -> float | None:
-    if metric == "map50":
-        value = entry.get("test_accuracy") if entry.get("test_metric") == "map50" else None
+    metric = _METRIC_ALIASES.get(metric, metric)
+    if metric == entry.get("primary_metric"):
+        value = entry.get("primary_value")
     else:
-        value = entry.get(metric)
+        value = entry.get("metrics", {}).get(metric)
     return float(value) if isinstance(value, (int, float)) else None
 
 
@@ -412,7 +414,7 @@ def trial_config_values(trial_dir: str | Path, flags: list[str]) -> dict[str, An
 def sweep_entry(sweep_dir: str | Path) -> dict[str, Any] | None:
     """Summarize a sweep as one `runs list` entry (same keys as `scan_experiments` plus `is_sweep` and `n_trials`).
 
-    `val_loss` / `val_accuracy` / `test_accuracy` / `test_metric` / `epochs_run` come from the best trial (never
+    `val_loss` / `val_accuracy` / `primary_metric` / `primary_value` / `epochs_run` come from the best trial (never
     the ranking metric) and are None when no trial has finished. Status is `running` while any trial runs, else `done`.
     Returns None if the manifest is missing or unreadable.
     """
@@ -424,7 +426,7 @@ def sweep_entry(sweep_dir: str | Path) -> dict[str, Any] | None:
     entries = [e for r in rows if (e := _read_entry(sweep / r.dir)) is not None]
     best = best_trial(rows)
     best_entry = _read_entry(sweep / best.dir) if best else None
-    task = entries[0]["task"] if entries else ("detection" if manifest.metric == "map50" else "classification")
+    task = entries[0]["task"] if entries else task_for_metric(manifest.metric)
     return {
         "name": manifest.name or sweep.name,
         "dir": str(sweep),
@@ -434,8 +436,8 @@ def sweep_entry(sweep_dir: str | Path) -> dict[str, Any] | None:
         "status": "running" if any(e["status"] == "running" for e in entries) else "done",
         "val_loss": best_entry["val_loss"] if best_entry else None,
         "val_accuracy": best_entry["val_accuracy"] if best_entry else None,
-        "test_accuracy": best_entry["test_accuracy"] if best_entry else None,
-        "test_metric": best_entry["test_metric"] if best_entry else None,
+        "primary_metric": best_entry["primary_metric"] if best_entry else None,
+        "primary_value": best_entry["primary_value"] if best_entry else None,
         "epochs_run": best_entry["epochs_run"] if best_entry else None,
         "date": manifest.date,
         "is_sweep": True,

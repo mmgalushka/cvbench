@@ -1,7 +1,10 @@
 """Classification task: class-folder datasets, softmax head, confusion-matrix eval.
 
 ``ClassificationTask`` wires the modules in this package to the ``Task``
-interface — pure delegation, no new logic.
+interface — pure delegation, no new logic. The TensorFlow-backed modules
+(``data``, ``model``, ``evaluator``) are imported inside the methods that need
+them, so asking the task for its metadata, report rendering or prediction
+shaping never loads TensorFlow.
 """
 from __future__ import annotations
 
@@ -9,20 +12,34 @@ import contextlib
 import io
 from pathlib import Path
 
-from cvbench.classification.data import build_dataset as _build_dataset
-from cvbench.classification.data import build_datasets as _build_datasets
-from cvbench.classification.data import get_class_names as _get_class_names
-from cvbench.classification.evaluator import evaluate as _evaluate
-from cvbench.classification.model import build_model as _build_model
-from cvbench.core.task import DatasetSpec, Task
-from cvbench.datasets.layout import classification_layout_errors
+from cvbench.classification import predict as _predict
+from cvbench.classification import view as _view
+from cvbench.core.task import VAL_LOSS, DatasetSpec, MetricSpec, Task
+from cvbench.datasets.layout import classification_layout_errors, is_yolo_dataset
 from cvbench.datasets.stats import get_class_distribution, print_imbalance_warning, resolve_class_weights
 
 
 class ClassificationTask(Task):
     name = "classification"
+    short_name = "cls"
+    primary_metric = MetricSpec("accuracy", "Accuracy", "max")
+    sweep_metric = "val_loss"
+    selection_metric_names = ("val_loss", "val_accuracy")
+    predict_option_names = frozenset({"top_k"})
+
+    def metrics_schema(self) -> tuple[MetricSpec, ...]:
+        return (VAL_LOSS, MetricSpec("val_accuracy", "Val Acc", "max"), self.primary_metric)
+
+    @classmethod
+    def matches_layout(cls, data_dir: Path) -> bool:
+        return not is_yolo_dataset(data_dir)
+
+    def layout_errors(self, data_dir: Path) -> list[str]:
+        return classification_layout_errors(data_dir)
 
     def resolve_layout(self, cfg) -> DatasetSpec:
+        from cvbench.classification.data import get_class_names as _get_class_names
+
         class_names = _get_class_names(cfg.data.train_dir)
         cfg.data.classes = class_names
         cfg.model.num_classes = len(class_names)
@@ -34,17 +51,18 @@ class ClassificationTask(Task):
             num_train_images=self.count_images(cfg.data.train_dir),
         )
 
-    def validate_config(self, cfg) -> list[str]:
-        return classification_layout_errors(Path(cfg.data.data_dir))
-
     def count_images(self, directory: str) -> int:
         return sum(1 for _ in Path(directory).glob("*/*"))
 
     def build_datasets(self, cfg, spec: DatasetSpec):
+        from cvbench.classification.data import build_datasets as _build_datasets
+
         train_ds, val_ds, _class_names, num_train = _build_datasets(cfg)
         return train_ds, val_ds, num_train
 
     def build_eval_dataset(self, cfg, spec: DatasetSpec):
+        from cvbench.classification.data import build_dataset as _build_dataset
+
         with contextlib.redirect_stdout(io.StringIO()):
             return _build_dataset(cfg.data.test_dir, spec.class_names, cfg, training=False)
 
@@ -54,6 +72,8 @@ class ClassificationTask(Task):
         return resolve_class_weights(cfg.training.class_weight, class_dist, spec.class_names)
 
     def build_model(self, cfg):
+        from cvbench.classification.model import build_model as _build_model
+
         return _build_model(cfg)
 
     def headline_metrics(self, final_metrics: dict) -> dict:
@@ -63,6 +83,8 @@ class ClassificationTask(Task):
         }
 
     def evaluate(self, model, eval_ds, cfg, spec: DatasetSpec, run_dir, output_dir=None, conf=None) -> dict:
+        from cvbench.classification.evaluator import evaluate as _evaluate
+
         return _evaluate(
             model=model,
             test_ds=eval_ds,
@@ -74,4 +96,25 @@ class ClassificationTask(Task):
         )
 
     def test_score(self, report: dict) -> tuple[str, float | None]:
-        return "accuracy", report["overall"]["value"]
+        return self.primary_metric.name, report["overall"]["value"]
+
+    def predict(self, images, outputs_list, cfg, class_names, conf=None, top_k=1) -> list[dict]:
+        return _predict.build_results(images, [o[0] for o in outputs_list], class_names, top_k)
+
+    def predict_one(self, outputs, cfg, conf=None, top_k=1) -> dict:
+        return {
+            "task": self.name,
+            **_predict.build_classification_result(outputs[0], cfg.data.classes, top_k),
+        }
+
+    def render_predictions(self, formats_run, all_formats) -> None:
+        _view.render_predictions(formats_run, all_formats)
+
+    def eval_summary(self, report, val_accuracy=None):
+        return _view.eval_summary(report, val_accuracy)
+
+    def per_class_table(self, report):
+        return _view.per_class_table(report)
+
+    def render_report(self, report, val_accuracy=None, advisories=()) -> None:
+        _view.render_report(report, val_accuracy, advisories)

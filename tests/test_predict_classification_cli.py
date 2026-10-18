@@ -15,6 +15,7 @@ import pytest
 from click.testing import CliRunner
 from PIL import Image
 
+from cvbench.classification.predict import build_classification_result, build_results
 from cvbench.cli.predict import predict
 from cvbench.services import prediction
 
@@ -423,8 +424,8 @@ def test_load_image_converts_grayscale_to_rgb(tmp_path):
 def test_build_results_names_classes_and_falls_back_to_index():
     probs = [_probs(1), np.array([0.1, 0.1, 0.1, 0.7], dtype=np.float32)]
 
-    named = prediction._build_results(["d/a.jpg", "d/b.jpg"], probs, CLASSES)
-    bare = prediction._build_results(["d/a.jpg"], [_probs(2)], None)
+    named = build_results(["d/a.jpg", "d/b.jpg"], probs, CLASSES)
+    bare = build_results(["d/a.jpg"], [_probs(2)], None)
 
     assert {k: named[0][k] for k in ("filename", "class_index", "class_name")} == {
         "filename": "a.jpg", "class_index": 1, "class_name": "dog",
@@ -436,7 +437,7 @@ def test_build_results_names_classes_and_falls_back_to_index():
 
 
 def test_build_classification_result_sorts_top_k():
-    result = prediction.build_classification_result(np.array([0.2, 0.5, 0.3]), CLASSES, None)
+    result = build_classification_result(np.array([0.2, 0.5, 0.3]), CLASSES, None)
 
     assert result["class_name"] == "dog" and result["class_index"] == 1
     assert [e["class_name"] for e in result["top_k"]] == ["dog", "bird", "cat"]

@@ -165,7 +165,7 @@ def test_class_weight_parser_accepts_valid_specs():
 
 
 def test_layout_errors_dispatches_on_task(data_dir):
-    from cvbench.datasets.layout import layout_errors
+    from cvbench.tasks import layout_errors
 
     assert layout_errors(data_dir) == []  # sniffed: classification
     assert any("images/train" in e for e in layout_errors(data_dir, "detection"))

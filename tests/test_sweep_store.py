@@ -334,9 +334,9 @@ def test_summarize_done_without_metric_not_best(tmp_path):
 
 def test_summarize_map50_uses_test_metric(tmp_path):
     d = _sweep(tmp_path, metric="map50", direction="max", axes={"lr": ["1", "2", "3"]})
-    _write_exp(d, "sw_001", test_metric="map50", test_accuracy=0.3)
-    _write_exp(d, "sw_002", test_metric="map50", test_accuracy=0.7)
-    _write_exp(d, "sw_003", test_metric="accuracy", test_accuracy=0.99)  # wrong metric: ignored
+    _write_exp(d, "sw_001", primary_metric="map50", primary_value=0.3)
+    _write_exp(d, "sw_002", primary_metric="map50", primary_value=0.7)
+    _write_exp(d, "sw_003", primary_metric="accuracy", primary_value=0.99)  # wrong metric: ignored
     _, rows = summarize(d)
     assert [r.value for r in rows] == [0.3, 0.7, None]
     assert best_trial(rows).dir == "sw_002"

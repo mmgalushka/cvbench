@@ -153,7 +153,7 @@ def validate_dataset(data_dir: str, from_dir: str | None = None) -> None:
     `run_training` does.
     """
     from cvbench.core.config import load_config
-    from cvbench.datasets.layout import layout_errors
+    from cvbench.tasks import layout_errors
 
     task = None
     if from_dir is not None:

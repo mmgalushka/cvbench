@@ -1,7 +1,7 @@
 import pytest
 
 from cvbench.core.config import load_config
-from cvbench.core.task import DatasetSpec
+from cvbench.core.task import DatasetSpec, MetricSpec
 from cvbench.services import training as training_service
 
 
@@ -10,6 +10,7 @@ class _CrashingTask:
     partway through run_training (before the real training loop even starts)."""
 
     name = "classification"
+    primary_metric = MetricSpec("accuracy", "Accuracy", "max")
 
     def validate_config(self, cfg):
         return []

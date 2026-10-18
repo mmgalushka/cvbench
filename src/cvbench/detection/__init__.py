@@ -1,17 +1,20 @@
 """Detection task: YOLO-layout datasets, 2-scale anchor-based YOLO head, mAP eval.
 
-``DetectionTask`` wires this package's modules to the ``Task`` interface.
+``DetectionTask`` wires this package's modules to the ``Task`` interface. The
+TensorFlow-backed modules (``data``, ``losses``, ``model``, ``evaluator``) are
+imported inside the methods that need them, so asking the task for its
+metadata, report rendering or prediction shaping never loads TensorFlow.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
 from cvbench.core.config import TransformConfig
-from cvbench.core.task import DatasetSpec, Task
-from cvbench.datasets.layout import detection_layout_errors, list_images, yolo_class_names
+from cvbench.core.task import VAL_LOSS, DatasetSpec, MetricSpec, Task
+from cvbench.datasets.layout import detection_layout_errors, is_yolo_dataset, list_images, yolo_class_names
+from cvbench.detection import predict as _predict
+from cvbench.detection import view as _view
 from cvbench.detection.anchors import resolve_anchors
-from cvbench.detection.data import build_detection_dataset
-from cvbench.detection.losses import YoloLoss
 
 # EfficientNet's Swish/SiLU activations are known to quantize poorly to
 # INT8 — detection defaults to a pure-ReLU backbone instead, unless the user
@@ -28,6 +31,23 @@ _GEOMETRIC_KERAS_TRANSFORMS = frozenset({
 
 class DetectionTask(Task):
     name = "detection"
+    short_name = "det"
+    primary_metric = MetricSpec("map50", "mAP@50", "max")
+    sweep_metric = "map50"
+    selection_metric_names = ("val_loss", "map50")
+    config_section = "detection"
+    hidden_config_prefixes = ("detection.anchors",)
+    predict_option_names = frozenset({"conf"})
+
+    def metrics_schema(self) -> tuple[MetricSpec, ...]:
+        return (VAL_LOSS, self.primary_metric)
+
+    @classmethod
+    def matches_layout(cls, data_dir: Path) -> bool:
+        return is_yolo_dataset(data_dir)
+
+    def layout_errors(self, data_dir: Path) -> list[str]:
+        return detection_layout_errors(data_dir)
 
     def resolve_layout(self, cfg) -> DatasetSpec:
         root = Path(cfg.data.data_dir)
@@ -56,14 +76,13 @@ class DetectionTask(Task):
             num_train_images=self.count_images(cfg.data.train_dir),
         )
 
-    def validate_config(self, cfg) -> list[str]:
-        return detection_layout_errors(Path(cfg.data.data_dir))
-
     def count_images(self, directory: str) -> int:
         d = Path(directory)
         return len(list_images(d)) if d.is_dir() else 0
 
     def build_datasets(self, cfg, spec: DatasetSpec):
+        from cvbench.detection.data import build_detection_dataset
+
         train_ds = build_detection_dataset(
             spec.train_dir, cfg.data.data_dir, spec.class_names, cfg, training=True
         )
@@ -73,6 +92,8 @@ class DetectionTask(Task):
         return train_ds, val_ds, spec.num_train_images
 
     def build_eval_dataset(self, cfg, spec: DatasetSpec):
+        from cvbench.detection.data import build_detection_dataset
+
         return build_detection_dataset(
             spec.test_dir, cfg.data.data_dir, spec.class_names, cfg, training=False
         )
@@ -98,12 +119,14 @@ class DetectionTask(Task):
         return build_model(cfg)
 
     def load_model(self, path: str):
-        # Force-imports cvbench.detection.losses (above) so
+        # Importing cvbench.detection.losses here registers YoloLoss, so
         # register_keras_serializable can resolve "YoloLoss" by name —
         # belt-and-braces, also pass it explicitly as custom_objects.
         import warnings
 
         import keras
+
+        from cvbench.detection.losses import YoloLoss
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
@@ -132,4 +155,34 @@ class DetectionTask(Task):
         )
 
     def test_score(self, report: dict) -> tuple[str, float | None]:
-        return "map50", report["overall"]["value"]
+        return self.primary_metric.name, report["overall"]["value"]
+
+    def predict(self, images, outputs_list, cfg, class_names, conf=None, top_k=1) -> list[dict]:
+        return _predict.build_detection_results(images, outputs_list, cfg, conf)
+
+    def predict_one(self, outputs, cfg, conf=None, top_k=1) -> dict:
+        result = _predict.build_detection_result(outputs, cfg, conf)
+        # Boxes are normalized top-left xywh in [0, 1] — what shared.js::buildBoxLayer() consumes.
+        top = max(result["detections"], key=lambda d: d["confidence"], default=None)
+        return {
+            "task": self.name,
+            **result,
+            "class_name": top["class_name"] if top else None,
+            "class_index": top["class_index"] if top else None,
+            "confidence": top["confidence"] if top else None,
+        }
+
+    def render_predictions(self, formats_run, all_formats) -> None:
+        _view.render_predictions(formats_run, all_formats)
+
+    def eval_summary(self, report, val_accuracy=None):
+        return _view.eval_summary(report, val_accuracy)
+
+    def per_class_table(self, report):
+        return _view.per_class_table(report)
+
+    def report_advisories(self, report) -> list[str]:
+        return _view.report_advisories(report)
+
+    def render_report(self, report, val_accuracy=None, advisories=()) -> None:
+        _view.render_report(report, val_accuracy, advisories)

@@ -1,10 +1,10 @@
 from pathlib import Path
 
 import click
-import numpy as np
 
 from cvbench.cli import _help
 from cvbench.core import _console
+from cvbench.tasks import get_task
 
 _MODEL_SUFFIXES = {".keras": "keras", ".onnx": "onnx", ".tflite": "tflite"}
 
@@ -142,15 +142,8 @@ def predict(experiment, input_path, fmt, conf, top_k, probs, model_path):
     print()
     if not formats_run:
         print(_console.yellow(" No models available to run inference."))
-    elif result["task"] == "detection":
-        if fmt == "all":
-            _print_all_formats_detection(formats_run)
-        else:
-            _print_single_format_detection(formats_run[0]["results"])
-    elif fmt == "all":
-        _print_all_formats(formats_run)
     else:
-        _print_single_format(formats_run[0]["results"])
+        get_task(result["task"]).render_predictions(formats_run, fmt == "all")
     print()
 
     print(_console.rule())
@@ -173,124 +166,6 @@ def predict(experiment, input_path, fmt, conf, top_k, probs, model_path):
         print(
             _console.dim(
                 " plan: Jetson only — for more information use: predict --format plan"
-            )
-        )
-
-
-def _print_single_format(results: list[dict]) -> None:
-    for r in results:
-        if len(r["top_k"]) <= 1:
-            print(
-                f" {r['filename']:<40} {r['class_name']:<20} "
-                f"{r['confidence'] * 100:5.1f}%"
-            )
-            continue
-        print(f" {r['filename']}")
-        for e in r["top_k"]:
-            print(f"   {e['class_name']:<20} {e['confidence'] * 100:5.1f}%")
-
-
-def _print_single_format_detection(results: list[dict]) -> None:
-    for r in results:
-        dets = r["detections"]
-        print(f" {r['filename']}  {len(dets)} detection{'s' if len(dets) != 1 else ''}")
-        for d in dets:
-            print(
-                f"   {d['class_name']:<20} {d['confidence'] * 100:5.1f}%"
-                f"  x={d['x']:.3f} y={d['y']:.3f} w={d['w']:.3f} h={d['h']:.3f}"
-            )
-
-
-def _print_all_formats_detection(formats_run: list[dict]) -> None:
-    """One row per image: detection count and class mix per format, flagging
-    formats that disagree with the first (reference) one."""
-    col_w = 28
-    fmt_names = [f["format"] for f in formats_run]
-    header = f" {'image':<38}" + "".join(f"  {n:<{col_w}}" for n in fmt_names)
-    print(header)
-    print(_console.dim(" " + "─" * (len(header) - 1)))
-
-    def summary(res: dict) -> tuple[int, list[str]]:
-        names = sorted(d["class_name"] for d in res["detections"])
-        return len(names), names
-
-    for ref in formats_run[0]["results"]:
-        ref_summary = summary(ref)
-        row = f" {ref['filename']:<38}"
-        for fmt_data in formats_run:
-            res = next(
-                (r for r in fmt_data["results"] if r["filename"] == ref["filename"]),
-                None,
-            )
-            if res is None:
-                cell = "—"
-            else:
-                count, names = summary(res)
-                top = max(res["detections"], key=lambda d: d["confidence"], default=None)
-                cell = f"{count} box{'es' if count != 1 else ''}"
-                if top:
-                    cell += f" (top {top['confidence'] * 100:.1f}%)"
-                if fmt_data is not formats_run[0] and (count, names) != ref_summary:
-                    cell += "  ⚠️"
-            row += f"  {cell:<{col_w}}"
-        print(row)
-
-
-def _print_all_formats(formats_run: list[dict]) -> None:
-    fmt_names = [f["format"] for f in formats_run]
-    col_w = 20
-
-    header = (
-        f" {'image':<38}"
-        + "".join(f"  {n:<{col_w}}" for n in fmt_names)
-        + "  max|diff|"
-    )
-    print(header)
-    print(_console.dim(" " + "─" * (len(header) - 1)))
-
-    ref_results = {
-        r["filename"]: r["class_name"] for r in formats_run[0]["results"]
-    }
-    filenames = [r["filename"] for r in formats_run[0]["results"]]
-
-    for filename in filenames:
-        ref_class = ref_results[filename]
-        row = f" {filename:<38}"
-        for fmt_data in formats_run:
-            res = next(
-                (r for r in fmt_data["results"] if r["filename"] == filename),
-                None,
-            )
-            if res is None:
-                cell = "—"
-            else:
-                label = f"{res['class_name']} ({res['confidence'] * 100:.1f}%)"
-                is_ref = fmt_data is formats_run[0]
-                differs = not is_ref and res["class_name"] != ref_class
-                if differs:
-                    label = f"{label}  ⚠️"
-                cell = label
-            row += f"  {cell:<{col_w}}"
-        ref = next(r for r in formats_run[0]["results"] if r["filename"] == filename)
-        diffs = [
-            float(np.max(np.abs(np.array(r["probs"]) - np.array(ref["probs"]))))
-            for fd in formats_run[1:]
-            for r in fd["results"]
-            if r["filename"] == filename
-        ]
-        row += f"  {max(diffs):.4f}" if diffs else "  —"
-        print(row)
-
-    ref_rows = formats_run[0]["results"]
-    n_classes = len(ref_rows[0]["probs"])
-    mean_top = sum(r["confidence"] for r in ref_rows) / len(ref_rows)
-    if mean_top <= 1.5 / n_classes:
-        print()
-        print(
-            _console.yellow(
-                f" ⚠ near-chance model: mean top-1 confidence {mean_top * 100:.1f}% "
-                f"(chance is {100 / n_classes:.1f}%). Matching class names are weak "
-                "evidence — compare max|diff| instead."
             )
         )
 

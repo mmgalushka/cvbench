@@ -201,50 +201,50 @@ def test_scan_experiments_reports_task_and_test_metric(tmp_path):
     cfg = build_config("data", task="detection")
     cfg.run.name = "det_run"
     cfg.run.date = "2026-01-01"
-    cfg.run.test_metric = "map50"
+    cfg.run.primary_metric = "map50"
     save_config(cfg, str(exp_dir))
 
     results = scan_experiments(str(tmp_path))
     assert results[0]["task"] == "detection"
-    assert results[0]["test_metric"] == "map50"
+    assert results[0]["primary_metric"] == "map50"
 
 
 def test_scan_experiments_defaults_task_to_classification(tmp_path):
     _write_exp(tmp_path, "plain")
     results = scan_experiments(str(tmp_path))
     assert results[0]["task"] == "classification"
-    assert results[0]["test_metric"] == "accuracy"
+    assert results[0]["primary_metric"] == "accuracy"
 
 
 def test_test_accuracy_reads_new_overall_envelope(tmp_path):
-    exp_dir = _write_exp(tmp_path, "with_envelope")  # cfg.run.test_accuracy left None
+    exp_dir = _write_exp(tmp_path, "with_envelope")  # cfg.run primary value left None
     (exp_dir / "eval_report.json").write_text(json.dumps({
         "task": "classification",
         "overall": {"metric": "accuracy", "value": 0.42, "label": "Overall Accuracy"},
         "overall_accuracy": 0.42,  # legacy mirror, also present
     }))
     results = scan_experiments(str(tmp_path))
-    assert results[0]["test_accuracy"] == 0.42
+    assert results[0]["primary_value"] == 0.42
 
 
 def test_test_accuracy_falls_back_to_legacy_report_shape(tmp_path):
     """A report written before the 'overall' envelope existed (no 'overall' key)
     must still resolve — this is the back-compat path for old runs."""
-    exp_dir = _write_exp(tmp_path, "legacy_report")  # cfg.run.test_accuracy left None
+    exp_dir = _write_exp(tmp_path, "legacy_report")  # cfg.run primary value left None
     (exp_dir / "eval_report.json").write_text(json.dumps({
         "overall_accuracy": 0.77,
     }))
     results = scan_experiments(str(tmp_path))
-    assert results[0]["test_accuracy"] == 0.77
+    assert results[0]["primary_value"] == 0.77
 
 
 def test_test_accuracy_prefers_config_value_over_report(tmp_path):
-    exp_dir = _write_exp(tmp_path, "config_wins", test_accuracy=0.99)
+    exp_dir = _write_exp(tmp_path, "config_wins", primary_value=0.99)
     (exp_dir / "eval_report.json").write_text(json.dumps({
         "overall": {"metric": "accuracy", "value": 0.11, "label": "Overall Accuracy"},
     }))
     results = scan_experiments(str(tmp_path))
-    assert results[0]["test_accuracy"] == 0.99
+    assert results[0]["primary_value"] == 0.99
 
 
 def _write_log(tmp_path, losses, column="val_loss"):

@@ -8,7 +8,6 @@ import tqdm
 
 from cvbench.core import _console, present
 from cvbench.core.report import report_envelope, write_report
-from cvbench.core.report_print import print_detection_body as print_body
 from cvbench.datasets.layout import list_images, read_yolo_boxes, yolo_label_dir
 from cvbench.detection.decode import decode_batch
 from cvbench.detection.metrics import (
@@ -16,6 +15,7 @@ from cvbench.detection.metrics import (
     compute_detection_metrics,
     match_detections,
 )
+from cvbench.detection.view import render_report as print_body
 
 # Decode every candidate above a tiny epsilon (not the operating conf_threshold)
 # so compute_detection_metrics sees the full ranked list it needs for AP.
@@ -141,7 +141,7 @@ def _print_report(report: dict, run_dir: str, out_dir: Path) -> None:
     print(_console.rule())
     print(f" {_console.bold('CVBench — evaluate')}  {_console.dim('|')}  {_console.dim('run: ' + run_name)}")
     print(_console.rule())
-    print_body(report, present.run_advisories(run_dir, report))
+    print_body(report, advisories=present.run_advisories(run_dir, report))
     print(f" {_console.bold('Saved:')}")
     print(f"   {_console.dim(str(out_dir / 'eval_report.json'))}")
     print(_console.rule())

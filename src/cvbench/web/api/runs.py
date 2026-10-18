@@ -22,6 +22,7 @@ from cvbench.core.exp_store import (
     validate_run_name,
 )
 from cvbench.core.sweep_store import SweepError, scan_sweeps, summarize
+from cvbench.tasks import task_or_default
 
 router = APIRouter()
 
@@ -124,11 +125,11 @@ def get_run(name: str):
     # an accurate live count, so use that instead of re-reading the file.
     epochs_run = len(training_log) if cfg.run.status == "running" else cfg.run.epochs_run
 
-    if cfg.run.test_accuracy is not None:
-        test_accuracy = cfg.run.test_accuracy
+    if cfg.run.primary_value is not None:
+        primary_value = cfg.run.primary_value
     else:
         report_overall = (eval_report or {}).get("overall")
-        test_accuracy = (
+        primary_value = (
             report_overall.get("value") if isinstance(report_overall, dict)
             # Back-compat: reports written before the "overall" envelope existed.
             else (eval_report or {}).get("overall_accuracy")
@@ -143,8 +144,9 @@ def get_run(name: str):
         "epochs_run": epochs_run,
         "val_accuracy": cfg.run.val_accuracy,
         "val_loss": cfg.run.val_loss,
-        "test_accuracy": test_accuracy,
-        "test_metric": cfg.run.test_metric,
+        "metrics": cfg.run.metrics,
+        "primary_metric": cfg.run.primary_metric,
+        "primary_value": primary_value,
         "status": cfg.run.status,
         "date": cfg.run.date,
     }
@@ -162,8 +164,10 @@ def get_run(name: str):
         "epochs_run": epochs_run,
         "val_accuracy": cfg.run.val_accuracy,
         "val_loss": cfg.run.val_loss,
-        "test_accuracy": test_accuracy,
-        "test_metric": cfg.run.test_metric,
+        "metrics": cfg.run.metrics,
+        "primary_metric": cfg.run.primary_metric,
+        "primary_value": primary_value,
+        "task_meta": task_or_default(cfg.task).meta(),
         "resumable": cfg.run.resumable,
         "notes": cfg.run.notes,
         "cli_command": cfg.run.cli_command or "",

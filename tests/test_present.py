@@ -56,8 +56,8 @@ def test_one_unit_convention():
 
 
 def test_run_cell_labels_non_accuracy_test_metric():
-    plain = present.present_run({"name": "r", "test_accuracy": 0.9})
-    det = present.present_run({"name": "r", "test_accuracy": 0.5, "test_metric": "map50"})
+    plain = present.present_run({"name": "r", "primary_value": 0.9})
+    det = present.present_run({"name": "r", "primary_value": 0.5, "primary_metric": "map50"})
     assert present.run_cell(plain, "test") == "90.0%"
     assert present.run_cell(det, "test") == "50.0% mAP@50"
 
@@ -71,7 +71,7 @@ def test_narrow_terminals_drop_backbone_and_date_only():
 # ── runs: same row in the terminal and the API ───────────────────────────────
 
 def test_runs_list_and_api_show_the_same_values(exps, monkeypatch):
-    _write_exp(exps, "exp_a", val_accuracy=0.9345, val_loss=0.2, test_accuracy=0.88, epochs_run=12)
+    _write_exp(exps, "exp_a", val_accuracy=0.9345, val_loss=0.2, primary_value=0.88, epochs_run=12)
     monkeypatch.setenv("COLUMNS", "200")
 
     (api_run,) = runs_api.list_runs()
@@ -85,7 +85,7 @@ def test_runs_list_and_api_show_the_same_values(exps, monkeypatch):
 
 
 def test_run_detail_headline_matches_runs_show(exps):
-    _write_exp(exps, "exp_a", val_accuracy=0.9, test_accuracy=0.8, epochs_run=3)
+    _write_exp(exps, "exp_a", val_accuracy=0.9, primary_value=0.8, epochs_run=3)
     detail = runs_api.get_run("exp_a")
     out = CliRunner().invoke(runs, ["show", str(exps / "exp_a")]).output
 

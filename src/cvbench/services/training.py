@@ -16,9 +16,8 @@ from cvbench.core.config import (
     update_run_status,
 )
 from cvbench.core.exp_store import EXPERIMENTS_DIR, check_output_dir, make_run_name, make_unique_dir
-from cvbench.datasets.layout import detect_task_name
 from cvbench.services._runtime import print_device_banner
-from cvbench.tasks import get_task
+from cvbench.tasks import detect_task_name, get_task
 
 
 def run_training(
@@ -149,6 +148,7 @@ def run_training(
     cfg.run.date = date.today().strftime("%Y-%m-%d")
     cfg.run.status = "running"
     cfg.run.pid = os.getpid()
+    cfg.run.primary_metric = task.primary_metric.name
     cfg.run.cli_command = " ".join([sys.argv[0].split("/")[-1]] + sys.argv[1:])
 
     save_config(cfg, exp_dir)

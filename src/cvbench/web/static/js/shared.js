@@ -94,6 +94,9 @@ const _PRESENT_FALLBACK = {
     outcomes: 'Per-class outcomes', class_confusion: 'Class-confusion matrix',
   },
   empty: { runs: "No runs found in '{dir}'.", datasets: "No datasets found in '{dir}'." },
+  tasks: {},
+  default_task: '',
+  test_metrics: {},
 };
 
 async function loadPresent() {
@@ -104,6 +107,21 @@ async function loadPresent() {
     _present = _PRESENT_FALLBACK;
   }
   return _present;
+}
+
+// Per-task facts served by the server (Task.meta): its primary metric, the prediction
+// options it honours, ... Pages pick task-specific renderers from these rather than
+// hard-coding which task does what; an unknown task falls back to generic renderers.
+function taskMeta(task) {
+  return ((_present && _present.tasks) || {})[task] || {};
+}
+
+function isDefaultTask(task) {
+  return !task || task === (_present && _present.default_task);
+}
+
+function metricLabel(metric) {
+  return ((_present && _present.test_metrics) || {})[metric] || metric || '';
 }
 
 function emptyText(kind, dir) {

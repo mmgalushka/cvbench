@@ -11,6 +11,7 @@ from typing import Any
 
 from cvbench.datasets import layout
 from cvbench.datasets.stats import get_dataset_overview
+from cvbench.tasks import detect_task_name
 
 
 def dataset_info(data_dir: str | Path) -> dict[str, Any]:
@@ -36,7 +37,7 @@ def dataset_info(data_dir: str | Path) -> dict[str, Any]:
         "name": root.name,
         "path": str(root),
         "format": "yolo" if yolo else "classification",
-        "task": layout.detect_task_name(root),
+        "task": detect_task_name(root),
         "classes": classes,
         "num_classes": len(classes),
         "splits": {

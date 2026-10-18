@@ -41,7 +41,7 @@ async function showInference() {
 function buildInferencePage() {
   const runOptions = _inferRuns.length
     ? _inferRuns.map(r =>
-        `<option value="${escHtml(r.name)}" data-task="${escHtml(r.task || 'classification')}">${escHtml(r.name)} (${escHtml(r.display.backbone)}, ${escHtml(r.display.val_accuracy)})</option>`
+        `<option value="${escHtml(r.name)}" data-task="${escHtml(r.task || '')}">${escHtml(r.name)} (${escHtml(r.display.backbone)}, ${escHtml(r.display.val_accuracy)})</option>`
       ).join('')
     : '<option value="">No runs available</option>';
 
@@ -251,24 +251,35 @@ function _renderAugStack() {
 
 function _inferTask() {
   const sel = document.getElementById('inference-run-select');
-  return sel?.selectedOptions[0]?.dataset.task || 'classification';
+  return sel?.selectedOptions[0]?.dataset.task || '';
+}
+
+// The prediction options the selected run's task honours (Task.predict_options);
+// without task metadata, fall back to the classification-style top-k.
+function _inferSupported() {
+  return taskMeta(_inferTask()).predict_options || ['top_k'];
 }
 
 function onInferRunChanged() {
-  const detection = _inferTask() === 'detection';
+  const supported = _inferSupported();
   const topk = document.getElementById('infer-opt-topk');
   const conf = document.getElementById('infer-opt-conf');
-  if (topk) topk.style.display = detection ? 'none' : '';
-  if (conf) conf.style.display = detection ? '' : 'none';
+  if (topk) topk.style.display = supported.includes('top_k') ? '' : 'none';
+  if (conf) conf.style.display = supported.includes('conf') ? '' : 'none';
 }
 
 // Options as sent to the API, only the ones that apply to the selected run's task.
 function _inferOptions() {
-  if (_inferTask() === 'detection') {
+  const supported = _inferSupported();
+  const options = {};
+  if (supported.includes('conf')) {
     const raw = document.getElementById('infer-conf')?.value;
-    return raw === '' || raw == null ? {} : { conf: raw };
+    if (raw !== '' && raw != null) options.conf = raw;
   }
-  return { top_k: document.getElementById('infer-top-k')?.value || '5' };
+  if (supported.includes('top_k')) {
+    options.top_k = document.getElementById('infer-top-k')?.value || '5';
+  }
+  return options;
 }
 
 /* ── Run prediction ────────────────────────────────────────────────────────── */
@@ -396,36 +407,32 @@ function _updateAugPanel() {
     </div>`;
 }
 
-function buildResultPanel(panelId, result, augImageB64) {
-  const imgSrcBase = augImageB64
-    ? `data:image/png;base64,${augImageB64}`
-    : (_inferFile ? URL.createObjectURL(_inferFile) : '');
+function buildDetectionResultPanel(panelId, result, imgSrcBase) {
+  const dets = result.detections || [];
+  const boxes = dets.map(d => ({
+    class_id: d.class_index, class: d.class_name,
+    x: d.x, y: d.y, w: d.w, h: d.h,
+    variant: 'pred', confidence: d.confidence,
+  }));
+  const rows = dets.length
+    ? dets.map(d => `
+      <div class="topk-row">
+        <span class="topk-label" style="border-left:3px solid ${boxColor(d.class_index)};padding-left:6px">${escHtml(d.class_name)}</span>
+        <span class="topk-pct">${(d.confidence * 100).toFixed(1)}%</span>
+      </div>`).join('')
+    : '<p class="aug-empty">No objects detected.</p>';
+  return `
+    <div class="result-image-wrap">
+      <img src="${imgSrcBase}" class="result-image ds-tile-img--contain" alt="input image"
+           onload="fitBoxOverlay(this)"
+           onclick="openModal('${imgSrcBase}', null, ${escHtml(JSON.stringify(boxes))})" id="result-img-${panelId}">
+      ${buildBoxLayer(boxes, false)}
+    </div>
+    <div class="result-topk">${rows}</div>
+  `;
+}
 
-  if (result.task === 'detection') {
-    const dets = result.detections || [];
-    const boxes = dets.map(d => ({
-      class_id: d.class_index, class: d.class_name,
-      x: d.x, y: d.y, w: d.w, h: d.h,
-      variant: 'pred', confidence: d.confidence,
-    }));
-    const rows = dets.length
-      ? dets.map(d => `
-        <div class="topk-row">
-          <span class="topk-label" style="border-left:3px solid ${boxColor(d.class_index)};padding-left:6px">${escHtml(d.class_name)}</span>
-          <span class="topk-pct">${(d.confidence * 100).toFixed(1)}%</span>
-        </div>`).join('')
-      : '<p class="aug-empty">No objects detected.</p>';
-    return `
-      <div class="result-image-wrap">
-        <img src="${imgSrcBase}" class="result-image ds-tile-img--contain" alt="input image"
-             onload="fitBoxOverlay(this)"
-             onclick="openModal('${imgSrcBase}', null, ${escHtml(JSON.stringify(boxes))})" id="result-img-${panelId}">
-        ${buildBoxLayer(boxes, false)}
-      </div>
-      <div class="result-topk">${rows}</div>
-    `;
-  }
-
+function buildClassificationResultPanel(panelId, result, imgSrc) {
   const topK = result.top_k || [];
 
   const bars = topK.map((item, i) => {
@@ -443,10 +450,6 @@ function buildResultPanel(panelId, result, augImageB64) {
     `;
   }).join('');
 
-  const imgSrc = augImageB64
-    ? `data:image/png;base64,${augImageB64}`
-    : (_inferFile ? URL.createObjectURL(_inferFile) : '');
-
   return `
     <div class="result-image-wrap">
       <img src="${imgSrc}" class="result-image" alt="input image"
@@ -461,6 +464,30 @@ function buildResultPanel(panelId, result, augImageB64) {
       <span class="explain-error" id="explain-err-${panelId}"></span>
     </div>
   `;
+}
+
+function buildGenericResultPanel(panelId, result, imgSrc) {
+  const { probs, ...shown } = result;
+  return `
+    <div class="result-image-wrap">
+      <img src="${imgSrc}" class="result-image" alt="input image"
+           onclick="openModal('${imgSrc}')" id="result-img-${panelId}">
+    </div>
+    <pre class="result-raw">${escHtml(JSON.stringify(shown, null, 2))}</pre>
+  `;
+}
+
+// Per-task result panels, keyed by the task name in the prediction result.
+const RESULT_PANELS = {
+  classification: buildClassificationResultPanel,
+  detection: buildDetectionResultPanel,
+};
+
+function buildResultPanel(panelId, result, augImageB64) {
+  const imgSrc = augImageB64
+    ? `data:image/png;base64,${augImageB64}`
+    : (_inferFile ? URL.createObjectURL(_inferFile) : '');
+  return (RESULT_PANELS[result.task] || buildGenericResultPanel)(panelId, result, imgSrc);
 }
 
 /* ── XAI for inference page ─────────────────────────────────────────────────── */

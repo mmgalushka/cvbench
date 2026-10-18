@@ -4,11 +4,15 @@
   browse dataset folders without paying for a TensorFlow import.
 * ``cvbench.core`` must never import a task package (``cvbench.classification``,
   ``cvbench.detection``) — task-specific code belongs above core, not inside it.
+* Only the task packages and ``cvbench.tasks`` may compare against a task name:
+  everything else asks the ``Task`` (see ``core/task.py``).
 """
 import ast
 import subprocess
 import sys
 from pathlib import Path
+
+from cvbench.tasks import TASK_NAMES
 
 SRC = Path(__file__).resolve().parent.parent / "src" / "cvbench"
 
@@ -62,7 +66,7 @@ def _imported_top_level_modules(py_file: Path) -> set[str]:
 
 
 def test_core_never_imports_a_task_package():
-    forbidden = {"classification", "detection"}
+    forbidden = set(TASK_NAMES)
     offenders = []
     for py_file in (SRC / "core").rglob("*.py"):
         for node in ast.walk(ast.parse(py_file.read_text(), filename=str(py_file))):
@@ -78,3 +82,19 @@ def test_core_never_imports_a_task_package():
             if module and module.startswith("cvbench.") and module.split(".")[1] in forbidden:
                 offenders.append((py_file, module))
     assert not offenders, f"core/ must not import task packages: {offenders}"
+
+
+def test_task_names_are_never_compared_outside_task_packages():
+    allowed = {SRC / "tasks.py", *SRC.joinpath("web", "static").rglob("*")}
+    offenders = []
+    for py_file in SRC.rglob("*.py"):
+        if py_file in allowed or py_file.relative_to(SRC).parts[0] in TASK_NAMES:
+            continue
+        for node in ast.walk(ast.parse(py_file.read_text(), filename=str(py_file))):
+            if isinstance(node, ast.Compare):
+                operands = [node.left, *node.comparators]
+                for op in operands:
+                    consts = [op] if isinstance(op, ast.Constant) else getattr(op, "elts", [])
+                    if any(isinstance(c, ast.Constant) and c.value in TASK_NAMES for c in consts):
+                        offenders.append((py_file.relative_to(SRC), node.lineno))
+    assert not offenders, f"compare against a Task, not a task-name string: {offenders}"

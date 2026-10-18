@@ -48,7 +48,7 @@ function runCell(col, r) {
         ? `<span class="type-name">${SWEEP_ICON}<strong>${escHtml(d.name)}</strong>${trialCount(r.n_trials)}</span>`
         : `<span class="type-name">${RUN_ICON}<strong>${escHtml(d.name)}</strong></span>`;
     case 'task':
-      return `<span class="badge badge-task-${r.task || 'classification'}">${escHtml(d.task)}</span>`;
+      return `<span class="badge badge-task-${r.task || ''}">${escHtml(d.task)}</span>`;
     case 'status':
       return `<span class="badge badge-${r.status}">${escHtml(d.status)}</span>`;
     case 'test':
@@ -193,13 +193,8 @@ async function showRunDetail(name) {
   }
 }
 
-function isDetectionRun(run) {
-  return run.task === 'detection';
-}
-
 function buildRunDetail(run) {
   const hasEval = run.eval_report != null;
-  const detection = isDetectionRun(run);
 
   // Same facts, labels and values as `runs show` (core/present.py run_fields);
   // the status is the badge in the title, not a card.
@@ -214,7 +209,7 @@ function buildRunDetail(run) {
         ${run.sweep
           ? `<a href="#/sweeps/${encodeURIComponent(run.sweep)}" class="back-link">← ${escHtml(run.sweep)}</a>`
           : `<a href="#/" class="back-link" onclick="setActive('nav-runs')">← Runs</a>`}
-        <h2><span class="type-name">${RUN_ICON}<span>${run.name}</span></span> <span class="badge badge-${run.status}">${run.status}</span>${detection ? ' <span class="badge badge-format">detection</span>' : ''}</h2>
+        <h2><span class="type-name">${RUN_ICON}<span>${run.name}</span></span> <span class="badge badge-${run.status}">${run.status}</span>${isDefaultTask(run.task) ? '' : ` <span class="badge badge-format">${escHtml(run.task)}</span>`}</h2>
       </div>
       <div class="run-actions-menu" id="run-actions-menu">
         <button class="run-actions-trigger" onclick="toggleRunMenu(event)" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
@@ -378,12 +373,37 @@ function renderChart(run) {
 
 /* ── Evaluation tab ────────────────────────────────────────────────────────── */
 
+// Task-specific Evaluation tabs, keyed by the task name stored in the report. A task
+// with no entry gets the generic tab, built purely from the server's formatted fields.
+const EVAL_TAB_BUILDERS = {
+  classification: buildClassificationEvalTab,
+  detection: buildDetectionEvalTab,
+};
+
+// Where a confusion-matrix cell click goes; tasks not listed use the plain image gallery.
+const CELL_GALLERY_HANDLERS = { detection: 'showDetectionCellGallery' };
+
+function buildGenericEvalTab(run, report) {
+  const d = run.eval_display;
+  const facts = d.summary.map(([label, value]) => `<tr><th>${escHtml(label)}</th><td>${escHtml(value)}</td></tr>`).join('');
+  const head = d.per_class.columns.map(c => `<th>${escHtml(c)}</th>`).join('');
+  const rows = d.per_class.rows
+    .map(r => `<tr>${r.map(c => `<td>${escHtml(c)}</td>`).join('')}</tr>`).join('');
+  return `
+    <article><table><tbody>${facts}</tbody></table></article>
+    <article>
+      <h3>${escHtml(d.sections.per_class)}</h3>
+      <table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>
+    </article>`;
+}
+
 function buildEvalTab(run) {
   const report = run.eval_report;
   if (!report) return '<p class="error-msg">No evaluation report. Run <kbd>evaluate</kbd> first.</p>';
   if (!run.eval_display) return '<p class="error-msg">This evaluation report predates the current format. Run <kbd>evaluate</kbd> again.</p>';
 
-  const body = report.task === 'detection' ? buildDetectionEvalTab(run, report) : buildClassificationEvalTab(run, report);
+  const build = EVAL_TAB_BUILDERS[report.task] || buildGenericEvalTab;
+  const body = build(run, report);
   return advisoriesHtml(run.advisories) + body;
 }
 
@@ -976,7 +996,7 @@ function buildConfusionMatrix(report, runName) {
   const { classes, matrix } = report.confusion_matrix;
   const n = classes.length;
   const maxVal = Math.max(...matrix.flat().filter(v => v > 0), 1);
-  const onCell = report.task === 'detection' ? 'showDetectionCellGallery' : 'showGallery';
+  const onCell = CELL_GALLERY_HANDLERS[report.task] || 'showGallery';
   const bgClass = c => (c === 'background' ? ' cm-bg-header' : '');
 
   let cells = `<div class="cm-corner"></div>`;
@@ -1614,7 +1634,8 @@ function buildCompareSideBySide(a, b) {
     ['Status',         a.status,           b.status],
     ['Backbone',       a.backbone,         b.backbone],
     ['Val Accuracy',   fmtAcc(a.val_accuracy),  fmtAcc(b.val_accuracy)],
-    ['Test Accuracy',  fmtAcc(a.test_accuracy), fmtAcc(b.test_accuracy)],
+    [`Test ${a.primary_metric === b.primary_metric ? metricLabel(a.primary_metric) : 'score'}`,
+                       fmtAcc(a.primary_value), fmtAcc(b.primary_value)],
     ['Learning rate',  a.display.lr,       b.display.lr],
     ['Epochs',          a.display.epochs,   b.display.epochs],
     ['Batch Size',     a.config.data.batch_size,       b.config.data.batch_size],

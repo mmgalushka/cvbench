@@ -193,7 +193,9 @@ def make_run_name(cfg: CVBenchConfig) -> str:
     classification and a detection run trained the same day with the same
     backbone/LR no longer produce identical names.
     """
-    task_prefix = "det" if cfg.task == "detection" else "cls"
+    from cvbench.tasks import resolve_task
+
+    task_prefix = resolve_task(cfg).run_prefix
     backbone = cfg.model.backbone.replace("efficientnet_", "effnet_")
     lr = _lr_slug(cfg.training.learning_rate)
     today = date.today().strftime("%Y_%m_%d")
@@ -209,7 +211,8 @@ def make_unique_dir(parent: str, name: str) -> Path:
 # Filesystem experiment index
 # ---------------------------------------------------------------------------
 
-def _resolve_test_accuracy(exp_dir: Path, config_value):
+def _resolve_primary_value(exp_dir: Path, config_value):
+    """The run's primary metric: config.yaml's, else the headline of eval_report.json."""
     if config_value is not None:
         return config_value
     report_path = exp_dir / "eval_report.json"
@@ -293,8 +296,9 @@ def _read_entry(exp_dir: Path) -> dict | None:
         "epochs": cfg.training.epochs,
         "val_accuracy": cfg.run.val_accuracy,
         "val_loss": cfg.run.val_loss,
-        "test_accuracy": _resolve_test_accuracy(exp_dir, cfg.run.test_accuracy),
-        "test_metric": cfg.run.test_metric,
+        "metrics": dict(cfg.run.metrics),
+        "primary_metric": cfg.run.primary_metric,
+        "primary_value": _resolve_primary_value(exp_dir, cfg.run.primary_value),
         "epochs_run": epochs_done_live(exp_dir, cfg),
         "status": cfg.run.status,
         "date": cfg.run.date,
@@ -320,8 +324,10 @@ def scan_experiments(parent_dir: str, sort_by: str = "date") -> list[dict]:
             if entry is not None:
                 entries.append(entry)
 
-    valid_sorts = {"val_accuracy", "val_loss", "date", "backbone"}
-    key = sort_by if sort_by in valid_sorts else "date"
+    # "test" orders by each run's primary metric (its task's headline score).
+    sort_keys = {"val_accuracy": "val_accuracy", "val_loss": "val_loss", "test": "primary_value",
+                 "date": "date", "backbone": "backbone"}
+    key = sort_keys.get(sort_by, "date")
     reverse = key != "backbone"
     return sorted(
         entries,
