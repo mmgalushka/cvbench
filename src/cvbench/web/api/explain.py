@@ -19,10 +19,7 @@ class GradCamRequest(BaseModel):
 
 @router.post("/runs/{name}/explain/gradcam")
 def gradcam(name: str, body: GradCamRequest):
-    try:
-        run_dir = resolve_run_dir(name)
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
+    run_dir = resolve_run_dir(name)
 
     cfg = load_config(run_dir)
 

@@ -8,6 +8,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from cvbench.augmentations.registry import get_schema
+from cvbench.core.errors import CVBenchError
 from cvbench.core.exp_store import resolve_run_dir
 
 router = APIRouter()
@@ -46,6 +47,8 @@ async def predict_single(
         result = predict_image(run, image_bytes, **_options(conf, top_k))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except CVBenchError:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse(result)
@@ -74,6 +77,8 @@ async def predict_augmented(
         result = _predict_augmented(run, image_bytes, aug_list, **_options(conf, top_k))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except CVBenchError:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse(result)
@@ -88,10 +93,7 @@ async def predict_xai(
     """Compute a Grad-CAM heatmap for an uploaded image."""
     image_bytes = await file.read()
 
-    try:
-        run_dir = resolve_run_dir(run)
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{run}' not found") from None
+    run_dir = resolve_run_dir(run)
 
     from pathlib import Path
 

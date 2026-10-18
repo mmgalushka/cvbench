@@ -1,12 +1,12 @@
 """`runs` commands and name resolution with sweep directories (trials live in experiments/<sweep>/)."""
 from pathlib import Path
 
-import click
 import pytest
 from click.testing import CliRunner
 
 from cvbench.cli.runs import runs
 from cvbench.core.config import build_config, save_config
+from cvbench.core.errors import AmbiguousNameError, NotFoundError, WrongKindError
 from cvbench.core.exp_store import (
     assert_name_available,
     assert_renamable,
@@ -68,7 +68,7 @@ def test_resolve_top_level_still_wins(exps):
 
 def test_resolve_unknown_still_errors(exps):
     _sweep(exps)
-    with pytest.raises(click.BadParameter):
+    with pytest.raises(NotFoundError):
         resolve_run_dir("nope")
 
 
@@ -183,7 +183,7 @@ def test_runs_show_sweep_by_path(exps):
 
 def test_resolve_run_dir_rejects_sweep_unless_allowed(exps):
     _sweep(exps)
-    with pytest.raises(click.BadParameter, match="is a sweep"):
+    with pytest.raises(WrongKindError, match="is a sweep"):
         resolve_run_dir("sw")
     assert resolve_run_dir("sw", allow_sweep=True).endswith("sw")
 
@@ -203,3 +203,71 @@ def test_runs_unknown_run_suggests_close_run_and_trial(exps):
     _write_exp(sweep, "sw_001")
     assert "Did you mean 'resnet_run'?" in CliRunner().invoke(runs, ["show", "resnet_rum"]).output
     assert "Did you mean 'sw_001'?" in CliRunner().invoke(runs, ["show", "sw_01"]).output
+
+
+# ---------------------------------------------------------------------------
+# prefix lookup
+# ---------------------------------------------------------------------------
+
+def test_resolve_unique_prefix(exps):
+    run = _write_exp(exps, "cls_resnet_lr1e4_2026_03_28")
+    _write_exp(exps, "det_resnet_lr1e4_2026_03_28")
+    assert Path(resolve_run_dir("cls_")).resolve() == run.resolve()
+
+
+def test_resolve_exact_name_wins_over_longer_names(exps):
+    short = _write_exp(exps, "run")
+    _write_exp(exps, "run_2")
+    assert Path(resolve_run_dir("run")).resolve() == short.resolve()
+
+
+def test_resolve_ambiguous_prefix_lists_matches(exps):
+    _write_exp(exps, "cls_a")
+    _write_exp(exps, "cls_b")
+    with pytest.raises(AmbiguousNameError) as exc:
+        resolve_run_dir("cls_")
+    assert exc.value.candidates == ["cls_a", "cls_b"]
+    assert "cls_a, cls_b" in exc.value.message
+
+
+def test_resolve_sweep_trial_by_prefix(exps):
+    sweep = _sweep(exps)
+    trial = _write_exp(sweep, "sw_001")
+    _write_exp(sweep, "other_002")
+    assert Path(resolve_run_dir("sw_0")).resolve() == trial.resolve()
+
+
+def test_resolve_prefix_matching_sweep_is_rejected_as_wrong_kind(exps):
+    _sweep(exps, name="sweep_one")
+    with pytest.raises(WrongKindError):
+        resolve_run_dir("sweep_o")
+    assert resolve_run_dir("sweep_o", allow_sweep=True).endswith("sweep_one")
+
+
+def test_resolve_no_prefix_match_suggests_close_name(exps):
+    _write_exp(exps, "resnet_run")
+    with pytest.raises(NotFoundError) as exc:
+        resolve_run_dir("resnet_rum")
+    assert exc.value.suggestion == "resnet_run"
+
+
+def test_cli_maps_domain_error_to_usage_error(exps):
+    _write_exp(exps, "cls_a")
+    _write_exp(exps, "cls_b")
+    result = CliRunner().invoke(runs, ["show", "cls_"])
+    assert result.exit_code == 2
+    assert "matches 2 runs" in result.output
+    result = CliRunner().invoke(runs, ["show", "zzz"])
+    assert result.exit_code == 2
+    assert "Run not found: 'zzz'" in result.output
+
+
+def test_runs_list_never_truncates_run_names(exps):
+    name = "cls_efficientnet_b0_lr1e4_2026_03_28_extra_long_suffix_here"
+    _write_exp(exps, name)
+    result = CliRunner().invoke(runs, ["list"])
+    assert "…" not in result.output
+    lines = result.output.splitlines()
+    first = next(i for i, ln in enumerate(lines) if ln.startswith("Run")) + 2
+    width = lines[first - 2].index("Task")
+    assert "".join(ln[:width].strip() for ln in lines[first:]) == name

@@ -2,10 +2,10 @@ import json
 from datetime import date
 from pathlib import Path
 
-import click
 import pytest
 
 from cvbench.core.config import build_config, save_config
+from cvbench.core.errors import NotFoundError
 from cvbench.core.exp_store import (
     assert_name_available,
     make_run_name,
@@ -41,7 +41,7 @@ def test_resolve_run_dir_bare_name(tmp_path, monkeypatch):
 def test_resolve_run_dir_not_found_raises_bad_parameter(tmp_path, monkeypatch):
     import cvbench.core.exp_store as store
     monkeypatch.setattr(store, "EXPERIMENTS_DIR", str(tmp_path))
-    with pytest.raises(click.BadParameter):
+    with pytest.raises(NotFoundError):
         resolve_run_dir("nope")
 
 

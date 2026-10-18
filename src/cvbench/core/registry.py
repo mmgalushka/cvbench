@@ -15,9 +15,8 @@ import difflib
 from collections.abc import Callable
 from pathlib import Path
 
-import click
-
 from cvbench.core._names import validate_slug
+from cvbench.core.errors import NotFoundError
 
 
 class Registry:
@@ -78,7 +77,12 @@ class Registry:
                 return str(with_ext)
             tried = with_ext
 
-        raise click.BadParameter(self._not_found_message(name_or_path, tried), param_hint=self.param_hint)
+        match = self.suggest(Path(name_or_path).name)
+        raise NotFoundError(
+            self._not_found_message(name_or_path, tried, match),
+            param_hint=self.param_hint,
+            suggestion=match,
+        )
 
     def suggest(self, name: str) -> str | None:
         """Return the closest existing entry name to `name`, if any is close enough."""
@@ -88,9 +92,8 @@ class Registry:
         matches = difflib.get_close_matches(name, entries, n=1, cutoff=0.6)
         return matches[0] if matches else None
 
-    def _not_found_message(self, name_or_path: str, tried: Path) -> str:
+    def _not_found_message(self, name_or_path: str, tried: Path, match: str | None) -> str:
         msg = f"{self.not_found_label} not found: '{name_or_path}'."
-        match = self.suggest(Path(name_or_path).name)
         if match:
             msg += f" Did you mean '{match}'?"
         if self.list_hint:

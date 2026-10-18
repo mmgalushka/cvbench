@@ -24,6 +24,7 @@ import click
 from click.formatting import HelpFormatter
 
 from cvbench.core import _console
+from cvbench.core.errors import CVBenchError
 
 _MAX_WIDTH = 100
 
@@ -56,6 +57,13 @@ class HelpMixin:
         self.examples: tuple[Example, ...] = tuple(examples)
         self.see_also: tuple[Example, ...] = tuple(see_also)
         super().__init__(*args, **kwargs)
+
+    def invoke(self, ctx):
+        # The one place domain errors from core/ and services/ become CLI usage errors.
+        try:
+            return super().invoke(ctx)
+        except CVBenchError as e:
+            raise click.BadParameter(e.message, param_hint=e.param_hint) from None
 
     def format_usage(self, ctx, formatter):
         w = formatter.width

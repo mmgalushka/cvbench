@@ -8,12 +8,12 @@ carries run-name generation and the filesystem experiment index used by
 from __future__ import annotations
 
 import json
+import os
 from datetime import date
 from pathlib import Path
 
-import click
-
 from cvbench.core.config import CVBenchConfig, load_config
+from cvbench.core.errors import AmbiguousNameError, NotFoundError, WrongKindError
 from cvbench.core.registry import Registry
 
 EXPERIMENTS_DIR = "experiments"
@@ -115,28 +115,57 @@ def assert_renamable(run_dir: Path) -> None:
         )
 
 
+def _named_runs() -> dict[str, str]:
+    """Every addressable run name -> its directory: top-level entries, then sweep trials.
+
+    A top-level entry wins over a trial of the same name, as it does for exact lookup.
+    """
+    named = {n: str(Path(EXPERIMENTS_DIR) / n) for n in EXP_REG.list_entries()}
+    for sweep in sweep_dirs(EXPERIMENTS_DIR):
+        for trial in sorted(sweep.iterdir()):
+            if (trial / "config.yaml").is_file():
+                named.setdefault(trial.name, str(trial))
+    return named
+
+
+def _lookup_run(name: str) -> str:
+    """exact name or path -> sweep trial -> unique name prefix; raises NotFoundError/AmbiguousNameError."""
+    try:
+        return EXP_REG.resolve(name)
+    except NotFoundError as not_found:
+        named = _named_runs()
+        if name in named:
+            return named[name]
+        if not name or os.sep in name or "/" in name:
+            raise
+        matches = sorted(n for n in named if n.startswith(name))
+        if len(matches) == 1:
+            return named[matches[0]]
+        if matches:
+            raise AmbiguousNameError(
+                f"'{name}' matches {len(matches)} runs: {', '.join(matches)}. "
+                "Use a longer prefix or the full name.",
+                candidates=matches,
+                param_hint=EXP_REG.param_hint,
+            ) from None
+        raise not_found from None
+
+
 def resolve_run_dir(name: str, *, allow_sweep: bool = False) -> str:
     """Resolve a run name or path to an existing directory.
 
-    Accepts a full path (experiments/my_run) or a bare run name (my_run).
-    If the given value does not exist as-is, looks under EXPERIMENTS_DIR, then
-    inside sweep directories (a sweep trial is addressable by its bare name).
+    Lookup order: a full path (experiments/my_run), a bare run name under EXPERIMENTS_DIR,
+    a sweep trial by its bare name, then a unique name prefix. An exact match always wins
+    over a prefix; an ambiguous prefix raises AmbiguousNameError listing the matches.
 
     A sweep directory is not a single run (it has no config.yaml), so it is rejected with
     a pointer to its trials unless the caller handles sweeps (`allow_sweep=True`).
     """
     EXP_REG.base_dir = EXPERIMENTS_DIR
-    try:
-        resolved = EXP_REG.resolve(name)
-    except click.BadParameter:
-        for sweep in sweep_dirs(EXPERIMENTS_DIR):
-            trial = sweep / name
-            if (trial / "config.yaml").is_file():
-                return str(trial)
-        raise
+    resolved = _lookup_run(name)
     if not allow_sweep and is_sweep_dir(resolved):
         sweep_name = Path(resolved).name
-        raise click.BadParameter(
+        raise WrongKindError(
             f"'{sweep_name}' is a sweep (a group of trials), not a single run. "
             f"Use one of its trials instead; `runs list {sweep_name}` shows them.",
             param_hint=EXP_REG.param_hint,
