@@ -52,8 +52,9 @@ services:
     restart: unless-stopped
 ```
 
-Then open the WebUI at `http://<server-ip>:8000` and JupyterLab at
-`http://<server-ip>:8888`. Add `--gpus all` (docker run) or the GPU
+Then open the WebUI at `http://<server-ip>:8000` (it starts automatically).
+JupyterLab does not autostart: run `jupyter lab --ip=0.0.0.0 --no-browser`
+inside the container, then open `http://<server-ip>:8888`. Add `--gpus all` (docker run) or the GPU
 `deploy.resources` block (Compose) for GPU acceleration.
 
 **Full documentation →** https://mmgalushka.github.io/cvbench

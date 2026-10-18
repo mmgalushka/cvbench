@@ -85,7 +85,7 @@ data upsample data/my_data/train/dog data/my_data_aug/train/dog \
 1. Copies every original image to `dst_dir` with a fresh 16-char random hex filename.
 2. Randomly picks source images and augments them until `--target` is reached.
 3. Uses MD5 hashing to detect exact duplicates; retries up to 10 times per sample before skipping.
-4. If the source already has ≥ `--target` images, the command exits with a hint to use `data downsample` instead (not yet implemented).
+4. If the source already has ≥ `--target` images, the command exits with an error — there is nothing to upsample.
 
 | Option | Required | Description |
 |---|---|---|

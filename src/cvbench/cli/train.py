@@ -170,10 +170,10 @@ def validate_dataset(data_dir: str, from_dir: str | None = None) -> None:
     examples=[
         ("train data/synthetic --epochs 5",
          "Smoke-test the whole pipeline on the synthetic dataset"),
-        ("train data --epochs 20 --backbone efficientnet_b0",
-         "Train on your own dataset (needs train/, val/, test/ subfolders)"),
-        ("train data --augmentation standard --loss focal:gamma=2.0",
-         "Add a saved augmentation config and swap the loss function"),
+        ("train data/my_dataset --epochs 20 --backbone efficientnet_b0",
+         "Train on your own dataset (needs a train/ subfolder; val/ and test/ optional)"),
+        ("train data/my_dataset --augmentation workspace/augmentation.yaml --loss focal:gamma=2.0",
+         "Add a saved augmentation config (see 'data aug') and swap the loss function"),
     ],
     see_also=[
         ("runs list", "find the name of the run you just created"),
@@ -239,9 +239,10 @@ def train(
 ):
     """Train a model on DATA_DIR.
 
-    DATA_DIR must contain train/, val/, and test/ subdirectories. It can be a
-    full path (data/my_dataset) or a bare dataset name (my_dataset), resolved
-    under data/.
+    DATA_DIR must contain a train/ subdirectory. val/ is optional (without it,
+    --val-split carves one out of train/; detection requires it) and test/ is
+    only needed by 'evaluate'. It can be a full path (data/my_dataset) or a bare
+    dataset name (my_dataset), resolved under data/.
 
     The task is auto-detected: a dataset with images/ and labels/ folders is
     trained as detection, a dataset of per-class folders as classification.

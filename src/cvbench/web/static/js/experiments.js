@@ -36,9 +36,23 @@ const RUN_ICON = '<i class="fas fa-flask type-icon" role="img" title="Experiment
 const SWEEP_ICON = `<svg class="type-icon" width="20" height="16" viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Sweep"><title>Sweep</title><path d="M12 3h6M13.5 3v6L9 19a1.5 1.5 0 0 0 1.4 2h9.2a1.5 1.5 0 0 0 1.4-2l-4.5-10V3"/><path d="M6 10h-3M4.5 10v3.5L2 19.5a1 1 0 0 0 1 1.5h3"/><path d="M24 10h3M25.5 10v3.5L28 19.5a1 1 0 0 1-1 1.5h-3"/></svg>`;
 const trialCount = n => n ? ` <small class="trial-count" title="${n} trial${n !== 1 ? 's' : ''}">×${n}</small>` : '';
 
+// Val/Test cells shared by run and sweep rows. "Test" adapts to the row's own
+// test_metric, since the list can mix classification (accuracy) and detection
+// (mAP@50) entries.
+function valCell(r) {
+  return r.val_accuracy != null ? (r.val_accuracy * 100).toFixed(1) + '%' : '—';
+}
+
+function testCell(r) {
+  if (r.test_accuracy == null) return '—';
+  const label = r.test_metric && r.test_metric !== 'accuracy'
+    ? (r.test_metric === 'map50' ? 'mAP@50' : r.test_metric)
+    : null;
+  return (r.test_accuracy * 100).toFixed(1) + '%' + (label ? ` <small class="ds-metric-label">${label}</small>` : '');
+}
+
 function buildSweepRow(sw) {
   const taskShort = sw.task === 'detection' ? 'det' : 'cls';
-  const loss = sw.val_loss != null ? sw.val_loss.toFixed(4) : '—';
   return `
     <tr onclick="navigate('#/sweeps/${encodeURIComponent(sw.name)}')">
       <td><span class="type-name">${SWEEP_ICON}<strong>${escHtml(sw.name)}</strong>${trialCount(sw.n_trials)}</span></td>
@@ -46,8 +60,8 @@ function buildSweepRow(sw) {
       <td>—</td>
       <td>${sw.date || '—'}</td>
       <td><span class="badge badge-${sw.status}">${sw.status}</span></td>
-      <td>${loss} <small class="ds-metric-label">val loss</small></td>
-      <td>—</td>
+      <td>${valCell(sw)}</td>
+      <td>${testCell(sw)}</td>
       <td>${sw.epochs_run ?? '—'}</td>
     </tr>
   `;
@@ -61,8 +75,6 @@ function buildRunsList(runs, sweeps = []) {
     `;
   }
 
-  // "Test" column header/value adapt per row's own test_metric, since the
-  // list can mix classification (accuracy) and detection (mAP@50) runs.
   const items = [
     ...runs.map(r => ({ date: r.date || '', html: null, r })),
     ...sweeps.map(sw => ({ date: sw.date || '', html: buildSweepRow(sw) })),
@@ -70,12 +82,6 @@ function buildRunsList(runs, sweeps = []) {
 
   const rows = items.map(({ html, r }) => {
     if (html) return html;
-    const testLabel = r.test_metric && r.test_metric !== 'accuracy'
-      ? (r.test_metric === 'map50' ? 'mAP@50' : r.test_metric)
-      : null;
-    const testCell = r.test_accuracy != null
-      ? (r.test_accuracy * 100).toFixed(1) + '%' + (testLabel ? ` <small class="ds-metric-label">${testLabel}</small>` : '')
-      : '—';
     const taskShort = r.task === 'detection' ? 'det' : 'cls';
     return `
     <tr onclick="navigate('#/runs/${encodeURIComponent(r.name)}')">
@@ -84,8 +90,8 @@ function buildRunsList(runs, sweeps = []) {
       <td>${r.backbone}</td>
       <td>${r.date || '—'}</td>
       <td><span class="badge badge-${r.status}">${r.status}</span></td>
-      <td>${r.val_accuracy != null ? (r.val_accuracy * 100).toFixed(1) + '%' : '—'}</td>
-      <td>${testCell}</td>
+      <td>${valCell(r)}</td>
+      <td>${testCell(r)}</td>
       <td>${r.epochs_run} / ${r.epochs}</td>
     </tr>
   `;
