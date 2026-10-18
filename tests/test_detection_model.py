@@ -75,6 +75,7 @@ def test_fit_one_step_on_two_images():
     assert loss > 0
 
 
+@pytest.mark.slow
 def test_overfit_one_batch_recovers_boxes():
     """Standard detector sanity gate: train on a handful of images until the
     model can recover each box's class and location — if this fails, suspect

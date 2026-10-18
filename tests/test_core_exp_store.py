@@ -1,6 +1,5 @@
 import json
 from datetime import date
-from pathlib import Path
 
 import pytest
 
@@ -143,18 +142,6 @@ def test_make_unique_dir_multiple_conflicts(tmp_path):
 # scan_experiments
 # ---------------------------------------------------------------------------
 
-def _write_exp(parent: Path, name: str, **run_kwargs) -> Path:
-    exp_dir = parent / name
-    exp_dir.mkdir(parents=True)
-    cfg = build_config("data")
-    cfg.run.name = name
-    cfg.run.date = "2026-01-01"
-    for k, v in run_kwargs.items():
-        setattr(cfg.run, k, v)
-    save_config(cfg, str(exp_dir))
-    return exp_dir
-
-
 def test_scan_experiments_empty_dir(tmp_path):
     assert scan_experiments(str(tmp_path)) == []
 
@@ -169,24 +156,24 @@ def test_scan_experiments_skips_dirs_without_config(tmp_path):
     assert results == []
 
 
-def test_scan_experiments_finds_experiments(tmp_path):
-    _write_exp(tmp_path, "exp_a", val_accuracy=0.8)
-    _write_exp(tmp_path, "exp_b", val_accuracy=0.9)
+def test_scan_experiments_finds_experiments(tmp_path, write_exp):
+    write_exp(tmp_path, "exp_a", val_accuracy=0.8)
+    write_exp(tmp_path, "exp_b", val_accuracy=0.9)
     results = scan_experiments(str(tmp_path))
     assert len(results) == 2
     names = {r["name"] for r in results}
     assert names == {"exp_a", "exp_b"}
 
 
-def test_scan_experiments_sort_by_val_accuracy(tmp_path):
-    _write_exp(tmp_path, "low", val_accuracy=0.7)
-    _write_exp(tmp_path, "high", val_accuracy=0.95)
+def test_scan_experiments_sort_by_val_accuracy(tmp_path, write_exp):
+    write_exp(tmp_path, "low", val_accuracy=0.7)
+    write_exp(tmp_path, "high", val_accuracy=0.95)
     results = scan_experiments(str(tmp_path), sort_by="val_accuracy")
     assert results[0]["name"] == "high"
 
 
-def test_scan_experiments_sort_by_date(tmp_path):
-    _write_exp(tmp_path, "old")
+def test_scan_experiments_sort_by_date(tmp_path, write_exp):
+    write_exp(tmp_path, "old")
     results = scan_experiments(str(tmp_path), sort_by="date")
     assert len(results) == 1
 
@@ -209,15 +196,15 @@ def test_scan_experiments_reports_task_and_test_metric(tmp_path):
     assert results[0]["primary_metric"] == "map50"
 
 
-def test_scan_experiments_defaults_task_to_classification(tmp_path):
-    _write_exp(tmp_path, "plain")
+def test_scan_experiments_defaults_task_to_classification(tmp_path, write_exp):
+    write_exp(tmp_path, "plain")
     results = scan_experiments(str(tmp_path))
     assert results[0]["task"] == "classification"
     assert results[0]["primary_metric"] == "accuracy"
 
 
-def test_test_accuracy_reads_new_overall_envelope(tmp_path):
-    exp_dir = _write_exp(tmp_path, "with_envelope")  # cfg.run primary value left None
+def test_test_accuracy_reads_new_overall_envelope(tmp_path, write_exp):
+    exp_dir = write_exp(tmp_path, "with_envelope")  # cfg.run primary value left None
     (exp_dir / "eval_report.json").write_text(json.dumps({
         "task": "classification",
         "overall": {"metric": "accuracy", "value": 0.42, "label": "Overall Accuracy"},
@@ -227,10 +214,10 @@ def test_test_accuracy_reads_new_overall_envelope(tmp_path):
     assert results[0]["primary_value"] == 0.42
 
 
-def test_test_accuracy_falls_back_to_legacy_report_shape(tmp_path):
+def test_test_accuracy_falls_back_to_legacy_report_shape(tmp_path, write_exp):
     """A report written before the 'overall' envelope existed (no 'overall' key)
     must still resolve — this is the back-compat path for old runs."""
-    exp_dir = _write_exp(tmp_path, "legacy_report")  # cfg.run primary value left None
+    exp_dir = write_exp(tmp_path, "legacy_report")  # cfg.run primary value left None
     (exp_dir / "eval_report.json").write_text(json.dumps({
         "overall_accuracy": 0.77,
     }))
@@ -238,8 +225,8 @@ def test_test_accuracy_falls_back_to_legacy_report_shape(tmp_path):
     assert results[0]["primary_value"] == 0.77
 
 
-def test_test_accuracy_prefers_config_value_over_report(tmp_path):
-    exp_dir = _write_exp(tmp_path, "config_wins", primary_value=0.99)
+def test_test_accuracy_prefers_config_value_over_report(tmp_path, write_exp):
+    exp_dir = write_exp(tmp_path, "config_wins", primary_value=0.99)
     (exp_dir / "eval_report.json").write_text(json.dumps({
         "overall": {"metric": "accuracy", "value": 0.11, "label": "Overall Accuracy"},
     }))

@@ -1,28 +1,14 @@
 """CLI tests using click's CliRunner — no Docker, no real training."""
-from pathlib import Path
 
 from click.testing import CliRunner
 
 from cvbench.cli.runs import runs
 from cvbench.cli.serve import serve
-from cvbench.core.config import build_config, load_config, save_config
+from cvbench.core.config import load_config, save_config
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _write_exp(parent: Path, name: str, **run_kwargs) -> Path:
-    exp_dir = parent / name
-    exp_dir.mkdir(parents=True)
-    cfg = build_config("data")
-    cfg.run.name = name
-    cfg.run.date = "2026-01-01"
-    cfg.run.status = "done"
-    for k, v in run_kwargs.items():
-        setattr(cfg.run, k, v)
-    save_config(cfg, str(exp_dir))
-    return exp_dir
-
 
 # ---------------------------------------------------------------------------
 # runs list
@@ -35,25 +21,25 @@ def test_runs_list_empty(tmp_path):
     assert "No runs found" in result.output
 
 
-def test_runs_list_shows_entries(tmp_path):
-    _write_exp(tmp_path, "exp_a", val_accuracy=0.91, epochs_run=10)
+def test_runs_list_shows_entries(tmp_path, write_exp):
+    write_exp(tmp_path, "exp_a", val_accuracy=0.91, epochs_run=10)
     runner = CliRunner()
     result = runner.invoke(runs, ["list", str(tmp_path)])
     assert result.exit_code == 0
     assert "exp_a" in result.output
 
 
-def test_runs_list_sort_by_val_accuracy(tmp_path):
-    _write_exp(tmp_path, "exp_low", val_accuracy=0.7)
-    _write_exp(tmp_path, "exp_high", val_accuracy=0.95)
+def test_runs_list_sort_by_val_accuracy(tmp_path, write_exp):
+    write_exp(tmp_path, "exp_low", val_accuracy=0.7)
+    write_exp(tmp_path, "exp_high", val_accuracy=0.95)
     runner = CliRunner()
     result = runner.invoke(runs, ["list", str(tmp_path), "--sort", "val_accuracy"])
     assert result.exit_code == 0
     assert result.output.index("exp_high") < result.output.index("exp_low")
 
 
-def test_runs_list_shows_val_acc_and_test_columns(tmp_path):
-    _write_exp(tmp_path, "exp_a", val_accuracy=0.9123, primary_value=0.8765)
+def test_runs_list_shows_val_acc_and_test_columns(tmp_path, write_exp):
+    write_exp(tmp_path, "exp_a", val_accuracy=0.9123, primary_value=0.8765)
     result = CliRunner().invoke(runs, ["list", str(tmp_path), "--sort", "val_accuracy"])
     assert result.exit_code == 0
     assert "Val Acc" in result.output
@@ -66,8 +52,8 @@ def test_runs_list_shows_val_acc_and_test_columns(tmp_path):
 # runs show
 # ---------------------------------------------------------------------------
 
-def test_runs_show_prints_config_and_command(tmp_path):
-    exp_a = _write_exp(tmp_path, "exp_a", cli_command="train data --epochs 3")
+def test_runs_show_prints_config_and_command(tmp_path, write_exp):
+    exp_a = write_exp(tmp_path, "exp_a", cli_command="train data --epochs 3")
     cfg = load_config(str(exp_a))
     cfg.model.fine_tune_from_layer = 120
     cfg.training.seed = 7
@@ -83,8 +69,8 @@ def test_runs_show_prints_config_and_command(tmp_path):
     # Defaults that aren't in the always-shown set stay out.
     assert "training.optimizer.momentum" not in result.output
 
-def test_runs_show(tmp_path):
-    exp_a = _write_exp(tmp_path, "exp_a", val_accuracy=0.9)
+def test_runs_show(tmp_path, write_exp):
+    exp_a = write_exp(tmp_path, "exp_a", val_accuracy=0.9)
     runner = CliRunner()
     result = runner.invoke(runs, ["show", str(exp_a)])
     assert result.exit_code == 0
@@ -94,10 +80,10 @@ def test_runs_show(tmp_path):
     assert "None" in result.output  # Exports section, no export/ dir yet
 
 
-def test_runs_show_with_exports_and_eval(tmp_path):
+def test_runs_show_with_exports_and_eval(tmp_path, write_exp):
     import json
 
-    exp_a = _write_exp(tmp_path, "exp_a")
+    exp_a = write_exp(tmp_path, "exp_a")
     (exp_a / "export" / "tflite").mkdir(parents=True)
     report = {
         "overall": {"label": "Overall Accuracy", "value": 0.87},
@@ -118,11 +104,11 @@ def test_runs_show_with_exports_and_eval(tmp_path):
     assert "Confusion matrix" in result.output
 
 
-def test_runs_show_classification_report_dispatches_to_dedicated_renderer(tmp_path):
+def test_runs_show_classification_report_dispatches_to_dedicated_renderer(tmp_path, write_exp):
     """A real classification report (with a "task" key) prints Top-3 accuracy."""
     import json
 
-    exp_a = _write_exp(tmp_path, "exp_a")
+    exp_a = write_exp(tmp_path, "exp_a")
     report = {
         "task": "classification",
         "n_images": 100,
@@ -142,11 +128,11 @@ def test_runs_show_classification_report_dispatches_to_dedicated_renderer(tmp_pa
     assert "98.0%" in result.output
 
 
-def test_runs_show_detection_report_dispatches_to_dedicated_renderer(tmp_path):
+def test_runs_show_detection_report_dispatches_to_dedicated_renderer(tmp_path, write_exp):
     """A real detection report (with a "task" key) prints localization + per-class AP."""
     import json
 
-    exp_a = _write_exp(tmp_path, "exp_a")
+    exp_a = write_exp(tmp_path, "exp_a")
     report = {
         "task": "detection",
         "n_images": 20,

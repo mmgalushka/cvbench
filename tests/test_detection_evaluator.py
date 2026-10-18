@@ -9,19 +9,7 @@ pytestmark = pytest.mark.tf
 from cvbench.cli.generate import generate
 
 
-@pytest.fixture
-def yolo_project(tmp_path, monkeypatch):
-    """A tiny generated YOLO dataset, with experiments/ scoped to tmp_path."""
-    monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(
-        generate,
-        ["data/yolo", "--format", "yolo", "--train", "6", "--val", "3", "--test", "4",
-         "--image-size", "64", "--max-objects", "2", "--seed", "1"],
-    )
-    assert result.exit_code == 0, result.output
-    return tmp_path
-
-
+@pytest.mark.slow
 def test_train_then_evaluate_produces_a_valid_envelope(yolo_project):
     from cvbench.services.evaluation import run_evaluation
     from cvbench.services.training import run_training
@@ -75,6 +63,7 @@ def test_train_then_evaluate_produces_a_valid_envelope(yolo_project):
     assert cfg.run.val_accuracy is None  # detection never sets this
 
 
+@pytest.mark.slow
 def test_scan_experiments_surfaces_the_detection_run(yolo_project):
     from cvbench.core.exp_store import scan_experiments
     from cvbench.services.evaluation import run_evaluation

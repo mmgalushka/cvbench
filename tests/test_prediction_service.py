@@ -6,21 +6,9 @@ from click.testing import CliRunner
 
 pytestmark = pytest.mark.tf
 
-from cvbench.cli.generate import generate
 
 
-@pytest.fixture
-def yolo_project(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(
-        generate,
-        ["data/yolo", "--format", "yolo", "--train", "6", "--val", "3", "--test", "4",
-         "--image-size", "64", "--max-objects", "2", "--seed", "1"],
-    )
-    assert result.exit_code == 0, result.output
-    return tmp_path
-
-
+@pytest.mark.slow
 def test_predict_image_detection_returns_boxes(yolo_project):
     from cvbench.datasets.layout import list_images
     from cvbench.services.prediction import predict_image
@@ -41,6 +29,7 @@ def test_predict_image_detection_returns_boxes(yolo_project):
 
 
 
+@pytest.mark.slow
 def test_cli_predict_decodes_detection_run(yolo_project):
     from cvbench.cli.predict import predict
     from cvbench.datasets.layout import list_images
