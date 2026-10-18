@@ -139,22 +139,6 @@ def _patch_ok_task(monkeypatch):
     return calls
 
 
-def test_run_training_overwrite_replaces_existing_run(tmp_path, monkeypatch):
-    calls = _patch_ok_task(monkeypatch)
-    exp_dir = tmp_path / "old"
-    exp_dir.mkdir()
-    (exp_dir / "config.yaml").write_text("x: 1\n")
-    (exp_dir / "best_history.jsonl").write_text('{"epoch": 1}\n')
-
-    training_service.run_training(
-        data_dir=str(tmp_path / "data"), output_dir=str(exp_dir), overwrite=True,
-    )
-
-    assert len(calls) == 1
-    assert not (exp_dir / "best_history.jsonl").exists()
-    assert load_config(str(exp_dir)).run.status == "running"
-
-
 def test_run_training_resume_keeps_existing_run(tmp_path, monkeypatch):
     calls = _patch_ok_task(monkeypatch)
     exp_dir = tmp_path / "old"

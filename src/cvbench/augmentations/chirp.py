@@ -39,6 +39,10 @@ def aug_chirp_artifacts(
     float_input = img.dtype in (np.float32, np.float64)
     img_u8 = (np.clip(img, 0.0, 1.0) * 255).astype(np.uint8) if float_input else img.astype(np.uint8)
 
+    keep_channel_axis = img_u8.ndim == 3 and img_u8.shape[2] == 1
+    if keep_channel_axis:
+        img_u8 = img_u8[:, :, 0]
+
     grayscale = img_u8.ndim == 2
     if grayscale:
         img_u8 = np.stack([img_u8] * 3, axis=-1)
@@ -69,12 +73,14 @@ def aug_chirp_artifacts(
     img_f = img_u8.astype(np.float32) / 255.0
     mask_f = mask.astype(np.float32) / 255.0
     blended_f = 1.0 - (1.0 - img_f) * (1.0 - mask_f)
-    blended_u8 = (np.clip(blended_f, 0.0, 1.0) * 255).astype(np.uint8)
+    blended_u8 = np.rint(np.clip(blended_f, 0.0, 1.0) * 255).astype(np.uint8)
 
     if has_alpha:
         blended_u8 = np.concatenate([blended_u8, alpha_channel], axis=2)
     if grayscale:
         blended_u8 = blended_u8[:, :, 0]
+    if keep_channel_axis:
+        blended_u8 = blended_u8[:, :, None]
 
     if float_input:
         return blended_u8.astype(np.float32) / 255.0

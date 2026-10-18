@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-from cvbench.core.config import build_config, save_config
 from cvbench.core.sweep_store import (
     DEFAULT_RANDOM_SPACE,
     SweepError,
@@ -20,19 +19,6 @@ from cvbench.core.sweep_store import (
     validate_sweep_name,
     write_manifest,
 )
-
-
-def _write_exp(parent: Path, name: str, **run_kwargs) -> Path:
-    exp_dir = parent / name
-    exp_dir.mkdir(parents=True)
-    cfg = build_config("data")
-    cfg.run.name = name
-    cfg.run.date = "2026-01-01"
-    cfg.run.status = "done"
-    for k, v in run_kwargs.items():
-        setattr(cfg.run, k, v)
-    save_config(cfg, str(exp_dir))
-    return exp_dir
 
 
 def _manifest(name="sw", metric="val_loss", direction="min", axes=None) -> SweepManifest:
@@ -273,11 +259,11 @@ def test_manifest_missing_field(tmp_path):
 # summarize / best_trial
 # ---------------------------------------------------------------------------
 
-def test_summarize_min_marks_best(tmp_path):
+def test_summarize_min_marks_best(tmp_path, write_exp):
     d = _sweep(tmp_path)
-    _write_exp(d, "sw_001", val_loss=0.5)
-    _write_exp(d, "sw_002", val_loss=0.2)
-    _write_exp(d, "sw_003", val_loss=0.9)
+    write_exp(d, "sw_001", val_loss=0.5)
+    write_exp(d, "sw_002", val_loss=0.2)
+    write_exp(d, "sw_003", val_loss=0.9)
     manifest, rows = summarize(d)
     assert manifest.name == "sw"
     assert [r.index for r in rows] == [1, 2, 3]
@@ -286,35 +272,35 @@ def test_summarize_min_marks_best(tmp_path):
     assert best_trial(rows).dir == "sw_002"
 
 
-def test_summarize_max_direction(tmp_path):
+def test_summarize_max_direction(tmp_path, write_exp):
     d = _sweep(tmp_path, metric="val_accuracy", direction="max")
-    _write_exp(d, "sw_001", val_accuracy=0.6)
-    _write_exp(d, "sw_002", val_accuracy=0.95)
-    _write_exp(d, "sw_003", val_accuracy=0.7)
+    write_exp(d, "sw_001", val_accuracy=0.6)
+    write_exp(d, "sw_002", val_accuracy=0.95)
+    write_exp(d, "sw_003", val_accuracy=0.7)
     _, rows = summarize(d)
     assert best_trial(rows).dir == "sw_002"
 
 
-def test_summarize_failed_never_best(tmp_path):
+def test_summarize_failed_never_best(tmp_path, write_exp):
     d = _sweep(tmp_path)
-    _write_exp(d, "sw_001", status="failed", val_loss=0.01)
-    _write_exp(d, "sw_002", val_loss=0.8)
-    _write_exp(d, "sw_003", status="failed")
+    write_exp(d, "sw_001", status="failed", val_loss=0.01)
+    write_exp(d, "sw_002", val_loss=0.8)
+    write_exp(d, "sw_003", status="failed")
     _, rows = summarize(d)
     assert [r.status for r in rows] == ["failed", "done", "failed"]
     assert best_trial(rows).dir == "sw_002"
 
 
-def test_summarize_no_best_when_all_failed(tmp_path):
+def test_summarize_no_best_when_all_failed(tmp_path, write_exp):
     d = _sweep(tmp_path)
-    _write_exp(d, "sw_001", status="failed")
+    write_exp(d, "sw_001", status="failed")
     _, rows = summarize(d)
     assert best_trial(rows) is None
 
 
-def test_summarize_missing_and_unreadable(tmp_path):
+def test_summarize_missing_and_unreadable(tmp_path, write_exp):
     d = _sweep(tmp_path)
-    _write_exp(d, "sw_001", val_loss=0.4)
+    write_exp(d, "sw_001", val_loss=0.4)
     (d / "sw_002").mkdir()  # no config.yaml
     # sw_003 never created
     _, rows = summarize(d)
@@ -323,26 +309,26 @@ def test_summarize_missing_and_unreadable(tmp_path):
     assert best_trial(rows).dir == "sw_001"
 
 
-def test_summarize_done_without_metric_not_best(tmp_path):
+def test_summarize_done_without_metric_not_best(tmp_path, write_exp):
     d = _sweep(tmp_path)
-    _write_exp(d, "sw_001")  # val_loss None
-    _write_exp(d, "sw_002", val_loss=0.3)
+    write_exp(d, "sw_001")  # val_loss None
+    write_exp(d, "sw_002", val_loss=0.3)
     _, rows = summarize(d)
     assert rows[0].value is None
     assert best_trial(rows).dir == "sw_002"
 
 
-def test_summarize_map50_uses_test_metric(tmp_path):
+def test_summarize_map50_uses_test_metric(tmp_path, write_exp):
     d = _sweep(tmp_path, metric="map50", direction="max", axes={"lr": ["1", "2", "3"]})
-    _write_exp(d, "sw_001", primary_metric="map50", primary_value=0.3)
-    _write_exp(d, "sw_002", primary_metric="map50", primary_value=0.7)
-    _write_exp(d, "sw_003", primary_metric="accuracy", primary_value=0.99)  # wrong metric: ignored
+    write_exp(d, "sw_001", primary_metric="map50", primary_value=0.3)
+    write_exp(d, "sw_002", primary_metric="map50", primary_value=0.7)
+    write_exp(d, "sw_003", primary_metric="accuracy", primary_value=0.99)  # wrong metric: ignored
     _, rows = summarize(d)
     assert [r.value for r in rows] == [0.3, 0.7, None]
     assert best_trial(rows).dir == "sw_002"
 
 
-def test_summarize_random_uses_manifest_trials(tmp_path):
+def test_summarize_random_uses_manifest_trials(tmp_path, write_exp):
     m = SweepManifest(
         version=1, name="sw", date="2026-01-01", data_dir="data", strategy="random",
         metric="val_loss", direction="min", axes={"lr": ["1e-3", "1e-4", "1e-5"]},
@@ -351,17 +337,17 @@ def test_summarize_random_uses_manifest_trials(tmp_path):
     d = tmp_path / m.name
     d.mkdir()
     write_manifest(d, m)
-    _write_exp(d, "sw_001", val_loss=0.9)
-    _write_exp(d, "sw_002", val_loss=0.1)
+    write_exp(d, "sw_001", val_loss=0.9)
+    write_exp(d, "sw_002", val_loss=0.1)
     _, rows = summarize(d)
     assert [r.params for r in rows] == [{"lr": "1e-5"}, {"lr": "1e-3"}]
     assert best_trial(rows).dir == "sw_002"
 
 
-def test_summarize_two_axes_params(tmp_path):
+def test_summarize_two_axes_params(tmp_path, write_exp):
     d = _sweep(tmp_path, axes={"lr": ["1", "2"], "backbone": ["a", "b"]})
     for i in range(1, 5):
-        _write_exp(d, f"sw_{i:03d}", val_loss=float(i))
+        write_exp(d, f"sw_{i:03d}", val_loss=float(i))
     _, rows = summarize(d)
     assert rows[1].params == {"lr": "1", "backbone": "b"}
     assert best_trial(rows).index == 1

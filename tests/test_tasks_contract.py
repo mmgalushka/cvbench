@@ -4,6 +4,12 @@ Runs over every name in ``cvbench.tasks.TASK_NAMES``: each must instantiate,
 declare a unique ``name`` matching its registry key, and implement every
 abstract method on ``Task``. A new task that forgets a method fails here
 first, not at some far-off orchestration call site.
+
+``test_task_lifecycle`` goes one step further: it drives each registered task through
+resolve_layout → build_datasets → build_model → evaluate → test_score/headline_metrics on a
+tiny generated dataset, so a task whose pieces don't fit together fails here too. A task with
+no dataset fixture in ``tests/conftest.py`` fails the test with instructions rather than
+being skipped.
 """
 import pytest
 
@@ -142,3 +148,56 @@ def test_dataset_spec_is_a_plain_frozen_record():
     assert spec.class_names == ["a", "b"]
     with pytest.raises(FrozenInstanceError):
         spec.train_dir = "other"
+
+
+@pytest.mark.tf
+@pytest.mark.parametrize("name", TASK_NAMES)
+def test_task_lifecycle(name, task_dataset, tmp_path):
+    """One pass through every Task hook the orchestrators call, minus the training loop."""
+    import numpy as np
+
+    from cvbench.core.config import build_config
+    from cvbench.core.task import DatasetSpec
+
+    data_dir = task_dataset(name)
+    task = get_task(name)
+    assert task.layout_errors(data_dir) == []
+    assert task.matches_layout(data_dir)
+
+    cfg = build_config(
+        str(data_dir), task=name, backbone="efficientnet_b0", weights="none",
+        epochs=1, batch_size=2, input_size=64,
+    )
+    assert task.validate_config(cfg) == []
+
+    spec = task.resolve_layout(cfg)
+    assert isinstance(spec, DatasetSpec)
+    assert spec.class_names and cfg.model.num_classes == len(spec.class_names)
+    assert spec.num_train_images == task.count_images(spec.train_dir) > 0
+
+    train_ds, val_ds, num_train = task.build_datasets(cfg, spec)
+    assert num_train == spec.num_train_images
+    x, _ = next(iter(train_ds.take(1)))
+    assert tuple(x.shape[1:3]) == (64, 64) and x.shape[0] <= 2
+    assert next(iter(val_ds.take(1))) is not None
+
+    model = task.build_model(cfg)
+    assert model.input_shape[1:3] == (64, 64)
+    outputs = model.predict(np.zeros((1, 64, 64, 3), dtype="float32"), verbose=0)
+    assert np.all(np.isfinite(np.concatenate([np.ravel(o) for o in
+                                              (outputs if isinstance(outputs, (list, tuple)) else [outputs])])))
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    eval_ds = task.build_eval_dataset(cfg, spec)
+    report = task.evaluate(model, eval_ds, cfg, spec, str(run_dir), None)
+    assert report["task"] == name and report["overall"]["metric"] == task.primary_metric.name
+    assert (run_dir / "eval_report.json").is_file()
+
+    metric, value = task.test_score(report)
+    assert metric == task.primary_metric.name and 0.0 <= value <= 1.0
+
+    headline = task.headline_metrics({"val_loss": 0.5, "val_accuracy": 0.25})
+    assert set(headline) == {"val_accuracy", "val_loss"} and headline["val_loss"] == 0.5
+
+    assert task.eval_summary(report) and task.per_class_table(report)["rows"] is not None

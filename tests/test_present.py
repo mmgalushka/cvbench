@@ -9,38 +9,12 @@ from cvbench.cli.data import data
 from cvbench.cli.generate import generate
 from cvbench.cli.runs import runs
 from cvbench.core import present
-from cvbench.core.config import build_config, save_config
 from cvbench.datasets.catalog import dataset_info
 
 pytest.importorskip("fastapi", reason="requires the 'web' extra")
 
 from cvbench.web.api import datasets as datasets_api  # noqa: E402
 from cvbench.web.api import runs as runs_api  # noqa: E402
-
-
-def _write_exp(parent: Path, name: str, **run_kwargs) -> Path:
-    exp_dir = parent / name
-    exp_dir.mkdir(parents=True)
-    cfg = build_config("data")
-    cfg.run.name = name
-    cfg.run.date = "2026-01-01"
-    cfg.run.status = "done"
-    for k, v in run_kwargs.items():
-        setattr(cfg.run, k, v)
-    save_config(cfg, str(exp_dir))
-    return exp_dir
-
-
-@pytest.fixture
-def exps(tmp_path, monkeypatch):
-    path = tmp_path / "experiments"
-    path.mkdir()
-    for module in ("cvbench.core.exp_store", "cvbench.web.api.runs"):
-        monkeypatch.setattr(f"{module}.EXPERIMENTS_DIR", str(path))
-    monkeypatch.setattr("cvbench.cli.runs.EXPERIMENTS_DIR", str(path))
-    monkeypatch.setattr("cvbench.cli.runs._DEFAULT_EXPERIMENTS_DIR", str(path))
-    return path
-
 
 # ── formatting ───────────────────────────────────────────────────────────────
 
@@ -70,8 +44,8 @@ def test_narrow_terminals_drop_backbone_and_date_only():
 
 # ── runs: same row in the terminal and the API ───────────────────────────────
 
-def test_runs_list_and_api_show_the_same_values(exps, monkeypatch):
-    _write_exp(exps, "exp_a", val_accuracy=0.9345, val_loss=0.2, primary_value=0.88, epochs_run=12)
+def test_runs_list_and_api_show_the_same_values(exps, monkeypatch, write_exp):
+    write_exp(exps, "exp_a", val_accuracy=0.9345, val_loss=0.2, primary_value=0.88, epochs_run=12)
     monkeypatch.setenv("COLUMNS", "200")
 
     (api_run,) = runs_api.list_runs()
@@ -84,8 +58,8 @@ def test_runs_list_and_api_show_the_same_values(exps, monkeypatch):
         assert label.split()[0] in out  # headers wrap onto two lines in the terminal
 
 
-def test_run_detail_headline_matches_runs_show(exps):
-    _write_exp(exps, "exp_a", val_accuracy=0.9, primary_value=0.8, epochs_run=3)
+def test_run_detail_headline_matches_runs_show(exps, write_exp):
+    write_exp(exps, "exp_a", val_accuracy=0.9, primary_value=0.8, epochs_run=3)
     detail = runs_api.get_run("exp_a")
     out = CliRunner().invoke(runs, ["show", str(exps / "exp_a")]).output
 
@@ -94,8 +68,8 @@ def test_run_detail_headline_matches_runs_show(exps):
         assert f"{label:<22}: {value}" in out
 
 
-def test_eval_report_advisories_and_display_come_from_one_place(exps):
-    run = _write_exp(exps, "exp_a", val_accuracy=0.9)
+def test_eval_report_advisories_and_display_come_from_one_place(exps, write_exp):
+    run = write_exp(exps, "exp_a", val_accuracy=0.9)
     report = {
         "task": "classification", "n_images": 10, "overall_accuracy": 0.9345, "top3_accuracy": None,
         "per_class": {"cat": {"precision": 0.5, "recall": 0.25, "f1": 0.3, "support": 4}},

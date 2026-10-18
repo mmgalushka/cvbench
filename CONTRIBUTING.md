@@ -51,9 +51,22 @@ The CI pipeline runs `pytest -m 'not tf'` automatically in two situations:
 - **When you open or update a pull request** targeting `main`
 - **When a commit lands directly on `main`** (e.g. the version bump commit from a release)
 
-It then runs `pytest -m slow`, which trains a small detector on generated shapes and
-fails if its mAP@50 drops below a floor (about 30 s). Run it locally with
-`./helper.sh test -m slow`.
+It runs everything except the `slow` tests (about 40 s), then `pytest -m slow`, which trains
+real detectors on generated shapes — including a quality gate that fails if mAP@50 drops
+below a floor. Run them locally with `./helper.sh test -m slow`. Codecov holds the project to
+a fixed coverage floor (see `codecov.yml`).
+
+## Writing tests
+
+- Shared fixtures live in `tests/conftest.py`: `write_exp` / `make_sweep` / `exps` for
+  experiment directories, `tiny_cls_root` / `tiny_yolo_root` / `yolo_project` for generated
+  datasets, `cls_run` / `cls_run_with_model` for a run backed by one. Never import helpers
+  from another test module.
+- Web routes are tested through `TestClient(create_app())` in `tests/test_web_api.py`; add a
+  test there for every new route (status code and response shape).
+- A new task added to `cvbench.tasks` is picked up by `test_task_lifecycle` automatically; give
+  it a tiny dataset fixture in `tests/conftest.py` and register it in `_TASK_DATASET_FIXTURES`.
+- Mark tests that train a real model for more than a few seconds `@pytest.mark.slow`.
 
 A green CI check is required before a PR can be merged. CI does **not** run on every
 push to a feature branch — only when the PR is opened or updated against `main`.

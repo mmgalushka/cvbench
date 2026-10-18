@@ -2,8 +2,8 @@ coverage:
   status:
     project:
       default:
-        target: auto
-        threshold: 1%   # tolerate small dips; fail only on a real drop
+        target: 90%   # a fixed floor (CI's `-m "not slow"` run measures ~93%), not "whatever main had last"
+        threshold: 0%
     patch:
       default:
         target: 80%

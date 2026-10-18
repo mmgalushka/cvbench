@@ -95,10 +95,11 @@ ignore_missing_imports = true  # keras/tensorflow/etc. ship no type stubs
 testpaths = ["tests"]
 filterwarnings = [
     "ignore:builtin type.*has no __module__ attribute:DeprecationWarning",
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
 ]
 markers = [
     "tf: marks tests that require TensorFlow (deselect with '-m \"not tf\"')",
-    "slow: trains a real model for minutes; run on its own with '-m slow'",
+    "slow: trains a real model for more than a few seconds; CI runs these in their own step ('-m slow')",
 ]
 
 [tool.coverage.run]
