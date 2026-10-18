@@ -22,8 +22,8 @@ SWEEP_MANIFEST = "sweep.yaml"
 EXP_REG = Registry(
     EXPERIMENTS_DIR,
     not_found_label="Run",
-    entity_name="experiment",
-    param_hint="EXPERIMENT",
+    entity_name="run",
+    param_hint="RUN",
     list_hint="runs list",
     extra_entries=lambda: _trial_names(),
 )

@@ -6,7 +6,7 @@ import click
 import numpy as np
 
 from cvbench.cli import _help
-from cvbench.core import _console
+from cvbench.core import _console, present
 from cvbench.core._confusion import print_confusion_matrix
 from cvbench.core.config import load_config, update_run_status
 from cvbench.core.exp_store import (
@@ -35,11 +35,6 @@ def _fit(s: str, width: int) -> str:
     head = keep // 2
     tail = keep - head
     return s[:head] + "…" + s[-tail:]
-
-
-def _score(value) -> str:
-    """Format a metric for a table cell; '—' when it was never recorded."""
-    return f"{value:.4f}" if isinstance(value, (int, float)) else "—"
 
 
 # Settings `runs show` always lists, even at their default — the knobs people compare runs on.
@@ -95,19 +90,19 @@ _DEFAULT_EXPERIMENTS_DIR = EXPERIMENTS_DIR
     ],
 )
 def runs():
-    """Manage and inspect experiment runs."""
+    """Manage and inspect runs."""
 
 
 @runs.command(
     "list",
-    short_help="List experiment runs (default: experiments/).",
+    short_help="List runs (default: experiments/).",
     examples=[
         ("runs list", "All runs, newest first"),
         ("runs list --sort val_loss", "Order by validation loss instead of date"),
     ],
     see_also=[("evaluate <run>", "score a run on the test split")],
 )
-@click.argument("experiments_dir", default=_DEFAULT_EXPERIMENTS_DIR)
+@click.argument("experiments_dir", metavar="RUNS_DIR", default=_DEFAULT_EXPERIMENTS_DIR)
 @click.option(
     "--sort",
     default="date",
@@ -115,9 +110,9 @@ def runs():
     show_default=True,
 )
 def list_runs(experiments_dir, sort):
-    """List experiments in EXPERIMENTS_DIR (default: experiments/).
+    """List runs in RUNS_DIR (default: experiments/).
 
-    EXPERIMENTS_DIR may also be a sweep name to list that sweep's trials.
+    RUNS_DIR may also be a sweep name to list that sweep's trials.
     """
     experiments_dir = resolve_experiments_dir(experiments_dir)
     entries = scan_experiments(experiments_dir, sort_by=sort)
@@ -128,39 +123,20 @@ def list_runs(experiments_dir, sort):
     else:
         entries = entries + sweeps
     if not entries:
-        print(f" No experiments found in '{experiments_dir}'.")
+        print(f" {present.EMPTY_RUNS.format(dir=experiments_dir)}")
         return
 
-    rows = []
-    for r in entries:
-        loss_str = _score(r.get("val_loss"))
-        val_acc_str = _score(r.get("val_accuracy"))
-        test_str = _score(r.get("test_accuracy"))
-        task_short = "det" if r.get("task") == "detection" else "cls"
-        if r.get("is_sweep"):
-            task_short += "·sweep"
-        epochs = r.get("epochs_run")
-        epochs_str = "—" if epochs is None else epochs
-        rows.append(
-            (_fit(r["name"], 40), task_short, r.get("status", "?"), loss_str, val_acc_str, test_str, epochs_str)
-        )
+    displays = [present.present_run(r) for r in entries]
+    columns = present.run_columns(_console.width())
     _console.table(
+        [(label, align) if align == "right" else label for _, label, align in columns],
         [
-            "Run",
-            "Task",
-            "Status",
-            ("Val Loss", "right"),
-            ("Val Acc", "right"),
-            ("Test", "right"),
-            ("Epochs", "right"),
+            [_fit(d["name"], 40) if key == "name" else present.run_cell(d, key) for key, _, _ in columns]
+            for d in displays
         ],
-        rows,
     )
-    # One metric per task, so a legend labels the column without widening every cell.
-    print(_console.dim(" Test: accuracy for cls, mAP@50 for det."))
     if sweeps:
         print(_console.dim(" Sweeps: `runs list <sweep>` shows their trials."))
-
 
 
 def _show_sweep(sweep_dir):
@@ -188,7 +164,8 @@ def _show_sweep(sweep_dir):
     print_trial_table(rows, list(manifest.axes), manifest.metric, show_test=True)
     best = best_trial(rows)
     if best is not None:
-        print(f" Best: {_console.green(best.dir)} ({manifest.metric} = {best.value:.4f})")
+        score = present.fmt_metric(manifest.metric, best.value)
+        print(f" Best: {_console.green(best.dir)} ({manifest.metric} = {score})")
         print(_console.dim(f" Inspect a trial with: runs show {best.dir}"))
 
 
@@ -199,11 +176,11 @@ def _show_sweep(sweep_dir):
     ],
     see_also=[("evaluate <run>", "score a run on the test split")],
 )
-@click.argument("experiment")
+@click.argument("experiment", metavar="RUN")
 def show(experiment):
-    """Show full config, metrics, exports, and eval results for EXPERIMENT.
+    """Show full config, metrics, exports, and eval results for RUN.
 
-    EXPERIMENT is a run name or full path to a run directory. For a sweep, shows its
+    RUN is a run name or full path to a run directory. For a sweep, shows its
     settings and trial table instead.
     """
     from pathlib import Path
@@ -224,32 +201,14 @@ def show(experiment):
     entry = _read_entry(run_dir)
     run_name = entry.get("name", run_dir.name)
 
-    fields = [
-        "backbone",
-        "lr",
-        "epochs",
-        "val_loss",
-        "val_accuracy",
-        "test_accuracy",
-        "epochs_run",
-        "status",
-        "date",
-    ]
-
     print(_console.rule())
     print(f" {_console.bold(f'CVBench — run {run_name}')}")
     print(_console.rule())
-    for f in fields:
-        value = entry.get(f)
-        if value is None:
-            value = "—"
-        elif isinstance(value, float):
-            value = f"{value:.4g}" if f == "lr" else f"{value:.4f}"
-        label = f"test_{entry.get('test_metric') or 'accuracy'}" if f == "test_accuracy" else f
+    for label, value in present.run_fields(entry):
         print(f" {label:<22}: {value}")
     print(_console.rule())
 
-    print(f" {_console.bold('Config')} {_console.dim('(non-default values)')}")
+    print(f" {_console.bold(present.SECTIONS['config'])} {_console.dim('(non-default values)')}")
     for key, value in _config_lines(cfg):
         print(f"   {key:<30}: {value}")
     if cfg.run.cli_command:
@@ -258,7 +217,7 @@ def show(experiment):
 
     export_dir = run_dir / "export"
     exports = sorted(d.name for d in export_dir.iterdir() if d.is_dir()) if export_dir.is_dir() else []
-    print(f" {_console.bold('Exports')}")
+    print(f" {_console.bold(present.SECTIONS['exports'])}")
     if exports:
         for name in exports:
             print(f"   {name}")
@@ -267,15 +226,16 @@ def show(experiment):
     print(_console.rule())
 
     eval_path = run_dir / "eval_report.json"
-    print(f" {_console.bold('Evaluation')}")
+    print(f" {_console.bold(present.SECTIONS['evaluation'])}")
     if eval_path.exists():
         with open(eval_path) as f:
             report = json.load(f)
         task = report.get("task")
+        advisories = present.run_advisories(run_dir, report)
         if task == "classification":
-            print_classification_body(report)
+            print_classification_body(report, entry.get("val_accuracy"), advisories)
         elif task == "detection":
-            print_detection_body(report)
+            print_detection_body(report, advisories)
         else:
             # Unknown/legacy report shape — fall back to the generic
             # overall/per-class/confusion-matrix rendering.
@@ -309,12 +269,12 @@ def show(experiment):
          "Give a run a memorable name"),
     ],
 )
-@click.argument("experiment")
+@click.argument("experiment", metavar="RUN")
 @click.argument("new_name")
 def rename(experiment, new_name):
-    """Rename an experiment directory and update its config.
+    """Rename a run directory and update its config.
 
-    EXPERIMENT is a run name or full path. NEW_NAME must contain only letters,
+    RUN is a run name or full path. NEW_NAME must contain only letters,
     digits, underscores, and hyphens.
     """
     from pathlib import Path
@@ -328,7 +288,7 @@ def rename(experiment, new_name):
 
     cfg = load_config(str(run_dir))
     if cfg.run.status == "running":
-        raise click.ClickException("Cannot rename a currently running experiment.")
+        raise click.ClickException("Cannot rename a currently running run.")
 
     try:
         validate_run_name(new_name)
@@ -353,7 +313,7 @@ def rename(experiment, new_name):
     ],
     see_also=[("predict my_run images/ --format tflite", "test the exported model")],
 )
-@click.argument("experiment")
+@click.argument("experiment", metavar="RUN")
 @click.option(
     "--format",
     "fmt",
@@ -413,10 +373,10 @@ def rename(experiment, new_name):
     ),
 )
 def export(experiment, fmt, quantize, output_dir, hw_arch, calib_total, calib_strategy):
-    """Export the best checkpoint of EXPERIMENT to TFLite, ONNX, or Hailo package,
+    """Export the best checkpoint of RUN to TFLite, ONNX, or Hailo package,
     or print Jetson deployment instructions (plan).
 
-    EXPERIMENT is a run name or full path to a run directory.
+    RUN is a run name or full path to a run directory.
     """
     from cvbench.services.export import run_export  # deferred: pulls in TensorFlow
 
@@ -438,7 +398,7 @@ def export(experiment, fmt, quantize, output_dir, hw_arch, calib_total, calib_st
         ("runs delete my_run --export tflite", "Remove only the tflite export, keep the run"),
     ],
 )
-@click.argument("experiment")
+@click.argument("experiment", metavar="RUN")
 @click.option(
     "--export",
     "export_subfolder",
@@ -450,7 +410,7 @@ def export(experiment, fmt, quantize, output_dir, hw_arch, calib_total, calib_st
 def delete(experiment, export_subfolder, yes):
     """Delete a run or one of its exports.
 
-    EXPERIMENT is a run name or full path to a run directory.
+    RUN is a run name or full path to a run directory.
 
     Without --export, the entire run directory is removed.
     With --export SUBFOLDER, only that export subfolder is removed.

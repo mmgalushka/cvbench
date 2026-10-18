@@ -26,44 +26,52 @@ async function showDatasetsList() {
   const page = document.getElementById('page');
   page.innerHTML = '<p aria-busy="true">Loading datasets…</p>';
   try {
-    const datasets = await api('/datasets');
+    const [datasets] = await Promise.all([api('/datasets'), loadPresent()]);
     page.innerHTML = buildDatasetsList(datasets);
   } catch (e) {
     page.innerHTML = `<p class="error-msg">Failed to load datasets: ${escHtml(e.message)}</p>`;
   }
 }
 
+// One cell of a dataset row. Counts and labels are preformatted by the server
+// (`ds.display`, from core/present.py) — the same strings `data list` prints. A split
+// count links to that split's gallery.
+function datasetCell(col, ds) {
+  const value = escHtml(ds.display[col.key] ?? '—');
+  if (col.key === 'name') {
+    return `<strong title="${escHtml(ds.path)}">${value}</strong>`;
+  }
+  if (col.key === 'task') {
+    return `<span class="badge badge-task-${ds.task}">${value}</span>`;
+  }
+  const split = ds.splits[col.key];
+  if (split) {
+    return `<a class="badge badge-split"
+               href="#/datasets/${encodeURIComponent(split.id)}"
+               onclick="event.stopPropagation()"
+               title="Browse ${col.key} split">${value}</a>`;
+  }
+  return value;
+}
+
 function buildDatasetsList(datasets) {
   if (datasets.length === 0) {
     return `
       <div class="page-header"><h2>Datasets</h2></div>
-      <article><p>No datasets found. Train a model first to register a dataset.</p></article>
+      <article><p>${escHtml(emptyText('datasets', 'data'))}</p></article>
     `;
   }
 
+  const columns = _present.dataset_columns;
   const rows = datasets.map(ds => {
-    const splitBadges = Object.entries(ds.splits).map(([name, info]) => `
-      <a class="badge badge-split"
-         href="#/datasets/${encodeURIComponent(info.id)}"
-         data-ds-id="${escHtml(JSON.stringify(ds))}"
-         onclick="event.stopPropagation()"
-         title="Browse ${name} split">${name}</a>
-    `).join('');
-
     const defaultSplit = ds.splits.train || ds.splits.val || ds.splits.test;
     const rowHref = defaultSplit
       ? `#/datasets/${encodeURIComponent(defaultSplit.id)}`
       : '#/datasets';
 
-    const fmt = `<span class="badge badge-format">${ds.format === 'yolo' ? 'YOLO' : 'classification'}</span>`;
-
     return `
       <tr class="ds-row" onclick="navigate('${rowHref}')">
-        <td><strong>${escHtml(ds.name)}</strong></td>
-        <td>${fmt}</td>
-        <td>${ds.num_classes}</td>
-        <td class="ds-splits-cell">${splitBadges || '—'}</td>
-        <td class="ds-path-cell" title="${escHtml(ds.path)}">${escHtml(ds.path)}</td>
+        ${columns.map(col => `<td${alignStyle(col)}>${datasetCell(col, ds)}</td>`).join('')}
       </tr>
     `;
   }).join('');
@@ -75,13 +83,7 @@ function buildDatasetsList(datasets) {
     <div class="overflow-x">
       <table class="runs-table">
         <thead>
-          <tr>
-            <th>Name</th>
-            <th>Format</th>
-            <th>Classes</th>
-            <th>Splits</th>
-            <th>Path</th>
-          </tr>
+          <tr>${columns.map(col => `<th${alignStyle(col)}>${escHtml(col.label)}</th>`).join('')}</tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>

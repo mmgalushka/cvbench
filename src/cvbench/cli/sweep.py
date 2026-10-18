@@ -23,7 +23,7 @@ from cvbench.cli.train import (
     _parse_optimizer,
     validate_dataset,
 )
-from cvbench.core import _console
+from cvbench.core import _console, present
 from cvbench.core.exp_store import EXPERIMENTS_DIR, assert_name_available, make_unique_dir
 from cvbench.core.sweep_store import (
     DEFAULT_RANDOM_SPACE,
@@ -95,8 +95,8 @@ def print_trial_table(
         else:
             columns += [metric]
         columns += ["Status"]
-    vals = [("—" if r.value is None else f"{r.value:.4f}") for r in rows]
-    tests = [("—" if r.test_value is None else f"{r.test_value:.4f}") for r in rows]
+    vals = [present.fmt_metric(metric, r.value) for r in rows]
+    tests = [present.fmt_pct(r.test_value) for r in rows]
     val_cells = _console.star_cells(vals, [r.is_best for r in rows])
     test_cells = _console.star_cells(tests, [r.is_best_test for r in rows])
     body = []
@@ -193,7 +193,7 @@ def _evaluate_on_val(trial_dir: str) -> None:
 @click.option("--metric", default=None, type=click.Choice(list(_METRICS)),
               help="Metric used to pick the best trial (default: val_loss; map50 for detection).")
 @click.option("--from", "from_dir", default=None, type=click.Path(exists=True),
-              help="Load config from an existing experiment as the baseline for every trial.")
+              help="Load config from an existing run as the baseline for every trial.")
 @click.option("--show", is_flag=True, help="Print the resolved trials and their count, then exit (no training).")
 @click.option("--backbone", default=None, help="Backbone name(s), comma-separated (e.g. efficientnet_b0,resnet_18).")
 @click.option("--weights", default=None, help="Weight init(s), comma-separated: imagenet,none.")
@@ -371,7 +371,8 @@ def _finish(sweep_dir: Path) -> None:
     if best is None:
         _console.warning("No trial produced a value for the selection metric.")
     else:
-        print(f" Best: {_console.green(best.dir)} ({manifest.metric} = {best.value:.4f})")
+        score = present.fmt_metric(manifest.metric, best.value)
+        print(f" Best: {_console.green(best.dir)} ({manifest.metric} = {score})")
         print(_console.dim(f" Inspect it with: runs show {best.dir}"))
         print(_console.dim(f" Evaluate the best trial on the test split:  evaluate {best.dir}"))
         print(_console.dim(f" Evaluate all trials on the test split:      evaluate {manifest.name}"))

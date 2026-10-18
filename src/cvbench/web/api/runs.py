@@ -1,4 +1,4 @@
-"""Runs API — list, inspect, delete, and rename experiment runs."""
+"""Runs API — list, inspect, delete, and rename runs."""
 
 import csv
 import json
@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from cvbench.core import present
 from cvbench.core.config import TransformConfig, load_config, update_run_status
 from cvbench.core.exp_store import (
     EXPERIMENTS_DIR,
@@ -29,14 +30,24 @@ class RenameRequest(BaseModel):
     new_name: str
 
 
+def _with_display(entry: dict) -> dict:
+    return {**entry, "display": present.present_run(entry)}
+
+
+@router.get("/present")
+def get_present():
+    """Canonical labels, columns and empty-state texts — the same ones the CLI prints."""
+    return present.labels()
+
+
 @router.get("/runs")
 def list_runs():
-    return scan_experiments(EXPERIMENTS_DIR)
+    return [_with_display(e) for e in scan_experiments(EXPERIMENTS_DIR)]
 
 
 @router.get("/sweeps")
 def list_sweeps():
-    return scan_sweeps(EXPERIMENTS_DIR)
+    return [_with_display(e) for e in scan_sweeps(EXPERIMENTS_DIR)]
 
 
 @router.get("/sweeps/{name}")
@@ -64,7 +75,9 @@ def get_sweep(name: str):
         "trials": [
             {"index": r.index, "dir": r.dir, "params": r.params,
              "status": r.status, "value": r.value, "is_best": r.is_best,
-             "test_value": r.test_value, "test_metric": r.test_metric, "is_best_test": r.is_best_test}
+             "test_value": r.test_value, "test_metric": r.test_metric, "is_best_test": r.is_best_test,
+             "display": {"value": present.fmt_metric(manifest.metric, r.value),
+                         "test": present.fmt_pct(r.test_value)}}
             for r in rows
         ],
     }
@@ -130,6 +143,21 @@ def get_run(name: str):
             else (eval_report or {}).get("overall_accuracy")
         )
 
+    summary = {
+        "name": cfg.run.name or run_path.name,
+        "task": cfg.task,
+        "backbone": cfg.model.backbone,
+        "lr": cfg.training.learning_rate,
+        "epochs": cfg.training.epochs,
+        "epochs_run": epochs_run,
+        "val_accuracy": cfg.run.val_accuracy,
+        "val_loss": cfg.run.val_loss,
+        "test_accuracy": test_accuracy,
+        "test_metric": cfg.run.test_metric,
+        "status": cfg.run.status,
+        "date": cfg.run.date,
+    }
+
     return {
         "name": cfg.run.name or run_path.name,
         "dir": run_dir,
@@ -148,6 +176,11 @@ def get_run(name: str):
         "resumable": cfg.run.resumable,
         "notes": cfg.run.notes,
         "cli_command": cfg.run.cli_command or "",
+        "display": present.run_detail_display(summary),
+        "advisories": present.run_advisories(run_path, eval_report) if eval_report else [],
+        "eval_display": (
+            present.eval_display(eval_report, cfg.run.val_accuracy) if eval_report else None
+        ),
         "config": {
             "data": {
                 "data_dir": cfg.data.data_dir,
@@ -197,7 +230,7 @@ def rename_run(name: str, body: RenameRequest):
 
     cfg = load_config(str(run_dir))
     if cfg.run.status == "running":
-        raise HTTPException(status_code=409, detail="Cannot rename a currently running experiment.")
+        raise HTTPException(status_code=409, detail="Cannot rename a currently running run.")
 
     try:
         validate_run_name(body.new_name)

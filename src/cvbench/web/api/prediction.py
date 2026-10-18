@@ -13,6 +13,16 @@ from cvbench.core.exp_store import resolve_run_dir
 router = APIRouter()
 
 
+def _options(conf: float | None, top_k: int | None) -> dict:
+    """Only the options the client sent, so the service defaults apply to the rest."""
+    options: dict = {}
+    if conf is not None:
+        options["conf"] = conf
+    if top_k is not None:
+        options["top_k"] = top_k
+    return options
+
+
 @router.get("/augmentations")
 def list_augmentations():
     """Return UI parameter schemas for all registered augmentations."""
@@ -23,12 +33,17 @@ def list_augmentations():
 async def predict_single(
     file: UploadFile = File(...),
     run: str = Form(...),
+    conf: float | None = Form(None),
+    top_k: int | None = Form(None),
 ):
-    """Run inference on an uploaded image using the checkpoint from the given run."""
+    """Run inference on an uploaded image using the checkpoint from the given run.
+
+    ``conf`` (detection) and ``top_k`` (classification) match `predict --conf` / `--top-k`.
+    """
     image_bytes = await file.read()
     try:
         from cvbench.services.prediction import predict_image
-        result = predict_image(run, image_bytes)
+        result = predict_image(run, image_bytes, **_options(conf, top_k))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -41,6 +56,8 @@ async def predict_augmented(
     file: UploadFile = File(...),
     run: str = Form(...),
     augmentations: str = Form(...),
+    conf: float | None = Form(None),
+    top_k: int | None = Form(None),
 ):
     """Apply augmentations to an uploaded image then run inference.
 
@@ -54,7 +71,7 @@ async def predict_augmented(
 
     try:
         from cvbench.services.prediction import predict_augmented as _predict_augmented
-        result = _predict_augmented(run, image_bytes, aug_list)
+        result = _predict_augmented(run, image_bytes, aug_list, **_options(conf, top_k))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

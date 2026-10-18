@@ -11,13 +11,15 @@ import numpy as np
 
 from cvbench.cli import _help
 from cvbench.cli.generate import generate
+from cvbench.core import present
 from cvbench.core.data_store import DATA_DIR, DATA_REG
 from cvbench.datasets import flatten as flatten_mod
 from cvbench.datasets import hashify as hashify_mod
 from cvbench.datasets import layout as layout_mod
 from cvbench.datasets import prep as prep_mod
 from cvbench.datasets import split as split_mod
-from cvbench.datasets.stats import get_dataset_overview, print_class_distribution
+from cvbench.datasets.catalog import scan_datasets
+from cvbench.datasets.stats import print_class_distribution
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
 _TOKEN_LEN = 16
@@ -62,22 +64,16 @@ def list_data(data_dir):
     DATA_REG.base_dir = data_dir
     names = DATA_REG.list_entries()
     if not names:
-        print(f" No datasets found in '{data_dir}'.")
+        print(f" {present.EMPTY_DATASETS.format(dir=data_dir)}")
         return
 
-    rows = []
-    for name in names:
-        ds_dir = Path(data_dir) / name
-        task = layout_mod.detect_task_name(ds_dir)
-        task_short = "det" if task == "detection" else "cls"
-        overview = get_dataset_overview(ds_dir)
-        counts = {s: overview.get(s, {}).get("images", 0) for s in layout_mod.SPLIT_NAMES}
-        n_classes = next((v["classes"] for v in overview.values()), 0)
-        rows.append((name, task_short, counts["train"], counts["val"], counts["test"], n_classes))
-
+    infos = scan_datasets(data_dir, names)
     _console.table(
-        ["Dataset", "Task", ("Train", "right"), ("Val", "right"), ("Test", "right"), ("Classes", "right")],
-        rows,
+        [(label, align) if align == "right" else label for _, label, align in present.DATASET_COLUMNS],
+        [
+            [present.present_dataset(info)[key] for key, _, _ in present.DATASET_COLUMNS]
+            for info in infos
+        ],
     )
 
 
