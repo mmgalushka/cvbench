@@ -133,11 +133,6 @@ def write_data_yaml(output_root: Path, splits: list[str], class_names: list[str]
     (output_root / "data.yaml").write_text("\n".join(lines) + "\n")
 
 
-def detect_task_name(data_dir: str | Path) -> str:
-    """'detection' for a YOLO-layout data dir, else 'classification'."""
-    return "detection" if is_yolo_dataset(Path(data_dir)) else "classification"
-
-
 def _class_dirs(split_dir: Path) -> list[Path]:
     return sorted(p for p in split_dir.iterdir() if p.is_dir())
 
@@ -201,12 +196,3 @@ def detection_layout_errors(root: Path) -> list[str]:
             "val split (auto-splitting is not yet supported for object detection)."
         )
     return errors
-
-
-def layout_errors(data_dir: str | Path, task_name: str | None = None) -> list[str]:
-    """Layout problems for DATA_DIR under TASK_NAME (sniffed from the layout when omitted)."""
-    root = Path(data_dir)
-    task_name = task_name or detect_task_name(root)
-    if task_name == "detection":
-        return detection_layout_errors(root)
-    return classification_layout_errors(root)

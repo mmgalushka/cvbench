@@ -19,8 +19,8 @@ from cvbench.core.exp_store import (
     scan_experiments,
     validate_run_name,
 )
-from cvbench.core.report_print import print_classification_body, print_detection_body
 from cvbench.core.sweep_store import scan_sweeps
+from cvbench.tasks import TASK_NAMES, get_task
 
 # NOTE: cvbench.services.export is imported inside export() — it pulls in
 # TensorFlow, and importing it at module scope would make every `runs …`
@@ -35,7 +35,12 @@ _ALWAYS_SHOWN = (
     "training.seed",
 )
 # Run bookkeeping (shown above) and bulky/derived values that would only add noise.
-_HIDDEN_PREFIXES = ("run.", "detection.anchors", "augmentation.", "data.classes")
+_HIDDEN_PREFIXES = (
+    "run.",
+    "augmentation.",
+    "data.classes",
+    *(p for name in TASK_NAMES for p in get_task(name).hidden_config_prefixes),
+)
 
 
 def _flatten(d: dict, prefix: str = "") -> dict:
@@ -96,7 +101,7 @@ def runs():
 @click.option(
     "--sort",
     default="date",
-    type=click.Choice(["val_accuracy", "val_loss", "date", "backbone"]),
+    type=click.Choice(["val_accuracy", "val_loss", "test", "date", "backbone"]),
     show_default=True,
 )
 def list_runs(experiments_dir, sort):
@@ -220,12 +225,10 @@ def show(experiment):
     if eval_path.exists():
         with open(eval_path) as f:
             report = json.load(f)
-        task = report.get("task")
+        task_name = report.get("task")
         advisories = present.run_advisories(run_dir, report)
-        if task == "classification":
-            print_classification_body(report, entry.get("val_accuracy"), advisories)
-        elif task == "detection":
-            print_detection_body(report, advisories)
+        if task_name in TASK_NAMES:
+            get_task(task_name).render_report(report, entry.get("val_accuracy"), advisories)
         else:
             # Unknown/legacy report shape — fall back to the generic
             # overall/per-class/confusion-matrix rendering.

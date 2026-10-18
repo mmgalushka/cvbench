@@ -7,7 +7,7 @@ from cvbench.core.config import load_config, save_config
 from cvbench.core.exp_store import resolve_run_dir
 from cvbench.core.sweep_store import selection_metric_of_trial, summarize
 from cvbench.services._runtime import print_device_banner
-from cvbench.tasks import resolve_task
+from cvbench.tasks import option_scope_message, resolve_task
 
 
 def run_evaluation(
@@ -43,8 +43,8 @@ def run_evaluation(
 
     cfg = load_config(run_dir)
     task = resolve_task(cfg)
-    if conf is not None and cfg.task != "detection":
-        _console.warning("--conf only applies to detection runs; ignoring it.")
+    if conf is not None and "conf" not in task.predict_options():
+        _console.warning(f"{option_scope_message('conf')}; ignoring it.")
 
     spec = task.resolve_layout(cfg)
     test_ds = task.build_eval_dataset(cfg, spec)
@@ -65,11 +65,11 @@ def run_evaluation(
     )
 
     metric, value = task.test_score(report)
-    # A map50 sweep ranks trials on the val mAP@50 kept in these run fields, so a test
-    # score must not overwrite it (the test score stays in eval_report.json).
-    if selection_metric_of_trial(run_dir) != "map50":
-        cfg.run.test_accuracy = value
-        cfg.run.test_metric = metric
+    # A sweep that ranks on this metric keeps the trial's val score under its name in the
+    # run metrics, so a test score must not overwrite it (the test score stays in eval_report.json).
+    if selection_metric_of_trial(run_dir) != metric:
+        cfg.run.metrics[metric] = value
+        cfg.run.primary_metric = metric
         save_config(cfg, run_dir)
 
     return report

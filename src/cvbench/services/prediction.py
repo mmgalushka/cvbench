@@ -10,6 +10,7 @@ import numpy as np
 
 from cvbench.core.config import load_config
 from cvbench.core.exp_store import resolve_run_dir
+from cvbench.tasks import check_predict_options, resolve_task
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp"}
 
@@ -147,101 +148,6 @@ def _infer_tflite(model_path: Path, images: list[str], size: int) -> list[list[n
     return results
 
 
-def _class_name(class_names: list[str] | None, idx: int) -> str:
-    return class_names[idx] if class_names and idx < len(class_names) else str(idx)
-
-
-def build_classification_result(
-    probs, class_names: list[str] | None, top_k: int | None = 1
-) -> dict:
-    """Shape one image's class probabilities; ``top_k=None`` keeps every class.
-
-    The single classification result builder — `predict` and the WebUI both use it,
-    so a given image yields the same fields from either.
-    """
-    order = [int(i) for i in np.argsort(-np.asarray(probs), kind="stable")]
-    top_idx = order[0]
-    return {
-        "class_index": top_idx,
-        "confidence": float(probs[top_idx]),
-        "class_name": _class_name(class_names, top_idx),
-        "top_k": [
-            {"class_name": _class_name(class_names, i), "confidence": float(probs[i])}
-            for i in order[: top_k or len(order)]
-        ],
-        "probs": [float(x) for x in probs],
-    }
-
-
-def _build_results(
-    images: list[str],
-    probs_list: list[np.ndarray],
-    class_names: list[str] | None,
-    top_k: int | None = 1,
-) -> list[dict]:
-    """Per-image classification results, tagged with the file name."""
-    return [
-        {"filename": Path(img_path).name, **build_classification_result(probs, class_names, top_k)}
-        for img_path, probs in zip(images, probs_list, strict=True)
-    ]
-
-
-def build_detection_result(outputs: list[np.ndarray], cfg, conf: float | None) -> dict:
-    """Decode one image's raw head outputs (no batch axis) into detections.
-
-    The single detection result builder. Exported models don't guarantee output
-    order (TFLite sorts tensors by name), so scales are re-ordered to match
-    ``cfg.detection.strides`` — finest stride first means largest grid first.
-    ``conf`` overrides the run's ``detection.conf_threshold``.
-    """
-    from cvbench.detection.decode import decode_batch
-
-    det = cfg.detection
-    if not det.anchors or not det.strides:
-        raise ValueError(
-            "This detection run predates anchor-based decoding and cannot be "
-            "used for inference — retrain with the current detection head."
-        )
-    class_names = cfg.data.classes
-    scales = sorted(outputs, key=lambda o: o.shape[0], reverse=True)
-    dets = decode_batch(
-        [o[None] for o in scales],
-        num_classes=len(class_names),
-        anchors=det.anchors,
-        strides=det.strides,
-        conf_threshold=det.conf_threshold if conf is None else conf,
-        max_detections=det.max_detections,
-        nms_iou_threshold=det.iou_threshold,
-    )[0]
-    return {
-        "detections": [
-            {
-                "class_index": d["class_id"],
-                "class_name": _class_name(class_names, d["class_id"]),
-                "confidence": d["confidence"],
-                "x": d["x"],
-                "y": d["y"],
-                "w": d["w"],
-                "h": d["h"],
-            }
-            for d in dets
-        ],
-    }
-
-
-def _build_detection_results(
-    images: list[str],
-    outputs_list: list[list[np.ndarray]],
-    cfg,
-    conf: float | None,
-) -> list[dict]:
-    """Per-image detection results, tagged with the file name."""
-    return [
-        {"filename": Path(img_path).name, **build_detection_result(outs, cfg, conf)}
-        for img_path, outs in zip(images, outputs_list, strict=True)
-    ]
-
-
 def run_experiment_prediction(
     experiment: str,
     input_path: str,
@@ -253,15 +159,15 @@ def run_experiment_prediction(
     """Run inference for an experiment across one or all model formats.
 
     fmt: "keras" | "onnx" | "tflite" | "plan" | "all"
-    conf: detection runs only — minimum score for a detection to be reported
-        (default: the run's ``detection.conf_threshold``).
-    top_k: classification runs only — classes reported per image (None = all).
+    conf: only for tasks that threshold detections (see ``Task.predict_options``) — minimum
+        score for a detection to be reported (default: the run's ``detection.conf_threshold``).
+    top_k: only for tasks that rank classes — classes reported per image (None = all).
     model_path: explicit model file; the format is taken from ``fmt``, which
         must be one of keras/onnx/tflite.
 
     Returns dict with keys:
         plan_only       – True when fmt == "plan"
-        task            – "classification" | "detection"
+        task            – the run's task name
         experiment      – resolved run name
         run_dir         – Path to run directory
         formats_run     – list of {format, model_path, results}
@@ -274,11 +180,8 @@ def run_experiment_prediction(
         return {"plan_only": True, "experiment": run_dir.name, "run_dir": run_dir}
 
     run_cfg = load_config(str(run_dir))
-    task = getattr(run_cfg, "task", "classification")
-    if conf is not None and task != "detection":
-        raise ValueError("--conf only applies to detection runs")
-    if task == "detection" and top_k != 1:
-        raise ValueError("--top-k and --probs only apply to classification runs")
+    task = resolve_task(run_cfg)
+    check_predict_options(task, conf, top_k)
 
     found = _collect_images(input_path)
     if not found:
@@ -332,19 +235,14 @@ def run_experiment_prediction(
                 outputs_list = _infer_onnx(path, images, size)
             else:
                 outputs_list = _infer_tflite(path, images, size)
-            if task == "detection":
-                results = _build_detection_results(images, outputs_list, run_cfg, conf)
-            else:
-                results = _build_results(
-                    images, [o[0] for o in outputs_list], class_names, top_k
-                )
+            results = task.predict(images, outputs_list, run_cfg, class_names, conf, top_k)
             formats_run.append({"format": f, "model_path": str(path), "results": results})
         except RuntimeError as e:
             formats_skipped.append({"format": f, "reason": str(e)})
 
     return {
         "plan_only": False,
-        "task": task,
+        "task": task.name,
         "experiment": run_dir.name,
         "run_dir": run_dir,
         "formats_run": formats_run,
@@ -387,8 +285,6 @@ def run_prediction(checkpoint: str, input_path: str) -> list[dict]:
 
 def _load_run_model(run_name: str):
     """Return (cfg, model, input_size) for a run's keras checkpoint."""
-    from cvbench.tasks import resolve_task
-
     run_dir = Path(resolve_run_dir(run_name))
     cfg = load_config(str(run_dir))
     checkpoint = _model_path(run_dir, "keras")
@@ -404,32 +300,16 @@ def _load_run_model(run_name: str):
 WEB_TOP_K = 5  # classes the WebUI lists by default
 
 
-def _check_options(task: str, conf: float | None) -> None:
-    if conf is not None and task != "detection":
-        raise ValueError("--conf only applies to detection runs")
-
-
 def _predict_from_input(
     cfg, model, arr: np.ndarray, conf: float | None = None, top_k: int | None = WEB_TOP_K
 ) -> dict:
     """Run the model on a batched ``(1, H, W, 3)`` float array and shape the
     result with the same builders the CLI uses."""
-    task = getattr(cfg, "task", "classification")
-    _check_options(task, conf)
+    task = resolve_task(cfg)
+    check_predict_options(task, conf)
     preds = model.predict(arr, verbose=0)
     outputs = [np.asarray(o[0], dtype=np.float32) for o in (preds if isinstance(preds, (list, tuple)) else [preds])]
-    if task == "detection":
-        result = build_detection_result(outputs, cfg, conf)
-        # Boxes are normalized top-left xywh in [0, 1] — what shared.js::buildBoxLayer() consumes.
-        top = max(result["detections"], key=lambda d: d["confidence"], default=None)
-        return {
-            "task": "detection",
-            **result,
-            "class_name": top["class_name"] if top else None,
-            "class_index": top["class_index"] if top else None,
-            "confidence": top["confidence"] if top else None,
-        }
-    return {"task": "classification", **build_classification_result(outputs[0], cfg.data.classes, top_k)}
+    return task.predict_one(outputs, cfg, conf, top_k)
 
 
 def predict_image(

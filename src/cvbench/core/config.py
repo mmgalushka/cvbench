@@ -9,6 +9,8 @@ from typing import Any
 
 import yaml
 
+from cvbench.tasks import DEFAULT_TASK
+
 # Backbone names accepted by --backbone. Kept here, not derived from
 # core/backbone.py's presets, because that module imports keras_hub and the CLI
 # must validate the flag without paying for it (tests keep the two in sync).
@@ -129,14 +131,45 @@ class RunConfig:
     pid: int = 0  # PID of the process that set status="running"; used to detect a
     # crashed/killed run whose status was never updated (see load_config).
     epochs_run: int = 0
-    val_accuracy: Any = None
-    val_loss: Any = None
-    test_accuracy: Any = None
-    test_metric: str = "accuracy"  # label for test_accuracy: "accuracy" | "map50" | ...
+    # {metric name: value} — the headline numbers of the run. Which names exist is the
+    # task's call (Task.metrics_schema); `primary_metric` names the one that stands for
+    # the run as a whole (the test score, or the val score a sweep ranks on).
+    metrics: dict = field(default_factory=dict)
+    primary_metric: str = "accuracy"
     resumable: bool = False
     resume_checkpoint: Any = None
     notes: str = ""
     cli_command: str = ""
+
+    @property
+    def val_accuracy(self) -> Any:
+        return self.metrics.get("val_accuracy")
+
+    @val_accuracy.setter
+    def val_accuracy(self, value: Any) -> None:
+        self._set_metric("val_accuracy", value)
+
+    @property
+    def val_loss(self) -> Any:
+        return self.metrics.get("val_loss")
+
+    @val_loss.setter
+    def val_loss(self, value: Any) -> None:
+        self._set_metric("val_loss", value)
+
+    @property
+    def primary_value(self) -> Any:
+        return self.metrics.get(self.primary_metric)
+
+    @primary_value.setter
+    def primary_value(self, value: Any) -> None:
+        self._set_metric(self.primary_metric, value)
+
+    def _set_metric(self, name: str, value: Any) -> None:
+        if value is None:
+            self.metrics.pop(name, None)
+        else:
+            self.metrics[name] = value
 
 
 @dataclass
@@ -158,7 +191,7 @@ class DetectionConfig:
 
 @dataclass
 class CVBenchConfig:
-    task: str = "classification"  # "classification" | "detection" | ...
+    task: str = DEFAULT_TASK  # any name registered in cvbench.tasks
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
@@ -194,6 +227,23 @@ def _parse_transforms(raw: list) -> list:
 # ---------------------------------------------------------------------------
 # Internal: dict → config
 # ---------------------------------------------------------------------------
+
+def _run_metrics(r: dict, default: dict) -> dict:
+    """The run's ``metrics`` dict, migrating the pre-``metrics`` keys of an older config.yaml.
+
+    Older runs stored ``val_loss`` / ``val_accuracy`` flat and the test score as
+    ``test_accuracy`` labelled by ``test_metric``; the score is re-keyed by that label.
+    """
+    if isinstance(r.get("metrics"), dict):
+        return dict(r["metrics"])
+    metrics = dict(default)
+    for key in ("val_loss", "val_accuracy"):
+        if r.get(key) is not None:
+            metrics[key] = r[key]
+    if r.get("test_accuracy") is not None:
+        metrics[r.get("test_metric") or "accuracy"] = r["test_accuracy"]
+    return metrics
+
 
 def _dict_to_config(d: dict) -> CVBenchConfig:
     cfg = CVBenchConfig()
@@ -288,10 +338,8 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
         status=r.get("status", cfg.run.status),
         pid=r.get("pid", cfg.run.pid),
         epochs_run=r.get("epochs_run", cfg.run.epochs_run),
-        val_accuracy=r.get("val_accuracy", cfg.run.val_accuracy),
-        val_loss=r.get("val_loss", cfg.run.val_loss),
-        test_accuracy=r.get("test_accuracy", cfg.run.test_accuracy),
-        test_metric=r.get("test_metric", cfg.run.test_metric),
+        metrics=_run_metrics(r, cfg.run.metrics),
+        primary_metric=r.get("primary_metric", r.get("test_metric", cfg.run.primary_metric)),
         resumable=r.get("resumable", cfg.run.resumable),
         resume_checkpoint=r.get("resume_checkpoint", cfg.run.resume_checkpoint),
         notes=r.get("notes", cfg.run.notes),
@@ -477,9 +525,14 @@ def load_aug_file(path: str) -> AugmentationConfig:
 
 
 def update_run_status(exp_dir: str, **kwargs):
-    """Update fields in the run: section of config.yaml in-place."""
+    """Update fields in the run: section of config.yaml in-place.
+
+    ``metrics`` is merged into the run's metrics rather than replacing them.
+    """
     cfg = load_config(exp_dir)
     for k, v in kwargs.items():
-        if hasattr(cfg.run, k):
+        if k == "metrics":
+            cfg.run.metrics.update(v)
+        elif hasattr(cfg.run, k):
             setattr(cfg.run, k, v)
     save_config(cfg, exp_dir)

@@ -175,7 +175,7 @@ def test_interrupted_trial_skips_map50_eval_and_stops(data_dir, workdir, monkeyp
     # An interrupted trial raises before returning, so the map50 eval step (which needs
     # the trial's best.keras) must never run for it.
     calls = _install_fake(monkeypatch, interrupt_lr=1e-4)
-    monkeypatch.setattr("cvbench.datasets.layout.detect_task_name", lambda d: "detection")
+    monkeypatch.setattr("cvbench.tasks.detect_task_name", lambda d: "detection")
     monkeypatch.setattr("cvbench.cli.sweep.validate_dataset", lambda *a: None)  # data_dir is not YOLO
     eval_calls = []
     monkeypatch.setattr("cvbench.cli.sweep._evaluate_on_val", lambda trial_dir: eval_calls.append(trial_dir))
@@ -195,7 +195,7 @@ def test_map50_eval_failure_does_not_mark_training_failed(data_dir, workdir, mon
     # trial's own "done" training status must not be overwritten or misreported, and the
     # sweep must still continue to the remaining trials (this isn't a Ctrl-C).
     calls = _install_fake(monkeypatch)
-    monkeypatch.setattr("cvbench.datasets.layout.detect_task_name", lambda d: "detection")
+    monkeypatch.setattr("cvbench.tasks.detect_task_name", lambda d: "detection")
     monkeypatch.setattr("cvbench.cli.sweep.validate_dataset", lambda *a: None)  # data_dir is not YOLO
 
     def _boom(trial_dir):

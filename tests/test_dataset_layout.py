@@ -38,8 +38,10 @@ def test_is_yolo_dataset(yolo_root, cls_root):
 
 
 def test_detect_task_name(yolo_root, cls_root):
-    assert layout.detect_task_name(yolo_root) == "detection"
-    assert layout.detect_task_name(cls_root) == "classification"
+    from cvbench.tasks import detect_task_name
+
+    assert detect_task_name(yolo_root) == "detection"
+    assert detect_task_name(cls_root) == "classification"
 
 
 def test_yolo_root_walks_up_from_split_dir(yolo_root):

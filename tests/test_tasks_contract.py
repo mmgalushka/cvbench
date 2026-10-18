@@ -7,8 +7,6 @@ first, not at some far-off orchestration call site.
 """
 import pytest
 
-pytestmark = pytest.mark.tf  # get_task() imports a task module, which imports TensorFlow
-
 from cvbench.tasks import TASK_NAMES, get_task
 
 
@@ -29,6 +27,71 @@ def test_task_instantiates(name):
 def test_task_name_matches_registry_key(name):
     task = get_task(name)
     assert task.name == name
+
+
+@pytest.mark.parametrize("name", TASK_NAMES)
+def test_task_metadata_is_consistent(name):
+    task = get_task(name)
+    schema = {m.name: m for m in task.metrics_schema()}
+    assert task.primary_metric.name in schema
+    assert task.sweep_metric in task.selection_metric_names
+    assert set(task.selection_metric_names) <= set(schema)
+    assert all(m.direction in ("min", "max") for m in schema.values())
+    assert task.predict_options() <= {"conf", "top_k"}
+    assert task.run_prefix == task.short_name
+
+
+def test_short_names_are_unique():
+    shorts = [get_task(n).short_name for n in TASK_NAMES]
+    assert len(set(shorts)) == len(shorts)
+
+
+@pytest.mark.parametrize("name", TASK_NAMES)
+def test_task_meta_is_json_serializable(name):
+    import json
+
+    meta = json.loads(json.dumps(get_task(name).meta()))
+    assert meta["name"] == name
+    assert meta["primary_metric"] in [m["name"] for m in meta["metrics"]]
+
+
+def test_task_packages_import_without_tensorflow():
+    """Metadata, report rendering and prediction shaping must not pay for TensorFlow."""
+    import subprocess
+    import sys
+
+    code = (
+        "import sys\n"
+        "from cvbench.tasks import TASK_NAMES, get_task\n"
+        "for n in TASK_NAMES:\n"
+        "    t = get_task(n)\n"
+        "    t.meta(); t.metrics_schema(); t.predict_options()\n"
+        "bad = sorted(m for m in sys.modules if m.split('.')[0] in ('tensorflow', 'keras'))\n"
+        "assert not bad, bad\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_check_predict_options_names_the_supporting_tasks():
+    from cvbench.tasks import check_predict_options
+
+    cls, det = get_task("classification"), get_task("detection")
+    check_predict_options(cls, None, 3)
+    check_predict_options(det, 0.4, 1)
+    with pytest.raises(ValueError, match="--conf only applies to detection runs"):
+        check_predict_options(cls, 0.4)
+    with pytest.raises(ValueError, match="--top-k and --probs only apply to classification runs"):
+        check_predict_options(det, None, 3)
+
+
+def test_detect_task_name_and_layout_errors_dispatch_through_tasks(tmp_path):
+    from cvbench.tasks import detect_task_name, layout_errors
+
+    (tmp_path / "images" / "train").mkdir(parents=True)
+    (tmp_path / "labels").mkdir()
+    assert detect_task_name(tmp_path) == "detection"
+    assert any("images/val" in e for e in layout_errors(tmp_path))
 
 
 @pytest.mark.parametrize("name", TASK_NAMES)

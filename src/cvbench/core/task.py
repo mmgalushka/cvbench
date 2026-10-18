@@ -15,7 +15,8 @@ from __future__ import annotations
 import abc
 import warnings
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
     import keras
@@ -35,15 +36,79 @@ class DatasetSpec:
     num_train_images: int
 
 
+@dataclass(frozen=True)
+class MetricSpec:
+    """One metric a task records on its runs: how to rank, label and format it."""
+
+    name: str
+    label: str
+    direction: str  # "min" | "max"
+    fmt: str = "pct"  # "pct" (0..1 shown as %) | "loss" (plain float)
+
+
+VAL_LOSS = MetricSpec("val_loss", "Val Loss", "min", fmt="loss")
+
+
 class Task(abc.ABC):
     """A training scenario: classification, detection, and (later) others.
 
     Instances are stateless — all state lives in the ``CVBenchConfig`` and
     ``DatasetSpec`` passed into every method — so ``cvbench.tasks.get_task``
     can hand out a fresh instance per call for free.
+
+    Everything outside the model/data path (metadata, report rendering,
+    prediction shaping) is TensorFlow-free, so the CLI and WebUI can ask a
+    task about itself without paying for a TensorFlow import.
     """
 
     name: ClassVar[str]
+    short_name: ClassVar[str]  # run-name / table prefix, e.g. "cls"
+    primary_metric: ClassVar[MetricSpec]  # the run's single headline test score
+    sweep_metric: ClassVar[str]  # default selection metric of a sweep
+    # Metrics a sweep may rank trials on — never the test score of a task that also has a
+    # validation-time metric (ranking on the test set would leak it into model selection).
+    selection_metric_names: ClassVar[tuple[str, ...]]
+    config_section: ClassVar[str | None] = None  # cfg attribute holding task-only settings
+    hidden_config_prefixes: ClassVar[tuple[str, ...]] = ()  # bulky derived keys `runs show` skips
+    predict_option_names: ClassVar[frozenset[str]] = frozenset()  # subset of {"conf", "top_k"}
+
+    @property
+    def run_prefix(self) -> str:
+        return self.short_name
+
+    def metrics_schema(self) -> tuple[MetricSpec, ...]:
+        """Every metric a run of this task can record, primary one included."""
+        return (VAL_LOSS, self.primary_metric)
+
+    def metric(self, name: str) -> MetricSpec | None:
+        return next((m for m in self.metrics_schema() if m.name == name), None)
+
+    def predict_options(self) -> frozenset[str]:
+        """Which of ``conf`` / ``top_k`` this task's predictions honour."""
+        return self.predict_option_names
+
+    def meta(self) -> dict[str, Any]:
+        """JSON-able description of the task, served to the WebUI."""
+        return {
+            "name": self.name,
+            "short_name": self.short_name,
+            "primary_metric": self.primary_metric.name,
+            "sweep_metric": self.sweep_metric,
+            "selection_metrics": list(self.selection_metric_names),
+            "metrics": [vars(m) for m in self.metrics_schema()],
+            "predict_options": sorted(self.predict_options()),
+        }
+
+    # ---- dataset layout -------------------------------------------------
+
+    @classmethod
+    def matches_layout(cls, data_dir: Path) -> bool:
+        """Whether DATA_DIR looks like this task's dataset layout (used to sniff the task)."""
+        return False
+
+    def layout_errors(self, data_dir: Path) -> list[str]:
+        """Human-readable problems with DATA_DIR as a dataset for this task."""
+        return []
 
     # ---- layout / config ---------------------------------------------------
 
@@ -59,9 +124,9 @@ class Task(abc.ABC):
         """Return human-readable errors for a config this task cannot run.
 
         The caller (``run_training``) raises when this is non-empty. The
-        default accepts anything.
+        default checks the dataset layout on disk.
         """
-        return []
+        return self.layout_errors(Path(cfg.data.data_dir))
 
     @abc.abstractmethod
     def count_images(self, directory: str) -> int:
@@ -137,3 +202,49 @@ class Task(abc.ABC):
     @abc.abstractmethod
     def test_score(self, report: dict) -> tuple[str, float | None]:
         """Return (metric_name, value) — the run's single primary test score."""
+
+    # ---- prediction ---------------------------------------------------------
+
+    @abc.abstractmethod
+    def predict(
+        self,
+        images: list[str],
+        outputs_list: list[list[Any]],
+        cfg: CVBenchConfig,
+        class_names: list[str] | None,
+        conf: float | None = None,
+        top_k: int | None = 1,
+    ) -> list[dict]:
+        """Shape raw model outputs (one list of head arrays per image) into per-image results."""
+
+    @abc.abstractmethod
+    def predict_one(
+        self,
+        outputs: list[Any],
+        cfg: CVBenchConfig,
+        conf: float | None = None,
+        top_k: int | None = 1,
+    ) -> dict:
+        """Shape one image's raw head outputs (no batch axis) into a WebUI result."""
+
+    @abc.abstractmethod
+    def render_predictions(self, formats_run: list[dict], all_formats: bool) -> None:
+        """Print ``predict`` results to the terminal."""
+
+    # ---- report rendering -----------------------------------------------------
+
+    @abc.abstractmethod
+    def eval_summary(self, report: dict, val_accuracy: float | None = None) -> list[tuple[str, str]]:
+        """Ordered (label, value) headline facts of an eval report."""
+
+    @abc.abstractmethod
+    def per_class_table(self, report: dict) -> dict[str, list]:
+        """Columns and formatted rows of the per-class metrics table."""
+
+    def report_advisories(self, report: dict) -> list[str]:
+        """Advisories derivable from an eval report alone."""
+        return []
+
+    @abc.abstractmethod
+    def render_report(self, report: dict, val_accuracy: float | None = None, advisories=()) -> None:
+        """Print the body of an eval report to the terminal."""

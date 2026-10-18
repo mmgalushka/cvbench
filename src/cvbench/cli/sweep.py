@@ -47,7 +47,12 @@ from cvbench.core.sweep_store import (
 # the functions that need them — they pull in TensorFlow, and importing them at module
 # scope would slow down every `--help` and the `commands` overview.
 
-_METRICS = ("val_loss", "val_accuracy", "map50")
+
+
+def _selection_metric_names() -> list[str]:
+    from cvbench.tasks import selection_metrics
+
+    return list(selection_metrics())
 
 
 def _convert(flag: str, raw: str) -> Any:
@@ -124,8 +129,8 @@ def _evaluate_on_val(trial_dir: str) -> None:
     same task API on a spec whose `test_dir` points at the val split. The report is
     written to a throw-away directory (not the trial's eval_report.json, which is
     reserved for the real test evaluation) and only the headline score is stored,
-    in `run.test_accuracy` / `run.test_metric="map50"` — the fields
-    `sweep_store.summarize` reads for the map50 metric. Running `evaluate <trial>`
+    in `run.metrics` under the task's primary metric name (e.g. `map50`) — where
+    `sweep_store.summarize` reads it for that selection metric. Running `evaluate <trial>`
     later overwrites them with the real test mAP@50.
     """
     import dataclasses
@@ -154,7 +159,7 @@ def _evaluate_on_val(trial_dir: str) -> None:
             model=model, eval_ds=val_ds, cfg=cfg, spec=val_spec, run_dir=trial_dir, output_dir=tmp,
         )
     metric, value = task.test_score(report)
-    update_run_status(trial_dir, test_accuracy=value, test_metric=metric)
+    update_run_status(trial_dir, metrics={metric: value}, primary_metric=metric)
 
 
 @_help.command(
@@ -190,7 +195,7 @@ def _evaluate_on_val(trial_dir: str) -> None:
               help="Number of trials to sample. Required for --strategy random; rejected for grid.")
 @click.option("--sample-seed", "sample_seed", default=None, type=int,
               help="Seed for --strategy random sampling (auto-picked and recorded in sweep.yaml if omitted).")
-@click.option("--metric", default=None, type=click.Choice(list(_METRICS)),
+@click.option("--metric", default=None, type=click.Choice(_selection_metric_names()),
               help="Metric used to pick the best trial (default: val_loss; map50 for detection).")
 @click.option("--from", "from_dir", default=None, type=click.Path(exists=True),
               help="Load config from an existing run as the baseline for every trial.")
@@ -233,7 +238,7 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
     """
     from cvbench.core.config import load_config
     from cvbench.core.data_store import resolve_data_dir
-    from cvbench.datasets.layout import detect_task_name
+    from cvbench.tasks import check_selection_metric, detect_task_name, get_task
 
     try:
         if strategy == "random":
@@ -280,8 +285,13 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
             metric, direction = default_metric(task)
         else:
             direction = metric_direction(metric)
-        if metric == "map50" and task != "detection":
-            raise click.ClickException("--metric map50 is only available for detection datasets.")
+        try:
+            check_selection_metric(metric, task)
+        except ValueError as e:
+            raise click.ClickException(str(e)) from e
+        # The task's primary metric only exists after an evaluation, so a sweep ranking on
+        # it scores each trial on its val split once training finishes.
+        post_hoc_metric = get_task(task).primary_metric.name
 
         if name is None:
             name = make_unique_dir(EXPERIMENTS_DIR, f"sweep_{date.today().strftime('%Y_%m_%d')}").name
@@ -343,7 +353,7 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
         # Evaluation is a separate step from training: a trial that trained fine but has
         # no best.keras (e.g. the monitored metric never improved) must be reported as a
         # val-evaluation failure, not misattributed as "training failed".
-        if metric == "map50":
+        if metric == post_hoc_metric:
             try:
                 _evaluate_on_val(trial_dir)
             except KeyboardInterrupt:

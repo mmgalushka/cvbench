@@ -9,11 +9,12 @@ import-time crash.
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from cvbench.core.config import CVBenchConfig
-    from cvbench.core.task import Task
+    from cvbench.core.task import MetricSpec, Task
 
 # name -> (module to import, attribute holding the Task subclass)
 _TASKS: dict[str, tuple[str, str]] = {
@@ -22,6 +23,15 @@ _TASKS: dict[str, tuple[str, str]] = {
 }
 
 TASK_NAMES: tuple[str, ...] = tuple(_TASKS)
+
+# The task assumed for a config or report that doesn't name one (pre-detection runs).
+DEFAULT_TASK = "classification"
+
+# Order in which layouts are sniffed: the most specific layout first, the catch-all last.
+_SNIFF_ORDER: tuple[str, ...] = ("detection", "classification")
+
+# Flag text and verb used when an option is passed to a run whose task ignores it.
+_OPTION_FLAGS = {"conf": ("--conf", "applies"), "top_k": ("--top-k and --probs", "apply")}
 
 
 def get_task(name: str) -> Task:
@@ -42,4 +52,90 @@ def get_task(name: str) -> Task:
 
 def resolve_task(cfg: CVBenchConfig) -> Task:
     """Instantiate the task named by cfg.task, defaulting to classification."""
-    return get_task(getattr(cfg, "task", None) or "classification")
+    return get_task(getattr(cfg, "task", None) or DEFAULT_TASK)
+
+
+def task_or_default(name: str | None) -> Task:
+    """The task named NAME, or the default task for a missing or unregistered name."""
+    return get_task(name if name in _TASKS else DEFAULT_TASK)
+
+
+def detect_task_name(data_dir: str | Path) -> str:
+    """Name of the task whose dataset layout DATA_DIR matches."""
+    root = Path(data_dir)
+    for name in _SNIFF_ORDER:
+        if get_task(name).matches_layout(root):
+            return name
+    return DEFAULT_TASK
+
+
+def layout_errors(data_dir: str | Path, task_name: str | None = None) -> list[str]:
+    """Layout problems for DATA_DIR under TASK_NAME (sniffed from the layout when omitted)."""
+    root = Path(data_dir)
+    return get_task(task_name or detect_task_name(root)).layout_errors(root)
+
+
+def task_meta() -> dict[str, dict]:
+    """``{task name: Task.meta()}`` for every registered task — served to the WebUI."""
+    return {name: get_task(name).meta() for name in TASK_NAMES}
+
+
+def all_metrics() -> dict[str, MetricSpec]:
+    """Every metric any task records, by name."""
+    out: dict[str, MetricSpec] = {}
+    for name in TASK_NAMES:
+        for m in get_task(name).metrics_schema():
+            out.setdefault(m.name, m)
+    return out
+
+
+def selection_metrics() -> dict[str, MetricSpec]:
+    """Every metric a sweep can rank on, by name, across all tasks."""
+    out: dict[str, MetricSpec] = {}
+    for name in TASK_NAMES:
+        task = get_task(name)
+        for m in task.metrics_schema():
+            if m.name in task.selection_metric_names:
+                out.setdefault(m.name, m)
+    return out
+
+
+def check_selection_metric(metric: str, task_name: str) -> None:
+    """Raise ValueError when TASK_NAME cannot rank a sweep on METRIC."""
+    task = get_task(task_name)
+    if metric not in task.selection_metric_names:
+        owners = [n for n in TASK_NAMES if metric in get_task(n).selection_metric_names]
+        raise ValueError(
+            f"--metric {metric} is only available for {' / '.join(owners)} datasets."
+            if owners
+            else f"Unknown metric '{metric}'."
+        )
+
+
+def task_for_metric(metric: str) -> str:
+    """The task a selection METRIC belongs to: the only one recording it, else the default."""
+    owners = [n for n in TASK_NAMES if get_task(n).metric(metric) is not None]
+    return owners[0] if len(owners) == 1 else DEFAULT_TASK
+
+
+def tasks_supporting(option: str) -> list[str]:
+    """Names of the tasks whose predictions honour OPTION (``conf`` or ``top_k``)."""
+    return [n for n in TASK_NAMES if option in get_task(n).predict_options()]
+
+
+def option_scope_message(option: str) -> str:
+    """e.g. ``--conf only applies to detection runs``."""
+    flag, verb = _OPTION_FLAGS[option]
+    return f"{flag} only {verb} to {' / '.join(tasks_supporting(option))} runs"
+
+
+def check_predict_options(task: Task, conf: float | None, top_k: int | None = 1) -> None:
+    """Raise ValueError when CONF or TOP_K is set for a task that doesn't honour it.
+
+    ``top_k=1`` is the CLI default, so only another value counts as "set".
+    """
+    supported = task.predict_options()
+    if conf is not None and "conf" not in supported:
+        raise ValueError(option_scope_message("conf"))
+    if top_k != 1 and "top_k" not in supported:
+        raise ValueError(option_scope_message("top_k"))
