@@ -189,40 +189,40 @@ case $1 in
         action_init
         ;;
     data)
-        action_data ${@:2}
+        action_data "${@:2}"
         ;;
     train)
-        action_train ${@:2}
+        action_train "${@:2}"
         ;;
     sweep)
-        action_sweep ${@:2}
+        action_sweep "${@:2}"
         ;;
     evaluate)
-        action_evaluate ${@:2}
+        action_evaluate "${@:2}"
         ;;
     predict)
-        action_predict ${@:2}
+        action_predict "${@:2}"
         ;;
     runs)
-        action_runs ${@:2}
+        action_runs "${@:2}"
         ;;
     serve)
-        action_serve ${@:2}
+        action_serve "${@:2}"
         ;;
     test)
-        action_test ${@:2}
+        action_test "${@:2}"
         ;;
     prep)
-        action_prep ${@:2}
+        action_prep "${@:2}"
         ;;
     release)
-        action_release ${@:2}
+        action_release "${@:2}"
         ;;
     docs)
         action_docs
         ;;
     site)
-        action_site ${@:2}
+        action_site "${@:2}"
         ;;
     *)
         action_usage

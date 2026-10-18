@@ -26,6 +26,7 @@ cd ~/cvbench
     docker run -d \
       --name cvbench \
       --gpus all \
+      -p 0.0.0.0:8000:8000 \
       -p 0.0.0.0:8888:8888 \
       -v ~/cvbench/data:/home/cvbench/data \
       -v ~/cvbench/workspace:/home/cvbench/workspace \ # (1)!
@@ -44,6 +45,7 @@ cd ~/cvbench
     ```bash
     docker run -d \
       --name cvbench \
+      -p 0.0.0.0:8000:8000 \
       -p 0.0.0.0:8888:8888 \
       -v ~/cvbench/data:/home/cvbench/data \
       -v ~/cvbench/workspace:/home/cvbench/workspace \
@@ -113,8 +115,11 @@ After starting:
 
 ```bash
 # CVBench WebUI → http://<server-ip>:8000  (starts automatically; set URL via CVBENCH_URL)
-# JupyterLab    → http://<server-ip>:8888
+# JupyterLab    → http://<server-ip>:8888  (start manually — see below)
 ```
+
+JupyterLab doesn't start automatically; see [JupyterLab](../tools/jupyter-notebook.md)
+for how to launch it inside the container.
 
 ---
 

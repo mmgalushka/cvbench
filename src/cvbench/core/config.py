@@ -448,6 +448,9 @@ def load_config(exp_dir: str) -> CVBenchConfig:
       that PID is no longer alive.
     - Legacy runs with no recorded PID (pid=0): stale if nothing in the run
       directory has been touched in over _LEGACY_STALE_SECONDS.
+
+    The correction is in-memory only: reading never rewrites config.yaml. It
+    reaches disk the next time a writer (e.g. update_run_status) saves the config.
     """
     path = Path(exp_dir) / "config.yaml"
     if not path.exists():
@@ -463,7 +466,6 @@ def load_config(exp_dir: str) -> CVBenchConfig:
             stale = latest is not None and (time.time() - latest) > _LEGACY_STALE_SECONDS
         if stale:
             cfg.run.status = "failed"
-            save_config(cfg, exp_dir)
     return cfg
 
 

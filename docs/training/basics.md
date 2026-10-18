@@ -6,7 +6,7 @@ From a JupyterLab terminal or SSH session:
 ```bash
 docker exec -it cvbench bash
 tm new train
-train data --epochs 20 --backbone efficientnet_b0
+train data/my_dataset --epochs 20 --backbone efficientnet_b0
 # Ctrl+B D to detach — training continues after you close the terminal
 ```
 

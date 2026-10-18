@@ -156,6 +156,8 @@ def list_runs(experiments_dir, sort):
         ],
         rows,
     )
+    # One metric per task, so a legend labels the column without widening every cell.
+    print(_console.dim(" Test: accuracy for cls, mAP@50 for det."))
     if sweeps:
         print(_console.dim(" Sweeps: `runs list <sweep>` shows their trials."))
 
@@ -238,7 +240,13 @@ def show(experiment):
     print(f" {_console.bold(f'CVBench — run {run_name}')}")
     print(_console.rule())
     for f in fields:
-        print(f" {f:<22}: {entry.get(f, '—')}")
+        value = entry.get(f)
+        if value is None:
+            value = "—"
+        elif isinstance(value, float):
+            value = f"{value:.4g}" if f == "lr" else f"{value:.4f}"
+        label = f"test_{entry.get('test_metric') or 'accuracy'}" if f == "test_accuracy" else f
+        print(f" {label:<22}: {value}")
     print(_console.rule())
 
     print(f" {_console.bold('Config')} {_console.dim('(non-default values)')}")

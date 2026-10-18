@@ -139,13 +139,13 @@ choosing the winner. The sweep never evaluates on the test split itself; that is
 a separate, manual step. Score the best trial once you have decided on it:
 
 ```bash
-evaluate shapes_lr_001
+evaluate shapes_lr_backbone_001
 ```
 
 or get a test score for **every** trial by evaluating the sweep by name:
 
 ```bash
-evaluate shapes_lr
+evaluate shapes_lr_backbone
 ```
 
 Each finished trial is evaluated and gets its own `eval_report.json`, and a table
@@ -170,7 +170,8 @@ Trial names are unique, so a bare trial name works everywhere a run name does
 ## In `runs list`
 
 A sweep appears in `runs list` as **one row**, tagged `cls·sweep` or
-`det·sweep` in the Task column. Val Loss and Epochs come from the best trial,
+`det·sweep` in the Task column. Val Loss, Val Acc, Test and Epochs come from
+the best trial (Test stays `—` until that trial is evaluated),
 and Status is `running` while any trial is still training. To see the trials,
 list the sweep directory:
 
@@ -187,14 +188,15 @@ How each `runs` command treats a sweep name:
 | `runs delete <sweep>` | removes the whole sweep and its trials |
 | `runs rename`, `runs export` | not supported: a clear message asks for a trial name |
 
-`evaluate` and `predict` likewise ask for a trial name. Trials themselves are
+`evaluate <sweep>` scores every finished trial (see above); `predict` asks for
+a trial name. Trials themselves are
 ordinary runs for every command, except that `runs rename` refuses them
 (renaming would make the sweep report the trial as missing).
 
 ## In the WebUI
 
 The **Experiments** page lists a sweep as one row (tagged `sweep`) alongside
-ordinary runs, with the best trial's validation loss. Click it to open the sweep
+ordinary runs, with the best trial's validation accuracy and test score. Click it to open the sweep
 page: its settings, the axes, and a trial table with the best trial highlighted.
 Click a trial to open it as a normal run; its back link returns to the sweep.
 A sweep can be deleted from its page (this removes all trials). Sweeps and

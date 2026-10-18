@@ -371,8 +371,8 @@ def upsample(src_dir, dst_dir, aug_file, target):
 
     if n_src >= target:
         raise click.ClickException(
-            f"'{src.name}' already has {n_src} images — "
-            f"use 'data downsample' to reduce to {target}."
+            f"'{src.name}' already has {n_src} images, at or above --target {target}; "
+            "nothing to upsample."
         )
 
     if dst.exists():
@@ -610,9 +610,9 @@ def prep(src, dst, no_hash, no_duplicates, on_incompatible, dry_run):
 def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
     """Copy SRC to DST, split into train/val/test, stratified by class.
 
-    SRC  dataset directory to split — a flat pool (classification:
-    <class>/*; YOLO: images/* + labels/*) or an already-split dataset,
-    which is pooled back together before re-partitioning.\n
+    SRC  flat dataset directory to split (classification: <class>/*;
+    YOLO: images/* + labels/*). An already-split SRC is rejected — run
+    'data flatten' first to pool it back together.\n
     DST  destination for the split dataset; must be empty or non-existent.
 
     Classification stratifies by class folder. YOLO images can carry boxes

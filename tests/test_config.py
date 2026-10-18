@@ -132,9 +132,9 @@ def test_load_config_marks_stale_running_as_failed(tmp_path):
     reloaded = load_config(str(tmp_path))
     assert reloaded.run.status == "failed"
 
-    # The correction is persisted, not just returned in-memory.
+    # Reading never mutates the file: the correction is in-memory only.
     on_disk = yaml.safe_load((tmp_path / "config.yaml").read_text())
-    assert on_disk["run"]["status"] == "failed"
+    assert on_disk["run"]["status"] == "running"
 
 
 def test_load_config_leaves_running_alone_when_pid_alive(tmp_path):

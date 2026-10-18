@@ -6,7 +6,7 @@ The fastest path from a running container to a trained, evaluated, served model.
 commands ──▶ tm new ──▶ data generate ──▶ train ──▶ runs list ──▶ evaluate ──▶ serve
 ```
 
-Five commands, top to bottom, and you have a trained model. Run these inside
+Seven commands, top to bottom, and you have a trained model. Run these inside
 the container (`docker exec -it cvbench bash`):
 
 ```text

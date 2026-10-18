@@ -1,7 +1,8 @@
 # Preparing Real Datasets
 
-The `data` command group has six subcommands in total: `list` and `explore`
-for inspecting a dataset, `upsample` for correcting class imbalance (see
+The `data` command group has eight subcommands in total: `list` and `explore`
+for inspecting a dataset, `generate` for making a synthetic dataset (see
+[Synthetic Data](synthetic.md)), `aug` for writing an augmentation config, `upsample` for correcting class imbalance (see
 [Augmentation](augmentation.md#upsampling-a-class-folder)), and three verbs for
 reshaping a dataset (classification or
 [YOLO](https://docs.ultralytics.com/datasets/detect/) layout) without touching the
