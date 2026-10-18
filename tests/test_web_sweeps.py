@@ -5,6 +5,7 @@ pytest.importorskip("fastapi", reason="requires the 'web' extra")
 
 from fastapi import HTTPException  # noqa: E402
 
+from cvbench.core.errors import NotFoundError  # noqa: E402
 from cvbench.web.api import runs as api  # noqa: E402
 from tests.test_sweep_runs import _sweep, _write_exp  # noqa: E402
 
@@ -45,12 +46,16 @@ def test_get_sweep_missing_trial(exps):
     assert statuses == ["done", "missing"]
 
 
-def test_get_sweep_unknown_or_not_a_sweep(exps):
+def test_get_sweep_unknown_raises_not_found(exps):
+    with pytest.raises(NotFoundError):
+        api.get_sweep("nope")
+
+
+def test_get_sweep_not_a_sweep(exps):
     _write_exp(exps, "manual")
-    for name in ("nope", "manual"):
-        with pytest.raises(HTTPException) as e:
-            api.get_sweep(name)
-        assert e.value.status_code == 404
+    with pytest.raises(HTTPException) as e:
+        api.get_sweep("manual")
+    assert e.value.status_code == 404
 
 
 def test_delete_sweep(exps, sweep):
@@ -69,3 +74,23 @@ def test_get_run_sweep_field(exps, sweep):
     _write_exp(exps, "manual")
     assert api.get_run("sw_001")["sweep"] == "sw"
     assert api.get_run("manual")["sweep"] is None
+
+
+def test_web_domain_error_handler_returns_404_with_suggestion_and_candidates(exps):
+    from fastapi.testclient import TestClient
+
+    from cvbench.web.app import create_app
+
+    _write_exp(exps, "resnet_run")
+    _write_exp(exps, "cls_a")
+    _write_exp(exps, "cls_b")
+    client = TestClient(create_app())
+
+    missing = client.get("/api/runs/resnet_rum")
+    assert missing.status_code == 404
+    assert "Did you mean 'resnet_run'?" in missing.json()["detail"]
+    assert missing.json()["candidates"] == ["resnet_run"]
+
+    ambiguous = client.get("/api/runs/cls_")
+    assert ambiguous.status_code == 409
+    assert ambiguous.json()["candidates"] == ["cls_a", "cls_b"]

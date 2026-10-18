@@ -77,6 +77,21 @@ def create_app():
     app = fastapi.FastAPI(title="CVBench", docs_url="/api/docs", redoc_url=None)
     app.include_router(api_router, prefix="/api")
 
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    from cvbench.core.errors import AmbiguousNameError, CVBenchError, NotFoundError
+
+    @app.exception_handler(CVBenchError)
+    async def _domain_error(_request: Request, exc: CVBenchError):
+        """The one place domain errors become HTTP responses (message + candidate names)."""
+        status = 404 if isinstance(exc, NotFoundError) else 409 if isinstance(exc, AmbiguousNameError) else 400
+        body: dict = {"detail": exc.message}
+        candidates = getattr(exc, "candidates", None)
+        if candidates:
+            body["candidates"] = candidates
+        return JSONResponse(body, status_code=status)
+
     if _STATIC_DIR.exists():
         app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True), name="static")
 

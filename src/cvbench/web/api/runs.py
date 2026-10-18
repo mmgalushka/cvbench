@@ -52,10 +52,7 @@ def list_sweeps():
 
 @router.get("/sweeps/{name}")
 def get_sweep(name: str):
-    try:
-        sweep_dir = Path(resolve_run_dir(name, allow_sweep=True))
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"Sweep '{name}' not found") from None
+    sweep_dir = Path(resolve_run_dir(name, allow_sweep=True))
     if not is_sweep_dir(sweep_dir):
         raise HTTPException(status_code=404, detail=f"'{name}' is not a sweep")
 
@@ -85,10 +82,7 @@ def get_sweep(name: str):
 
 @router.get("/runs/{name}/images/{path:path}")
 def get_run_image(name: str, path: str):
-    try:
-        run_dir = resolve_run_dir(name)
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
+    run_dir = resolve_run_dir(name)
 
     cfg = load_config(run_dir)
     test_dir = Path(cfg.data.test_dir).resolve()
@@ -107,10 +101,7 @@ def get_run_image(name: str, path: str):
 
 @router.get("/runs/{name}")
 def get_run(name: str):
-    try:
-        run_dir = resolve_run_dir(name)
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
+    run_dir = resolve_run_dir(name)
 
     run_path = Path(run_dir)
     cfg = load_config(run_dir)
@@ -218,10 +209,7 @@ def get_run(name: str):
 
 @router.patch("/runs/{name}")
 def rename_run(name: str, body: RenameRequest):
-    try:
-        run_dir = Path(resolve_run_dir(name, allow_sweep=True))
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
+    run_dir = Path(resolve_run_dir(name, allow_sweep=True))
 
     try:
         assert_renamable(run_dir)
@@ -246,10 +234,7 @@ def rename_run(name: str, body: RenameRequest):
 
 @router.delete("/runs/{name}")
 def delete_run(name: str):
-    try:
-        run_dir = Path(resolve_run_dir(name, allow_sweep=True))
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
+    run_dir = Path(resolve_run_dir(name, allow_sweep=True))
 
     experiments_base = Path(EXPERIMENTS_DIR).resolve()
     try:

@@ -53,10 +53,7 @@ def _scan_exports(run_dir: Path) -> list[dict]:
 
 @router.get("/runs/{name}/exports")
 def list_exports(name: str):
-    try:
-        run_dir = Path(resolve_run_dir(name))
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
+    run_dir = Path(resolve_run_dir(name))
     return _scan_exports(run_dir)
 
 
@@ -84,10 +81,7 @@ async def create_export(name: str, req: ExportRequest):
             detail="calib_strategy must be 'stratified', 'proportional', 'equal', or 'diverse'",
         )
 
-    try:
-        run_dir = Path(resolve_run_dir(name))
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
+    run_dir = Path(resolve_run_dir(name))
 
     if not (run_dir / "best.keras").exists():
         raise HTTPException(status_code=400, detail="No trained checkpoint found (best.keras missing)")
@@ -130,10 +124,7 @@ def _stream_tar_gz(files: list[tuple[Path, str]], chunk_size: int = 65536):
 
 @router.get("/runs/{name}/exports/{subfolder}/download/{filename}")
 def download_export(name: str, subfolder: str, filename: str):
-    try:
-        run_dir = Path(resolve_run_dir(name))
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
+    run_dir = Path(resolve_run_dir(name))
 
     export_base = (run_dir / "export").resolve()
     export_dir = (export_base / subfolder).resolve()
@@ -176,10 +167,7 @@ def download_export(name: str, subfolder: str, filename: str):
 
 @router.delete("/runs/{name}/exports/{subfolder}")
 def delete_export(name: str, subfolder: str):
-    try:
-        run_dir = Path(resolve_run_dir(name))
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"Run '{name}' not found") from None
+    run_dir = Path(resolve_run_dir(name))
 
     export_base = (run_dir / "export").resolve()
     export_dir = (export_base / subfolder).resolve()

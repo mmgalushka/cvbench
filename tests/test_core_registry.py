@@ -1,6 +1,6 @@
-import click
 import pytest
 
+from cvbench.core.errors import NotFoundError
 from cvbench.core.registry import Registry
 
 # ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ def test_resolve_not_found_raises_bad_parameter_directory_mode(tmp_path):
     reg = Registry(
         str(tmp_path / "base"), not_found_label="Run", param_hint="EXPERIMENT", list_hint="runs list",
     )
-    with pytest.raises(click.BadParameter) as exc_info:
+    with pytest.raises(NotFoundError) as exc_info:
         reg.resolve("nope")
     msg = str(exc_info.value)
     assert "Run not found: 'nope'." in msg
@@ -37,14 +37,14 @@ def test_resolve_not_found_suggests_close_match(tmp_path):
     base = tmp_path / "base"
     (base / "resnet_run").mkdir(parents=True)
     reg = Registry(str(base), not_found_label="Run", list_hint="runs list")
-    with pytest.raises(click.BadParameter) as exc_info:
+    with pytest.raises(NotFoundError) as exc_info:
         reg.resolve("resnet_rum")
     assert "Did you mean 'resnet_run'?" in str(exc_info.value)
 
 
 def test_resolve_not_found_suggests_extra_entries(tmp_path):
     reg = Registry(str(tmp_path / "base"), extra_entries=lambda: ["trial_001"])
-    with pytest.raises(click.BadParameter) as exc_info:
+    with pytest.raises(NotFoundError) as exc_info:
         reg.resolve("trial_01")
     assert "Did you mean 'trial_001'?" in str(exc_info.value)
 
@@ -81,7 +81,7 @@ def test_resolve_not_found_raises_bad_parameter_file_mode(tmp_path):
         str(tmp_path / "base"), ext=".yaml",
         not_found_label="Augmentation config", param_hint="--augmentation",
     )
-    with pytest.raises(click.BadParameter) as exc_info:
+    with pytest.raises(NotFoundError) as exc_info:
         reg.resolve("nope")
     msg = str(exc_info.value)
     assert "Augmentation config not found: 'nope'" in msg

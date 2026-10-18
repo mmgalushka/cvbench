@@ -193,7 +193,7 @@ def table(
     t = Table(title=title, header_style=header_style, box=box.SIMPLE_HEAD, show_edge=False, pad_edge=False)
     for col in columns:
         header, justify = col if isinstance(col, tuple) else (col, "left")
-        t.add_column(header, justify=justify)
+        t.add_column(header, justify=justify, overflow="fold")
     for row in rows:
         t.add_row(*(str(v) for v in row))
     _make_console().print(t)

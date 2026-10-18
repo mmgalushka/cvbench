@@ -27,16 +27,6 @@ from cvbench.core.sweep_store import scan_sweeps
 # invocation (and `runs --help`, and the `commands` overview) take ~1.5s.
 
 
-def _fit(s: str, width: int) -> str:
-    """Fit string to width using a middle ellipsis, preserving start and end."""
-    if len(s) <= width:
-        return s
-    keep = width - 1  # 1 char for the ellipsis
-    head = keep // 2
-    tail = keep - head
-    return s[:head] + "…" + s[-tail:]
-
-
 # Settings `runs show` always lists, even at their default — the knobs people compare runs on.
 _ALWAYS_SHOWN = (
     "model.fine_tune_from_layer",
@@ -131,7 +121,7 @@ def list_runs(experiments_dir, sort):
     _console.table(
         [(label, align) if align == "right" else label for _, label, align in columns],
         [
-            [_fit(d["name"], 40) if key == "name" else present.run_cell(d, key) for key, _, _ in columns]
+            [d["name"] if key == "name" else present.run_cell(d, key) for key, _, _ in columns]
             for d in displays
         ],
     )

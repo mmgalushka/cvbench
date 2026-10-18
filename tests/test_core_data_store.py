@@ -1,7 +1,7 @@
-import click
 import pytest
 
 from cvbench.core.data_store import resolve_data_dir, validate_data_name
+from cvbench.core.errors import NotFoundError
 
 
 def test_resolve_data_dir_literal_path(tmp_path):
@@ -22,7 +22,7 @@ def test_resolve_data_dir_bare_name(tmp_path, monkeypatch):
 def test_resolve_data_dir_not_found_raises_bad_parameter_pointing_to_data_list(tmp_path, monkeypatch):
     import cvbench.core.data_store as store
     monkeypatch.setattr(store, "DATA_DIR", str(tmp_path / "data"))
-    with pytest.raises(click.BadParameter) as exc_info:
+    with pytest.raises(NotFoundError) as exc_info:
         resolve_data_dir("not_a_real_dataset")
     msg = str(exc_info.value)
     assert "not_a_real_dataset" in msg
