@@ -11,8 +11,8 @@ from cvbench.cli.serve import serve
 def _fake_evaluation(monkeypatch):
     calls = []
     fake = SimpleNamespace(
-        run_evaluation=lambda **kw: calls.append(("run", kw)),
-        run_sweep_evaluation=lambda name: calls.append(("sweep", name)),
+        run_evaluation=lambda listener, **kw: calls.append(("run", kw)),
+        run_sweep_evaluation=lambda name, listener: calls.append(("sweep", name)),
     )
     monkeypatch.setitem(sys.modules, "cvbench.services.evaluation", fake)
     return calls

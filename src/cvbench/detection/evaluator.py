@@ -4,9 +4,9 @@ from pathlib import Path
 
 import keras
 import numpy as np
-import tqdm
 
 from cvbench.core import _console, present
+from cvbench.core.events import Listener, track_batches
 from cvbench.core.report import report_envelope, write_report
 from cvbench.datasets.layout import list_images, read_yolo_boxes, yolo_label_dir
 from cvbench.detection.decode import decode_batch
@@ -35,6 +35,7 @@ def evaluate(
     iou_threshold: float = 0.5,
     max_detections: int = 100,
     output_dir: str | None = None,
+    listener: Listener | None = None,
 ) -> dict:
     """Run detection evaluation, print report, write eval_report.json.
 
@@ -56,10 +57,7 @@ def evaluate(
     # model.predict on a multi-output model returns a list of per-scale
     # arrays — accumulate each scale separately across batches.
     all_preds: list[list] = [[] for _ in strides]
-    n_batches = test_ds.cardinality().numpy()
-    total = int(n_batches) if n_batches > 0 else None
-    batches = tqdm.tqdm(test_ds, total=total, desc=" Evaluating", unit="batch", disable=not _console.is_tty())
-    for images, _targets in batches:
+    for images, _targets in track_batches(test_ds, listener):
         batch_preds = model.predict(images, verbose=0)
         for scale_preds, acc in zip(batch_preds, all_preds, strict=True):
             acc.append(scale_preds)

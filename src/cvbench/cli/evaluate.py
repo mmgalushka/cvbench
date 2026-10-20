@@ -51,6 +51,7 @@ def evaluate(experiment, output_dir, conf):
     and flag runs that look undertrained (many false positives per image, or a
     validation loss that was still falling when training stopped).
     """
+    from cvbench.cli._listeners import ConsoleListener
     from cvbench.cli.sweep import print_trial_table
     from cvbench.core.exp_store import is_sweep_dir, resolve_run_dir
     from cvbench.services.evaluation import run_evaluation, run_sweep_evaluation  # deferred: pulls in TensorFlow
@@ -60,10 +61,10 @@ def evaluate(experiment, output_dir, conf):
             raise click.UsageError("--output-dir is not supported when evaluating a sweep.")
         if conf is not None:
             raise click.UsageError("--conf is not supported when evaluating a sweep.")
-        run_sweep_evaluation(experiment)
+        run_sweep_evaluation(experiment, listener=ConsoleListener())
         manifest, rows = summarize(resolve_run_dir(experiment, allow_sweep=True))
         print()
         print_trial_table(rows, list(manifest.axes), manifest.metric, show_test=True)
         return
 
-    run_evaluation(experiment=experiment, output_dir=output_dir, conf=conf)
+    run_evaluation(experiment=experiment, output_dir=output_dir, conf=conf, listener=ConsoleListener())

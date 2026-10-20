@@ -4,10 +4,10 @@ from pathlib import Path
 
 import keras
 import numpy as np
-import tqdm
 
 from cvbench.classification.view import render_report as print_body
 from cvbench.core import _console, present
+from cvbench.core.events import Listener, track_batches
 from cvbench.core.report import report_envelope, write_report
 
 _MAX_SAMPLES_PER_CELL = 20
@@ -68,6 +68,7 @@ def evaluate(
     test_dir: str,
     output_dir: str | None = None,
     val_accuracy: float | None = None,
+    listener: Listener | None = None,
 ) -> dict:
     """Run evaluation, print report, write eval_report.json.
 
@@ -78,12 +79,8 @@ def evaluate(
     out_dir = Path(output_dir or run_dir)
 
     # Single pass: collect predictions, ground truth, and raw scores
-    n_batches = test_ds.cardinality().numpy()
-    total = int(n_batches) if n_batches > 0 else None
-
     y_true_list, y_pred_list, all_preds = [], [], []
-    batches = tqdm.tqdm(test_ds, total=total, desc=" Evaluating", unit="batch", disable=not _console.is_tty())
-    for images, labels in batches:
+    for images, labels in track_batches(test_ds, listener):
         preds = model.predict(images, verbose=0)
         all_preds.append(preds)
         y_pred_list.extend(np.argmax(preds, axis=1))

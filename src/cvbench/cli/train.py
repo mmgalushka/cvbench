@@ -325,6 +325,7 @@ def train(data_dir, output_dir, overwrite, from_dir, resume, set_options, **flag
     except CVBenchError as e:
         raise click.BadParameter(e.message, param_hint=e.param_hint) from None
 
+    from cvbench.cli._listeners import ConsoleListener
     from cvbench.services.training import run_training  # deferred: pulls in TensorFlow
 
     run_training(
@@ -334,4 +335,5 @@ def train(data_dir, output_dir, overwrite, from_dir, resume, set_options, **flag
         overrides=overrides,
         resume=resume,
         overwrite=overwrite,
+        listener=ConsoleListener(),
     )

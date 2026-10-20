@@ -9,6 +9,15 @@ import pytest
 pytestmark = pytest.mark.tf
 
 from cvbench.core.config import load_config  # noqa: E402
+from cvbench.core.events import (  # noqa: E402
+    DeviceDetected,
+    EpochEnded,
+    EvalProgress,
+    EvalStarted,
+    RunFinished,
+    RunStarted,
+    SeedSet,
+)
 from cvbench.services.evaluation import run_evaluation  # noqa: E402
 from cvbench.services.training import run_training  # noqa: E402
 
@@ -59,3 +68,25 @@ def test_an_existing_run_is_not_replaced_without_overwrite(tmp_path, tiny_cls_ro
 
     with pytest.raises(ValueError, match="already exists"):
         _train(tiny_cls_root, output_dir=str(out))
+
+
+def test_training_and_evaluation_report_progress_to_the_listener(exps, tiny_cls_root):
+    events = []
+    exp_dir = _train(tiny_cls_root, listener=events.append)
+
+    kinds = [type(e) for e in events]
+    assert kinds == [DeviceDetected, SeedSet, RunStarted, EpochEnded, RunFinished]
+    started, epoch, finished = events[2], events[3], events[4]
+    assert started.exp_dir == exp_dir and started.resume_checkpoint is None
+    assert epoch.epoch == 0 and "val_loss" in epoch.logs
+    assert finished.status == "done" and finished.run_name == load_config(exp_dir).run.name
+    assert finished.final_metrics["val_loss"] == load_config(exp_dir).run.val_loss
+    assert finished.best_events and finished.interrupt_checkpoint is None
+
+    events.clear()
+    run_evaluation(exp_dir, listener=events.append)
+
+    assert isinstance(events[0], DeviceDetected) and isinstance(events[1], EvalStarted)
+    progress = [e for e in events if isinstance(e, EvalProgress)]
+    assert progress[0].done == 0 and not progress[0].finished
+    assert progress[-1].finished and progress[-1].done == progress[-1].total

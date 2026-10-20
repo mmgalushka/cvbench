@@ -175,7 +175,9 @@ def test_interrupted_trial_skips_map50_eval_and_stops(data_dir, workdir, monkeyp
     monkeypatch.setattr("cvbench.tasks.detect_task_name", lambda d: "detection")
     monkeypatch.setattr("cvbench.cli.sweep.validate_dataset", lambda *a: None)  # data_dir is not YOLO
     eval_calls = []
-    monkeypatch.setattr("cvbench.cli.sweep._evaluate_on_val", lambda trial_dir: eval_calls.append(trial_dir))
+    monkeypatch.setattr(
+        "cvbench.services.sweep.evaluate_on_val", lambda trial_dir, listener=None: eval_calls.append(trial_dir),
+    )
 
     result = _run(data_dir, "--lr", "1e-3,1e-4,1e-5", "--metric", "map50", "--name", "s1")
 
@@ -195,10 +197,10 @@ def test_map50_eval_failure_does_not_mark_training_failed(data_dir, workdir, mon
     monkeypatch.setattr("cvbench.tasks.detect_task_name", lambda d: "detection")
     monkeypatch.setattr("cvbench.cli.sweep.validate_dataset", lambda *a: None)  # data_dir is not YOLO
 
-    def _boom(trial_dir):
+    def _boom(trial_dir, listener=None):
         raise ValueError(f"File not found: filepath={trial_dir}/best.keras")
 
-    monkeypatch.setattr("cvbench.cli.sweep._evaluate_on_val", _boom)
+    monkeypatch.setattr("cvbench.services.sweep.evaluate_on_val", _boom)
 
     result = _run(data_dir, "--lr", "1e-3,1e-4", "--metric", "map50", "--name", "s1")
 
@@ -233,11 +235,11 @@ def test_random_run_samples_trials(data_dir, workdir, monkeypatch):
 def test_random_run_is_reproducible_with_same_seed(data_dir, workdir, monkeypatch):
     calls = _install_fake(monkeypatch)
     _run(data_dir, "--strategy", "random", "--trials", "3", "--sample-seed", "7", "--name", "s1")
-    first = [{k: v for k, v in c.items() if k not in ("data_dir", "output_dir")} for c in calls]
+    first = [{k: v for k, v in c.items() if k not in ("data_dir", "output_dir", "listener")} for c in calls]
 
     calls.clear()
     _run(data_dir, "--strategy", "random", "--trials", "3", "--sample-seed", "7", "--name", "s2")
-    second = [{k: v for k, v in c.items() if k not in ("data_dir", "output_dir")} for c in calls]
+    second = [{k: v for k, v in c.items() if k not in ("data_dir", "output_dir", "listener")} for c in calls]
     assert first == second
 
 

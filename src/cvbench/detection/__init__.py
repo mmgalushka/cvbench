@@ -138,7 +138,9 @@ class DetectionTask(Task):
         # stays val_loss, with mAP computed as a post-hoc `evaluate` step.
         return {"val_accuracy": None, "val_loss": final_metrics.get("val_loss")}
 
-    def evaluate(self, model, eval_ds, cfg, spec: DatasetSpec, run_dir, output_dir=None, conf=None) -> dict:
+    def evaluate(
+        self, model, eval_ds, cfg, spec: DatasetSpec, run_dir, output_dir=None, conf=None, listener=None,
+    ) -> dict:
         from cvbench.detection.evaluator import evaluate as _evaluate
         return _evaluate(
             model=model,
@@ -153,6 +155,7 @@ class DetectionTask(Task):
             iou_threshold=cfg.detection.iou_threshold,
             max_detections=cfg.detection.max_detections,
             output_dir=output_dir,
+            listener=listener,
         )
 
     def test_score(self, report: dict) -> tuple[str, float | None]:
