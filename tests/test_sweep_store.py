@@ -24,7 +24,7 @@ from cvbench.core.sweep_store import (
 def _manifest(name="sw", metric="val_loss", direction="min", axes=None) -> SweepManifest:
     return SweepManifest(
         version=1, name=name, date="2026-01-01", data_dir="data", strategy="grid",
-        metric=metric, direction=direction, axes=axes or {"lr": ["0.1", "0.01", "0.001"]},
+        metric=metric, direction=direction, axes=axes or {"training.learning_rate": ["0.1", "0.01", "0.001"]},
     )
 
 
@@ -102,7 +102,7 @@ def test_split_numeric_range_rejected(flag):
 
 
 def test_split_unknown_flag():
-    with pytest.raises(SweepError, match="Unknown sweep flag"):
+    with pytest.raises(SweepError, match="Unknown config key"):
         split_axis_values("bogus", "1,2")
 
 
@@ -181,7 +181,8 @@ def test_sample_grid_rejects_less_than_one():
 
 def test_default_random_space_has_expected_flags():
     assert set(DEFAULT_RANDOM_SPACE) == {
-        "lr", "optimizer", "dropout", "fine_tune_from_layer", "lr_scheduler", "batch_size", "loss",
+        "training.learning_rate", "training.optimizer", "model.dropout", "model.fine_tune_from_layer",
+        "training.lr_scheduler", "data.batch_size", "training.loss",
     }
     assert all(len(v) >= 2 for v in DEFAULT_RANDOM_SPACE.values())
 
@@ -211,15 +212,15 @@ def test_metric_direction_unknown():
 # ---------------------------------------------------------------------------
 
 def test_manifest_round_trip(tmp_path):
-    m = _manifest(axes={"lr": ["1e-3", "1e-4"], "epochs": ["1", "2"]})
+    m = _manifest(axes={"training.learning_rate": ["1e-3", "1e-4"], "training.epochs": ["1", "2"]})
     write_manifest(tmp_path, m)
     assert read_manifest(tmp_path) == m
 
 
 def test_manifest_values_stringified(tmp_path):
-    m = _manifest(axes={"epochs": [1, 2]})  # type: ignore[list-item]
+    m = _manifest(axes={"training.epochs": [1, 2]})  # type: ignore[list-item]
     write_manifest(tmp_path, m)
-    assert read_manifest(tmp_path).axes == {"epochs": ["1", "2"]}
+    assert read_manifest(tmp_path).axes == {"training.epochs": ["1", "2"]}
 
 
 def test_manifest_missing(tmp_path):
@@ -242,8 +243,8 @@ def test_manifest_not_a_mapping(tmp_path):
 def test_manifest_round_trip_random_trials(tmp_path):
     m = SweepManifest(
         version=1, name="sw", date="2026-01-01", data_dir="data", strategy="random",
-        metric="val_loss", direction="min", axes={"lr": ["1e-3", "1e-4", "1e-5"]},
-        trials=[{"lr": "1e-3"}, {"lr": "1e-5"}], sample_seed=42,
+        metric="val_loss", direction="min", axes={"training.learning_rate": ["1e-3", "1e-4", "1e-5"]},
+        trials=[{"training.learning_rate": "1e-3"}, {"training.learning_rate": "1e-5"}], sample_seed=42,
     )
     write_manifest(tmp_path, m)
     assert read_manifest(tmp_path) == m
@@ -267,7 +268,7 @@ def test_summarize_min_marks_best(tmp_path, write_exp):
     manifest, rows = summarize(d)
     assert manifest.name == "sw"
     assert [r.index for r in rows] == [1, 2, 3]
-    assert [r.params for r in rows] == [{"lr": "0.1"}, {"lr": "0.01"}, {"lr": "0.001"}]
+    assert [r.params["training.learning_rate"] for r in rows] == ["0.1", "0.01", "0.001"]
     assert [r.is_best for r in rows] == [False, True, False]
     assert best_trial(rows).dir == "sw_002"
 
@@ -319,7 +320,7 @@ def test_summarize_done_without_metric_not_best(tmp_path, write_exp):
 
 
 def test_summarize_map50_uses_test_metric(tmp_path, write_exp):
-    d = _sweep(tmp_path, metric="map50", direction="max", axes={"lr": ["1", "2", "3"]})
+    d = _sweep(tmp_path, metric="map50", direction="max", axes={"training.learning_rate": ["1", "2", "3"]})
     write_exp(d, "sw_001", primary_metric="map50", primary_value=0.3)
     write_exp(d, "sw_002", primary_metric="map50", primary_value=0.7)
     write_exp(d, "sw_003", primary_metric="accuracy", primary_value=0.99)  # wrong metric: ignored
@@ -331,8 +332,8 @@ def test_summarize_map50_uses_test_metric(tmp_path, write_exp):
 def test_summarize_random_uses_manifest_trials(tmp_path, write_exp):
     m = SweepManifest(
         version=1, name="sw", date="2026-01-01", data_dir="data", strategy="random",
-        metric="val_loss", direction="min", axes={"lr": ["1e-3", "1e-4", "1e-5"]},
-        trials=[{"lr": "1e-5"}, {"lr": "1e-3"}], sample_seed=0,
+        metric="val_loss", direction="min", axes={"training.learning_rate": ["1e-3", "1e-4", "1e-5"]},
+        trials=[{"training.learning_rate": "1e-5"}, {"training.learning_rate": "1e-3"}], sample_seed=0,
     )
     d = tmp_path / m.name
     d.mkdir()
@@ -340,14 +341,14 @@ def test_summarize_random_uses_manifest_trials(tmp_path, write_exp):
     write_exp(d, "sw_001", val_loss=0.9)
     write_exp(d, "sw_002", val_loss=0.1)
     _, rows = summarize(d)
-    assert [r.params for r in rows] == [{"lr": "1e-5"}, {"lr": "1e-3"}]
+    assert [r.params for r in rows] == [{"training.learning_rate": "1e-5"}, {"training.learning_rate": "1e-3"}]
     assert best_trial(rows).dir == "sw_002"
 
 
 def test_summarize_two_axes_params(tmp_path, write_exp):
-    d = _sweep(tmp_path, axes={"lr": ["1", "2"], "backbone": ["a", "b"]})
+    d = _sweep(tmp_path, axes={"training.learning_rate": ["1", "2"], "model.backbone": ["a", "b"]})
     for i in range(1, 5):
         write_exp(d, f"sw_{i:03d}", val_loss=float(i))
     _, rows = summarize(d)
-    assert rows[1].params == {"lr": "1", "backbone": "b"}
+    assert rows[1].params == {"training.learning_rate": "1", "model.backbone": "b"}
     assert best_trial(rows).index == 1

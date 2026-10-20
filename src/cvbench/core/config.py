@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import contextlib
 import dataclasses
+import difflib
+import functools
 import os
 import time
+import types
+import typing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from cvbench.core.errors import CVBenchError
 from cvbench.tasks import DEFAULT_TASK
 
 # Backbone names accepted by --backbone. Kept here, not derived from
@@ -174,8 +180,8 @@ class RunConfig:
 
 @dataclass
 class DetectionConfig:
-    """Detection-only settings. Present (with defaults) even for classification runs —
-    it is simply unused, the same way TrainingConfig.class_weight is unused by detection."""
+    """Detection-only settings (``DetectionTask.config_section``): the loader and
+    ``save_config`` only read and write this section for detection runs."""
     strides: list = field(default_factory=lambda: [16, 32])  # output strides of the YOLO heads
     anchors: list = field(default_factory=list)  # resolved once (see detection/anchors.py),
     # then persisted here — [[ [w, h] x anchors_per_scale ] x len(strides)], smallest-area
@@ -201,8 +207,91 @@ class CVBenchConfig:
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# dict <-> config (generic: driven by the dataclass fields and their types)
 # ---------------------------------------------------------------------------
+
+# `train` / `sweep` flag -> dotted config key. Pure sugar: any config key is also
+# settable (`--set`) and sweepable by its dotted name. A flag whose key is a section
+# (optimizer, loss, lr_scheduler) takes a `type:k=v` spec; `augmentation` takes a file.
+FLAG_KEYS: dict[str, str] = {
+    "backbone": "model.backbone",
+    "weights": "model.weights",
+    "epochs": "training.epochs",
+    "lr": "training.learning_rate",
+    "batch_size": "data.batch_size",
+    "input_size": "model.input_size",
+    "dropout": "model.dropout",
+    "optimizer": "training.optimizer",
+    "loss": "training.loss",
+    "lr_scheduler": "training.lr_scheduler",
+    "class_weight": "training.class_weight",
+    "fine_tune_from_layer": "model.fine_tune_from_layer",
+    "val_split": "data.val_split",
+    "seed": "training.seed",
+    "augmentation": "augmentation",
+}
+KEY_FLAGS = {key: flag for flag, key in FLAG_KEYS.items()}
+
+# Setting these also records that the user chose the value (see ModelConfig / DataConfig).
+_EXPLICIT = {"model.backbone": "model.backbone_explicit", "data.val_split": "data.val_split_explicit"}
+
+
+@functools.cache
+def _hints(cls: type) -> dict[str, Any]:
+    return typing.get_type_hints(cls)
+
+
+def _is_section(tp: Any) -> bool:
+    return isinstance(tp, type) and dataclasses.is_dataclass(tp)
+
+
+def _unwrap_optional(tp: Any) -> tuple[Any, bool]:
+    """``X | None`` -> (X, True); anything else -> (tp, False)."""
+    if typing.get_origin(tp) in (typing.Union, types.UnionType):
+        args = [a for a in typing.get_args(tp) if a is not type(None)]
+        if len(args) == 1:
+            return args[0], True
+    return tp, False
+
+
+def _unknown_key(name: str, valid: typing.Iterable[str], prefix: str) -> CVBenchError:
+    valid = list(valid)
+    msg = f"Unknown config key '{prefix}{name}'."
+    close = difflib.get_close_matches(name, valid, n=1, cutoff=0.6)
+    msg += f" Did you mean '{prefix}{close[0]}'?" if close else f" Valid keys here: {', '.join(valid)}."
+    return CVBenchError(msg)
+
+
+def _coerce(value: Any, tp: Any, path: str) -> Any:
+    """Check ``value`` against the field type ``tp`` (ints widen to float); raise a CVBenchError naming ``path``."""
+    tp, optional = _unwrap_optional(tp)
+    if value is None and optional:
+        return None
+    if tp is Any:
+        return value
+    if tp is float:
+        if isinstance(value, str):  # YAML reads `1e-4` as a string
+            with contextlib.suppress(ValueError):
+                value = float(value)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+    ok = isinstance(value, tp) and not (tp is int and isinstance(value, bool))
+    if not ok:
+        raise CVBenchError(f"Invalid value for '{path}': expected {tp.__name__}, got {value!r}.")
+    return value
+
+
+def _section_owners() -> dict[str, str]:
+    """``{config section name: task that owns it}`` over every registered task."""
+    from cvbench.tasks import TASK_NAMES, get_task
+
+    return {s[0]: n for n in TASK_NAMES if (s := get_task(n).config_section)}
+
+
+def _foreign_sections(task: str) -> set[str]:
+    """Task-owned sections that do not belong to a run of ``task``."""
+    return {section for section, owner in _section_owners().items() if owner != task}
+
 
 def _parse_transforms(raw: list) -> list:
     transforms: list[TransformConfig | OneOfConfig] = []
@@ -224,11 +313,13 @@ def _parse_transforms(raw: list) -> list:
     return transforms
 
 
-# ---------------------------------------------------------------------------
-# Internal: dict → config
-# ---------------------------------------------------------------------------
+# Fields whose YAML shape is not their dataclass shape.
+_FIELD_LOADERS: dict[tuple[type, str], typing.Callable[[Any], Any]] = {
+    (AugmentationConfig, "transforms"): _parse_transforms,
+}
 
-def _run_metrics(r: dict, default: dict) -> dict:
+
+def _run_metrics(r: dict) -> dict:
     """The run's ``metrics`` dict, migrating the pre-``metrics`` keys of an older config.yaml.
 
     Older runs stored ``val_loss`` / ``val_accuracy`` flat and the test score as
@@ -236,116 +327,179 @@ def _run_metrics(r: dict, default: dict) -> dict:
     """
     if isinstance(r.get("metrics"), dict):
         return dict(r["metrics"])
-    metrics = dict(default)
-    for key in ("val_loss", "val_accuracy"):
-        if r.get(key) is not None:
-            metrics[key] = r[key]
+    metrics = {k: r[k] for k in ("val_loss", "val_accuracy") if r.get(k) is not None}
     if r.get("test_accuracy") is not None:
         metrics[r.get("test_metric") or "accuracy"] = r["test_accuracy"]
     return metrics
 
 
-def _dict_to_config(d: dict) -> CVBenchConfig:
-    cfg = CVBenchConfig()
+_LEGACY_RUN_KEYS = ("val_loss", "val_accuracy", "test_accuracy", "test_metric")
 
-    cfg.task = d.get("task", cfg.task)
 
-    dt = d.get("data", {})
-    cfg.data = DataConfig(
-        data_dir=dt.get("data_dir", cfg.data.data_dir),
-        train_dir=dt.get("train_dir", cfg.data.train_dir),
-        val_dir=dt.get("val_dir", cfg.data.val_dir),
-        test_dir=dt.get("test_dir", cfg.data.test_dir),
-        classes=dt.get("classes", cfg.data.classes),
-        batch_size=dt.get("batch_size", cfg.data.batch_size),
-        val_split=dt.get("val_split", cfg.data.val_split),
-        val_split_explicit=dt.get("val_split_explicit", cfg.data.val_split_explicit),
-    )
+def _migrate_run(r: dict) -> dict:
+    out = {k: v for k, v in r.items() if k not in _LEGACY_RUN_KEYS}
+    out["metrics"] = _run_metrics(r)
+    if "primary_metric" not in out and r.get("test_metric"):
+        out["primary_metric"] = r["test_metric"]
+    return out
 
-    m = d.get("model", {})
-    cfg.model = ModelConfig(
-        backbone=m.get("backbone", cfg.model.backbone),
-        backbone_explicit=m.get("backbone_explicit", cfg.model.backbone_explicit),
-        weights=m.get("weights", cfg.model.weights),
-        input_size=m.get("input_size", cfg.model.input_size),
-        num_classes=m.get("num_classes", cfg.model.num_classes),
-        dropout=m.get("dropout", cfg.model.dropout),
-        fine_tune_from_layer=m.get("fine_tune_from_layer", cfg.model.fine_tune_from_layer),
-    )
 
-    aug = d.get("augmentation", {})
-    cfg.augmentation = AugmentationConfig(transforms=_parse_transforms(aug.get("transforms", [])))
+# Fields removed from the dataclasses that older run directories still carry; dropped on load
+# so those runs stay readable (any other unknown key is an error).
+_REMOVED_KEYS = frozenset({
+    "detection.grid_stride", "training.grad_accum", "training.mixup",
+    "model.use_lcn", "model.lcn_kernel_size", "model.lcn_epsilon", "model.normalization",
+})
 
-    tr = d.get("training", {})
-    intr = tr.get("interrupt", {})
-    ckpt = tr.get("checkpoints", {})
-    lrs = tr.get("lr_scheduler", {})
-    loss = tr.get("loss", {})
-    opt = tr.get("optimizer", {})
-    cfg.training = TrainingConfig(
-        epochs=tr.get("epochs", cfg.training.epochs),
-        learning_rate=tr.get("learning_rate", cfg.training.learning_rate),
-        seed=tr.get("seed", cfg.training.seed),
-        class_weight=tr.get("class_weight", cfg.training.class_weight),
-        loss=LossConfig(
-            type=loss.get("type", cfg.training.loss.type),
-            label_smoothing=loss.get("label_smoothing", cfg.training.loss.label_smoothing),
-            focal_gamma=loss.get("focal_gamma", cfg.training.loss.focal_gamma),
-        ),
-        optimizer=OptimizerConfig(
-            type=opt.get("type", cfg.training.optimizer.type),
-            weight_decay=opt.get("weight_decay", cfg.training.optimizer.weight_decay),
-            momentum=opt.get("momentum", cfg.training.optimizer.momentum),
-        ),
-        lr_scheduler=LRSchedulerConfig(
-            patience=lrs.get("patience", cfg.training.lr_scheduler.patience),
-            factor=lrs.get("factor", cfg.training.lr_scheduler.factor),
-            min_lr=lrs.get("min_lr", cfg.training.lr_scheduler.min_lr),
-            monitor=lrs.get("monitor", cfg.training.lr_scheduler.monitor),
-        ),
-        interrupt=InterruptConfig(
-            enabled=intr.get("enabled", cfg.training.interrupt.enabled),
-            save_checkpoint=intr.get("save_checkpoint", cfg.training.interrupt.save_checkpoint),
-            save_optimizer_state=intr.get(
-                "save_optimizer_state", cfg.training.interrupt.save_optimizer_state
-            ),
-        ),
-        checkpoints=CheckpointsConfig(
-            strategy=ckpt.get("strategy", cfg.training.checkpoints.strategy),
-            every_n_epochs=ckpt.get("every_n_epochs", cfg.training.checkpoints.every_n_epochs),
-            monitor=ckpt.get("monitor", cfg.training.checkpoints.monitor),
-            mode=ckpt.get("mode", cfg.training.checkpoints.mode),
-            keep_last_n=ckpt.get("keep_last_n", cfg.training.checkpoints.keep_last_n),
-        ),
-    )
 
-    det = d.get("detection", {})
-    cfg.detection = DetectionConfig(
-        strides=det.get("strides", cfg.detection.strides),
-        anchors=det.get("anchors", cfg.detection.anchors),
-        anchors_per_scale=det.get("anchors_per_scale", cfg.detection.anchors_per_scale),
-        ignore_iou_threshold=det.get("ignore_iou_threshold", cfg.detection.ignore_iou_threshold),
-        noobj_weight=det.get("noobj_weight", cfg.detection.noobj_weight),
-        conf_threshold=det.get("conf_threshold", cfg.detection.conf_threshold),
-        iou_threshold=det.get("iou_threshold", cfg.detection.iou_threshold),
-        max_detections=det.get("max_detections", cfg.detection.max_detections),
-    )
+def _build(cls: type, raw: Any, path: str = "") -> Any:
+    """Build dataclass ``cls`` from a dict; unknown keys and mistyped values raise a CVBenchError."""
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise CVBenchError(f"Invalid value for '{path or 'config'}': expected a mapping, got {raw!r}.")
+    hints = _hints(cls)
+    prefix = f"{path}." if path else ""
+    kwargs = {}
+    for name, value in raw.items():
+        if f"{prefix}{name}" in _REMOVED_KEYS:
+            continue
+        if name not in hints:
+            raise _unknown_key(name, hints, prefix)
+        tp = hints[name]
+        if (cls, name) in _FIELD_LOADERS:
+            kwargs[name] = _FIELD_LOADERS[(cls, name)](value)
+        elif _is_section(tp):
+            kwargs[name] = _build(tp, value, f"{prefix}{name}")
+        else:
+            kwargs[name] = _coerce(value, tp, f"{prefix}{name}")
+    return cls(**kwargs)
 
-    r = d.get("run", {})
-    cfg.run = RunConfig(
-        name=r.get("name", cfg.run.name),
-        date=r.get("date", cfg.run.date),
-        status=r.get("status", cfg.run.status),
-        pid=r.get("pid", cfg.run.pid),
-        epochs_run=r.get("epochs_run", cfg.run.epochs_run),
-        metrics=_run_metrics(r, cfg.run.metrics),
-        primary_metric=r.get("primary_metric", r.get("test_metric", cfg.run.primary_metric)),
-        resumable=r.get("resumable", cfg.run.resumable),
-        resume_checkpoint=r.get("resume_checkpoint", cfg.run.resume_checkpoint),
-        notes=r.get("notes", cfg.run.notes),
-        cli_command=r.get("cli_command", cfg.run.cli_command),
-    )
 
+def config_from_dict(d: dict) -> CVBenchConfig:
+    """Build a config from parsed YAML.
+
+    Sections owned by another task are ignored (older configs carry a ``detection:``
+    block on every run); the pre-``metrics`` run keys are migrated.
+    """
+    d = dict(d)
+    for section in _foreign_sections(d.get("task") or DEFAULT_TASK):
+        d.pop(section, None)
+    if isinstance(d.get("run"), dict):
+        d["run"] = _migrate_run(d["run"])
+    return _build(CVBenchConfig, d)
+
+
+def _to_plain(obj: Any) -> Any:
+    if isinstance(obj, TransformConfig):
+        return {"name": obj.name, "prob": obj.prob, **obj.params}
+    if isinstance(obj, OneOfConfig):
+        return {"one_of": {
+            "prob": obj.prob,
+            "candidates": [{"name": c.name, "weight": c.weight, **c.params} for c in obj.candidates],
+        }}
+    if dataclasses.is_dataclass(obj):
+        return {f.name: _to_plain(getattr(obj, f.name)) for f in dataclasses.fields(obj)}
+    if isinstance(obj, list):
+        return [_to_plain(item) for item in obj]
+    return obj
+
+
+def config_to_dict(cfg: CVBenchConfig) -> dict:
+    """The exact inverse of ``config_from_dict``: plain dicts, only the run's task sections."""
+    d = _to_plain(cfg)
+    for section in _foreign_sections(cfg.task):
+        d.pop(section, None)
+    return d
+
+
+# ---------------------------------------------------------------------------
+# Dotted-key overrides
+# ---------------------------------------------------------------------------
+
+def _key_type(key: str) -> Any:
+    """Declared type of the config field at dotted ``key``; unknown keys raise a did-you-mean CVBenchError."""
+    tp: Any = CVBenchConfig
+    parts: list[str] = []
+    for part in key.split("."):
+        if not _is_section(tp):
+            raise CVBenchError(f"Unknown config key '{key}': '{'.'.join(parts)}' is not a section.")
+        hints = _hints(tp)
+        if part not in hints:
+            raise _unknown_key(part, hints, "".join(f"{p}." for p in parts))
+        tp = hints[part]
+        parts.append(part)
+    return tp
+
+
+def resolve_key(name: str) -> str:
+    """Canonical dotted key for a flag alias (``lr``) or a dotted key; unknown names raise a CVBenchError."""
+    key = FLAG_KEYS.get(name, name)
+    _key_type(key)
+    return key
+
+
+def key_type(key: str) -> Any:
+    """Declared type of ``key`` with ``| None`` stripped (``int`` for ``training.seed``)."""
+    return _unwrap_optional(_key_type(key))[0]
+
+
+def _parse_text(value: Any, tp: Any) -> Any:
+    """Command-line text is read as YAML into the field's type; strings stay strings; non-text passes through."""
+    if not isinstance(value, str):
+        return value
+    inner, optional = _unwrap_optional(tp)
+    if optional and value.strip().lower() in ("none", "null", ""):
+        return None
+    if inner is str:
+        return value
+    try:
+        return yaml.safe_load(value)
+    except yaml.YAMLError:
+        return value
+
+
+def _set_key(cfg: CVBenchConfig, key: str, value: Any) -> None:
+    tp = _key_type(key)
+    *parents, leaf = key.split(".")
+    owner = _section_owners().get(parents[0] if parents else key)
+    if owner is not None and owner != cfg.task:
+        raise CVBenchError(
+            f"'{key}' only applies to {owner} runs, but this is a {cfg.task} run.", param_hint=key
+        )
+    if tp is AugmentationConfig:
+        if isinstance(value, str):
+            value = load_aug_file(value)
+        elif not isinstance(value, AugmentationConfig):
+            raise CVBenchError(f"'{key}' takes an augmentation YAML file path.")
+    elif _is_section(tp):
+        raise CVBenchError(
+            f"'{key}' is a section; set one of its keys: "
+            + ", ".join(f"{key}.{n}" for n in _hints(tp)) + "."
+        )
+    else:
+        value = _coerce(_parse_text(value, tp), tp, key)
+        if key == "task":
+            from cvbench.tasks import TASK_NAMES
+
+            if value not in TASK_NAMES:
+                raise CVBenchError(f"Unknown task '{value}'. Valid options: {', '.join(TASK_NAMES)}.")
+    obj: Any = cfg
+    for part in parents:
+        obj = getattr(obj, part)
+    setattr(obj, leaf, value)
+    if key in _EXPLICIT:
+        _set_key(cfg, _EXPLICIT[key], True)
+
+
+def apply_overrides(cfg: CVBenchConfig, overrides: dict[str, Any]) -> CVBenchConfig:
+    """Set each dotted key (``{"training.learning_rate": 1e-3}``) on ``cfg`` in place and return it.
+
+    Values are checked against the field type; command-line strings are parsed first.
+    ``task`` is applied before the rest so task-owned sections can be checked against it.
+    """
+    for key in sorted(overrides, key=lambda k: k != "task"):
+        _set_key(cfg, key, overrides[key])
     return cfg
 
 
@@ -356,99 +510,32 @@ def _dict_to_config(d: dict) -> CVBenchConfig:
 def build_config(
     data_dir: str,
     from_dir: str | None = None,
-    task: str | None = None,
-    backbone: str | None = None,
-    weights: str | None = None,
-    epochs: int | None = None,
-    lr: float | None = None,
-    batch_size: int | None = None,
-    input_size: int | None = None,
-    dropout: float | None = None,
-    class_weight: Any = None,
-    loss: LossConfig | None = None,
-    optimizer: OptimizerConfig | None = None,
-    lr_scheduler: LRSchedulerConfig | None = None,
-    fine_tune_from_layer: int | None = None,
-    val_split: float | None = None,
-    seed: int | None = None,
+    overrides: dict[str, Any] | None = None,
 ) -> CVBenchConfig:
-    """Build a CVBenchConfig from CLI options.
+    """Build a CVBenchConfig for ``data_dir``.
 
-    If from_dir is given, loads that experiment's config.yaml as a baseline.
-    Any non-None CLI options override the loaded/default values.
-    Data directories are always derived from data_dir.
+    The baseline is the ``from_dir`` experiment's config.yaml, or defaults with the task
+    sniffed from the dataset layout. ``overrides`` (dotted key -> value) are applied on top.
+    Data directories are always derived from ``data_dir``.
     """
-    cfg = load_config(from_dir) if from_dir is not None else CVBenchConfig()
+    from cvbench.tasks import detect_task_name
+
+    cfg = load_config(from_dir) if from_dir is not None else CVBenchConfig(task=detect_task_name(data_dir))
 
     cfg.data.data_dir = data_dir
     cfg.data.train_dir = str(Path(data_dir) / "train")
     cfg.data.val_dir = str(Path(data_dir) / "val")
     cfg.data.test_dir = str(Path(data_dir) / "test")
 
-    if task is not None:
-        cfg.task = task
-    if backbone is not None:
-        cfg.model.backbone = backbone
-        cfg.model.backbone_explicit = True
-    if weights is not None:
-        cfg.model.weights = weights
-    if epochs is not None:
-        cfg.training.epochs = epochs
-    if lr is not None:
-        cfg.training.learning_rate = lr
-    if batch_size is not None:
-        cfg.data.batch_size = batch_size
-    if input_size is not None:
-        cfg.model.input_size = input_size
-    if dropout is not None:
-        cfg.model.dropout = dropout
-    if class_weight is not None:
-        cfg.training.class_weight = class_weight
-    if loss is not None:
-        cfg.training.loss = loss
-    if optimizer is not None:
-        cfg.training.optimizer = optimizer
-    if lr_scheduler is not None:
-        cfg.training.lr_scheduler = lr_scheduler
-    if fine_tune_from_layer is not None:
-        cfg.model.fine_tune_from_layer = fine_tune_from_layer
-    if val_split is not None:
-        cfg.data.val_split = val_split
-        cfg.data.val_split_explicit = True
-    if seed is not None:
-        cfg.training.seed = seed
-
-    return cfg
+    return apply_overrides(cfg, overrides or {})
 
 
 def save_config(cfg: CVBenchConfig, exp_dir: str):
     """Write the fully resolved config to config.yaml in exp_dir."""
     path = Path(exp_dir) / "config.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
-
-    def _to_dict(obj):
-        if isinstance(obj, TransformConfig):
-            d = {"name": obj.name, "prob": obj.prob}
-            d.update(obj.params)
-            return d
-        if isinstance(obj, OneOfConfig):
-            return {
-                "one_of": {
-                    "prob": obj.prob,
-                    "candidates": [
-                        {"name": c.name, "weight": c.weight, **c.params}
-                        for c in obj.candidates
-                    ],
-                }
-            }
-        if dataclasses.is_dataclass(obj):
-            return {f.name: _to_dict(getattr(obj, f.name)) for f in dataclasses.fields(obj)}
-        if isinstance(obj, list):
-            return [_to_dict(item) for item in obj]
-        return obj
-
     with open(path, "w") as f:
-        yaml.dump(_to_dict(cfg), f, default_flow_style=False, sort_keys=False)
+        yaml.dump(config_to_dict(cfg), f, default_flow_style=False, sort_keys=False)
 
 
 def _is_pid_alive(pid: int) -> bool:
@@ -505,7 +592,7 @@ def load_config(exp_dir: str) -> CVBenchConfig:
         raise FileNotFoundError(f"No config.yaml found in {exp_dir}")
     with open(path) as f:
         raw = yaml.safe_load(f) or {}
-    cfg = _dict_to_config(raw)
+    cfg = config_from_dict(raw)
     if cfg.run.status == "running":
         if cfg.run.pid:
             stale = not _is_pid_alive(cfg.run.pid)

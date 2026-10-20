@@ -15,8 +15,10 @@ from cvbench.services.training import run_training  # noqa: E402
 
 def _train(data_dir, **kwargs):
     return run_training(
-        str(data_dir), backbone="efficientnet_b0", weights="none", epochs=1, batch_size=4,
-        input_size=32, seed=3, **kwargs,
+        str(data_dir), overrides={
+            "model.backbone": "efficientnet_b0", "model.weights": "none", "training.epochs": 1,
+            "data.batch_size": 4, "model.input_size": 32, "training.seed": 3,
+        }, **kwargs,
     )
 
 

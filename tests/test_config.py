@@ -24,14 +24,13 @@ def test_build_config_defaults():
 
 
 def test_build_config_cli_overrides():
-    cfg = build_config(
-        "data",
-        backbone="efficientnet_b3",
-        epochs=20,
-        lr=5e-5,
-        batch_size=32,
-        dropout=0.3,
-    )
+    cfg = build_config("data", overrides={
+        "model.backbone": "efficientnet_b3",
+        "training.epochs": 20,
+        "training.learning_rate": 5e-5,
+        "data.batch_size": 32,
+        "model.dropout": 0.3,
+    })
     assert cfg.model.backbone == "efficientnet_b3"
     assert cfg.training.epochs == 20
     assert cfg.training.learning_rate == 5e-5
@@ -41,12 +40,12 @@ def test_build_config_cli_overrides():
 
 def test_build_config_from_dir(tmp_path):
     # Create an existing experiment with a config.yaml
-    cfg_orig = build_config("data", backbone="efficientnet_b3", epochs=50)
+    cfg_orig = build_config("data", overrides={"model.backbone": "efficientnet_b3", "training.epochs": 50})
     cfg_orig.run.name = "test_exp"
     save_config(cfg_orig, str(tmp_path))
 
     # Load from that dir as baseline, override just epochs
-    cfg_new = build_config("data2", from_dir=str(tmp_path), epochs=5)
+    cfg_new = build_config("data2", from_dir=str(tmp_path), overrides={"training.epochs": 5})
     assert cfg_new.model.backbone == "efficientnet_b3"  # inherited
     assert cfg_new.training.epochs == 5                 # overridden
     assert cfg_new.data.data_dir == "data2"             # always updated
@@ -62,7 +61,7 @@ def test_build_config_from_dir_data_dir_always_updated(tmp_path):
 
 
 def test_save_and_load_config(tmp_path):
-    cfg = build_config("data", backbone="efficientnet_b0", epochs=5)
+    cfg = build_config("data", overrides={"model.backbone": "efficientnet_b0", "training.epochs": 5})
     cfg.data.classes = ["cat", "dog"]
     cfg.model.num_classes = 2
     cfg.run.name = "effnet_b0_lr1e4_2026_03_28"
@@ -188,12 +187,12 @@ def test_build_config_defaults_to_classification_task():
 
 
 def test_build_config_task_override():
-    cfg = build_config("data", task="detection")
+    cfg = build_config("data", overrides={"task": "detection"})
     assert cfg.task == "detection"
 
 
 def test_task_round_trips(tmp_path):
-    cfg = build_config("data", task="detection")
+    cfg = build_config("data", overrides={"task": "detection"})
     save_config(cfg, str(tmp_path))
 
     reloaded = load_config(str(tmp_path))
@@ -209,7 +208,7 @@ def test_config_yaml_without_task_key_loads_as_classification(tmp_path):
 
 
 def test_detection_config_round_trips(tmp_path):
-    cfg = build_config("data", task="detection")
+    cfg = build_config("data", overrides={"task": "detection"})
     cfg.detection.strides = [8, 16]
     cfg.detection.anchors = [[[0.1, 0.1], [0.2, 0.2]], [[0.4, 0.4], [0.6, 0.6]]]
     cfg.detection.anchors_per_scale = 2
@@ -275,9 +274,9 @@ def test_update_run_status_merges_metrics(tmp_path):
 
 
 def test_val_split_round_trips(tmp_path):
-    # Regression test: _dict_to_config used to silently drop val_split and
+    # Regression test: the config loader used to silently drop val_split and
     # val_split_explicit, so --from would reset val_split to the 0.2 default.
-    cfg = build_config("data", val_split=0.3)
+    cfg = build_config("data", overrides={"data.val_split": 0.3})
     assert cfg.data.val_split == 0.3
     assert cfg.data.val_split_explicit is True
     save_config(cfg, str(tmp_path))
@@ -290,11 +289,9 @@ def test_val_split_round_trips(tmp_path):
 # ---------------------------------------------------------------------------
 # Reflective round-trip: every scalar field must survive save_config/load_config.
 #
-# _dict_to_config builds each section explicitly from a raw dict and silently
-# falls back to the default for any key it forgets to read (it already lost
-# val_split/val_split_explicit this way once). This test makes that bug class
-# structurally impossible to reintroduce, for every field present today and
-# any added later — including a future task's own config section.
+# The loader once silently dropped val_split/val_split_explicit. It is now driven by
+# the dataclass fields, and this test keeps it that way for every field present today
+# and any added later — including a future task's own config section.
 # ---------------------------------------------------------------------------
 
 def _mutate_scalar_fields(obj):
@@ -321,10 +318,157 @@ def _mutate_scalar_fields(obj):
 def test_every_scalar_field_survives_round_trip(tmp_path):
     import dataclasses
 
-    cfg = build_config("data")
+    cfg = build_config("data", overrides={"task": "detection"})  # a detection run owns every section
     _mutate_scalar_fields(cfg)
+    cfg.task = "detection"
 
     save_config(cfg, str(tmp_path))
     reloaded = load_config(str(tmp_path))
 
     assert dataclasses.asdict(reloaded) == dataclasses.asdict(cfg)
+
+
+# ---------------------------------------------------------------------------
+# Generic loader, round trips, overrides
+# ---------------------------------------------------------------------------
+
+def _round_trip(cfg, tmp_path):
+    save_config(cfg, str(tmp_path))
+    reloaded = load_config(str(tmp_path))
+    assert reloaded == cfg
+    save_config(reloaded, str(tmp_path))  # and the second save is stable too
+    assert load_config(str(tmp_path)) == cfg
+    return reloaded
+
+
+def test_full_config_round_trips(tmp_path):
+    from cvbench.core.config import OneOfCandidateConfig, OneOfConfig, TransformConfig
+
+    cfg = build_config("data", overrides={
+        "training.optimizer.type": "sgd", "training.loss.type": "focal", "training.seed": 7,
+        "training.class_weight": {"cat": 2.0}, "training.lr_scheduler.patience": 3,
+    })
+    cfg.augmentation.transforms = [
+        TransformConfig(name="keras_flip", prob=0.5, params={"mode": "horizontal"}),
+        OneOfConfig(prob=0.3, candidates=[OneOfCandidateConfig(name="aug_blur", weight=2.0, params={"k": 3})]),
+    ]
+    cfg.run.metrics = {"val_loss": 0.4, "accuracy": 0.9}
+    _round_trip(cfg, tmp_path)
+
+
+def test_legacy_flat_run_metrics_are_migrated(tmp_path):
+    (tmp_path / "config.yaml").write_text(
+        "run:\n  name: old\n  status: done\n  val_loss: 0.5\n  val_accuracy: 0.8\n  test_accuracy: 0.7\n"
+    )
+    cfg = load_config(str(tmp_path))
+    assert cfg.run.metrics == {"val_loss": 0.5, "val_accuracy": 0.8, "accuracy": 0.7}
+    _round_trip(cfg, tmp_path)
+
+
+def test_legacy_test_metric_label_names_the_primary_metric(tmp_path):
+    (tmp_path / "config.yaml").write_text(
+        "task: detection\nrun:\n  status: done\n  test_accuracy: 0.4\n  test_metric: map50\n"
+    )
+    cfg = load_config(str(tmp_path))
+    assert cfg.run.metrics == {"map50": 0.4} and cfg.run.primary_metric == "map50"
+    _round_trip(cfg, tmp_path)
+
+
+def test_detection_block_on_a_classification_run_is_ignored(tmp_path):
+    (tmp_path / "config.yaml").write_text(
+        "task: classification\ndetection:\n  strides: [8, 16]\n  anchors: []\nrun:\n  status: done\n"
+    )
+    cfg = load_config(str(tmp_path))
+    assert cfg.task == "classification"
+    _round_trip(cfg, tmp_path)
+    assert "detection" not in yaml.safe_load((tmp_path / "config.yaml").read_text())
+
+
+def test_detection_section_is_saved_only_for_detection_runs(tmp_path):
+    save_config(build_config("data"), str(tmp_path))
+    assert "detection" not in yaml.safe_load((tmp_path / "config.yaml").read_text())
+    det = build_config("data", overrides={"task": "detection", "detection.conf_threshold": 0.4})
+    reloaded = _round_trip(det, tmp_path)
+    assert reloaded.detection.conf_threshold == 0.4
+
+
+def test_unknown_yaml_key_names_the_path_and_suggests_a_fix(tmp_path):
+    from cvbench.core.errors import CVBenchError
+
+    (tmp_path / "config.yaml").write_text("training:\n  optimizer:\n    wieght_decay: 0.1\n")
+    with pytest.raises(CVBenchError, match=r"wieght_decay.*Did you mean 'training\.optimizer\.weight_decay'"):
+        load_config(str(tmp_path))
+
+
+def test_mistyped_yaml_value_is_rejected(tmp_path):
+    from cvbench.core.errors import CVBenchError
+
+    (tmp_path / "config.yaml").write_text("training:\n  epochs: many\n")
+    with pytest.raises(CVBenchError, match=r"training\.epochs.*expected int"):
+        load_config(str(tmp_path))
+
+
+def test_apply_overrides_sets_nested_keys_and_parses_text():
+    from cvbench.core.config import apply_overrides
+
+    cfg = apply_overrides(build_config("data"), {
+        "training.optimizer.weight_decay": "1e-4", "training.seed": "5", "training.interrupt.enabled": "false",
+        "model.backbone": "resnet_18", "training.class_weight": "auto",
+    })
+    assert cfg.training.optimizer.weight_decay == 1e-4
+    assert cfg.training.seed == 5 and cfg.training.interrupt.enabled is False
+    assert cfg.training.class_weight == "auto"
+    assert cfg.model.backbone_explicit is True  # setting the backbone marks it as the user's choice
+
+
+def test_apply_overrides_none_for_optional_field():
+    from cvbench.core.config import apply_overrides
+
+    cfg = build_config("data", overrides={"training.seed": 3})
+    assert apply_overrides(cfg, {"training.seed": "null"}).training.seed is None
+
+
+@pytest.mark.parametrize("key, value, message", [
+    ("training.learning_rte", 1e-3, r"Did you mean 'training\.learning_rate'"),
+    ("training.epochs", "many", r"expected int"),
+    ("training.epochs", True, r"expected int"),
+    ("training", 1, r"is a section"),
+    ("detection.conf_threshold", 0.3, r"only applies to detection runs"),
+    ("task", "segmentation", r"Unknown task"),
+])
+def test_apply_overrides_rejects_bad_input(key, value, message):
+    from cvbench.core.config import apply_overrides
+    from cvbench.core.errors import CVBenchError
+
+    with pytest.raises(CVBenchError, match=message):
+        apply_overrides(build_config("data"), {key: value})
+
+
+def test_every_field_of_every_section_can_be_overridden():
+    # Guards the "adding a field needs only the dataclass change" promise: nothing is hand-mapped.
+    import dataclasses
+
+    from cvbench.core.config import CVBenchConfig, _hints, _is_section, apply_overrides
+
+    def leaves(cls, prefix=""):
+        for name, tp in _hints(cls).items():
+            if _is_section(tp):
+                yield from leaves(tp, f"{prefix}{name}.")
+            else:
+                yield f"{prefix}{name}"
+
+    cfg = build_config("data", overrides={"task": "detection"})
+    for key in leaves(CVBenchConfig):
+        current = cfg
+        for part in key.split("."):
+            current = getattr(current, part)
+        if not dataclasses.is_dataclass(current):
+            apply_overrides(cfg, {key: current})  # re-setting the current value must type-check
+
+
+def test_keys_removed_from_the_dataclasses_still_load(tmp_path):
+    # Older run directories carry settings that no longer exist; they must stay readable.
+    (tmp_path / "config.yaml").write_text(
+        "task: detection\nmodel:\n  use_lcn: true\ntraining:\n  mixup:\n    alpha: 0.2\ndetection:\n  grid_stride: 4\n"
+    )
+    assert load_config(str(tmp_path)).task == "detection"

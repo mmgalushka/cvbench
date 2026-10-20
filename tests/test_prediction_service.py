@@ -15,7 +15,10 @@ def test_predict_image_detection_returns_boxes(yolo_project):
     from cvbench.services.training import run_training
 
     exp_dir = run_training(
-        "data/yolo", backbone="efficientnet_b0", epochs=1, batch_size=2, input_size=64,
+        "data/yolo", overrides={
+            "model.backbone": "efficientnet_b0", "training.epochs": 1,
+            "data.batch_size": 2, "model.input_size": 64,
+        },
     )
 
     img = list_images(yolo_project / "data/yolo/images/test")[0]
@@ -37,7 +40,10 @@ def test_cli_predict_decodes_detection_run(yolo_project):
     from cvbench.services.training import run_training
 
     exp_dir = run_training(
-        "data/yolo", backbone="efficientnet_b0", epochs=1, batch_size=2, input_size=64,
+        "data/yolo", overrides={
+            "model.backbone": "efficientnet_b0", "training.epochs": 1,
+            "data.batch_size": 2, "model.input_size": 64,
+        },
     )
     run = Path(exp_dir).name
     run_export(run, format="tflite")

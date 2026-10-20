@@ -136,7 +136,8 @@ def test_get_run_detail_shape(client, cls_run):
     assert [row["epoch"] for row in body["training_log"]] == [0.0, 1.0]
     assert body["eval_report"]["overall"]["value"] == 0.75
     assert body["task_meta"]["name"] == "classification"
-    assert set(body["config"]) == {"data", "model", "training", "augmentation"}
+    assert set(body["config"]) == {"task", "data", "model", "augmentation", "training", "run"}
+    assert body["config"]["training"]["optimizer"]["type"] == "adam"  # the whole config, not a hand-picked subset
     assert set(body["display"]) and body["eval_display"] is not None
 
 

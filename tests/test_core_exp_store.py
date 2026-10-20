@@ -64,7 +64,7 @@ def test_assert_name_available_raises_on_conflict(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def _make_cfg(backbone="efficientnet_b3", lr=5e-5, task="classification"):
-    cfg = build_config("data", backbone=backbone, lr=lr)
+    cfg = build_config("data", overrides={"model.backbone": backbone, "training.learning_rate": lr})
     cfg.task = task
     return cfg
 
@@ -185,7 +185,7 @@ def test_scan_experiments_sort_by_date(tmp_path, write_exp):
 def test_scan_experiments_reports_task_and_test_metric(tmp_path):
     exp_dir = tmp_path / "det_run"
     exp_dir.mkdir(parents=True)
-    cfg = build_config("data", task="detection")
+    cfg = build_config("data", overrides={"task": "detection"})
     cfg.run.name = "det_run"
     cfg.run.date = "2026-01-01"
     cfg.run.primary_metric = "map50"

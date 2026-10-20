@@ -276,9 +276,30 @@ function switchTab(tab) {
 
 /* ── Training tab ──────────────────────────────────────────────────────────── */
 
+/* Names of the augmentation transforms in a serialized config ("one_of" groups list their candidates). */
+function augNames(config) {
+  return config.augmentation.transforms
+    .map(t => t.one_of ? `one_of(${t.one_of.candidates.map(c => c.name).join(', ')})` : t.name)
+    .join(', ');
+}
+
+function fmtOptimizer(o) {
+  const extra = o.type === 'sgd' ? `, momentum ${o.momentum}` : '';
+  return `${o.type}${extra}${o.weight_decay ? `, weight decay ${o.weight_decay}` : ''}`;
+}
+
+function fmtLoss(l) {
+  const extra = l.type === 'focal' ? `, gamma ${l.focal_gamma}` : '';
+  return `${l.type}${extra}${l.label_smoothing ? `, label smoothing ${l.label_smoothing}` : ''}`;
+}
+
+function fmtScheduler(s) {
+  return s.patience ? `patience ${s.patience}, factor ${s.factor}, min ${s.min_lr}` : 'disabled';
+}
+
 function buildTrainingTab(run) {
-  const augs = run.config.augmentation;
-  const augText = augs.length ? augs.map(t => t.name).join(', ') : 'None';
+  const augText = augNames(run.config) || 'None';
+  const tr = run.config.training;
   const hasLog = run.training_log.length > 0;
   const cliHtml = run.cli_command ? `
     <div class="cli-command-bar">
@@ -294,7 +315,7 @@ function buildTrainingTab(run) {
         <h4>Model</h4>
         <dl>
           <dt>Backbone</dt>      <dd>${run.config.model.backbone}</dd>
-          <dt>Input size</dt>    <dd>${run.config.data.input_size}px</dd>
+          <dt>Input size</dt>    <dd>${run.config.model.input_size}px</dd>
           <dt>Dropout</dt>       <dd>${run.config.model.dropout}</dd>
           <dt>Fine-tune from</dt><dd>layer ${run.config.model.fine_tune_from_layer}</dd>
         </dl>
@@ -307,8 +328,10 @@ function buildTrainingTab(run) {
           <dt>Batch size</dt>     <dd>${run.config.data.batch_size}</dd>
           <dt>Seed</dt>           <dd>${run.config.training.seed != null ? run.config.training.seed : '—'}</dd>
           <dt>Class weight</dt>   <dd>${fmtClassWeight(run.config.training.class_weight)}</dd>
-          <dt>LR patience</dt>    <dd>${run.config.training.lr_scheduler_patience || 0}</dd>
-          <dt>Checkpoints</dt>    <dd>${run.config.training.checkpoints_strategy}</dd>
+          <dt>Optimizer</dt>      <dd>${fmtOptimizer(tr.optimizer)}</dd>
+          <dt>Loss</dt>           <dd>${fmtLoss(tr.loss)}</dd>
+          <dt>LR scheduler</dt>   <dd>${fmtScheduler(tr.lr_scheduler)}</dd>
+          <dt>Checkpoints</dt>    <dd>${tr.checkpoints.strategy}</dd>
         </dl>
       </article>
       <article>
@@ -1639,14 +1662,15 @@ function buildCompareSideBySide(a, b) {
     ['Learning rate',  a.display.lr,       b.display.lr],
     ['Epochs',          a.display.epochs,   b.display.epochs],
     ['Batch Size',     a.config.data.batch_size,       b.config.data.batch_size],
-    ['Input Size',     a.config.data.input_size + 'px',b.config.data.input_size + 'px'],
+    ['Input Size',     a.config.model.input_size + 'px',b.config.model.input_size + 'px'],
     ['Dropout',        a.config.model.dropout,         b.config.model.dropout],
     ['Classes',        a.config.data.classes.join(', '), b.config.data.classes.join(', ')],
-    ['Augmentations',  a.config.augmentation.map(t=>t.name).join(', ') || 'None',
-                       b.config.augmentation.map(t=>t.name).join(', ') || 'None'],
+    ['Augmentations',  augNames(a.config) || 'None', augNames(b.config) || 'None'],
     ['Seed',           a.config.training.seed ?? '—',      b.config.training.seed ?? '—'],
-    ['Checkpoint Strategy', a.config.training.checkpoints_strategy, b.config.training.checkpoints_strategy],
-    ['LR Patience',    a.config.training.lr_scheduler_patience, b.config.training.lr_scheduler_patience],
+    ['Checkpoint Strategy', a.config.training.checkpoints.strategy, b.config.training.checkpoints.strategy],
+    ['Optimizer',      fmtOptimizer(a.config.training.optimizer), fmtOptimizer(b.config.training.optimizer)],
+    ['Loss',           fmtLoss(a.config.training.loss),           fmtLoss(b.config.training.loss)],
+    ['LR Scheduler',   fmtScheduler(a.config.training.lr_scheduler), fmtScheduler(b.config.training.lr_scheduler)],
   ];
 
   const rowsHtml = rows.map(([label, av, bv]) => {

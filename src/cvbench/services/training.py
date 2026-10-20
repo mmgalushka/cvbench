@@ -4,19 +4,13 @@ import os
 import shutil
 import sys
 from datetime import date
+from typing import Any
 
 from cvbench.core import trainer as _trainer
-from cvbench.core.config import (
-    LossConfig,
-    LRSchedulerConfig,
-    OptimizerConfig,
-    build_config,
-    save_config,
-    update_run_status,
-)
+from cvbench.core.config import build_config, save_config, update_run_status
 from cvbench.core.exp_store import EXPERIMENTS_DIR, check_output_dir, make_run_name, make_unique_dir
 from cvbench.services._runtime import print_device_banner
-from cvbench.tasks import detect_task_name, get_task
+from cvbench.tasks import get_task
 
 
 def run_training(
@@ -43,23 +37,8 @@ def run_training(
     # TODO: add on_epoch_end parameter and _ProgressEmitter when implementing
     #       the WebUI training endpoint (tracked in a follow-up GitHub issue).
     from_dir: str | None = None,
-    backbone: str | None = None,
-    weights: str | None = None,
-    epochs: int | None = None,
-    lr: float | None = None,
-    batch_size: int | None = None,
-    input_size: int | None = None,
-    dropout: float | None = None,
-    aug_file: str | None = None,
+    overrides: dict[str, Any] | None = None,
     resume: str | None = None,
-    class_weight=None,
-    loss: LossConfig | None = None,
-    optimizer: OptimizerConfig | None = None,
-    lr_scheduler: LRSchedulerConfig | None = None,
-    fine_tune_from_layer: int | None = None,
-    val_split: float | None = None,
-    seed: int | None = None,
-    interrupt_enabled: bool | None = None,
     overwrite: bool = False,
 ) -> str:
     """Orchestrate a full training run.
@@ -67,10 +46,11 @@ def run_training(
     Builds config, datasets, model, and delegates to core trainer.
     Returns the experiment directory path.
 
-    `interrupt_enabled`, when not None, overrides `cfg.training.interrupt.enabled`
-    (graceful Ctrl-C: finish the current batch, checkpoint, and stop). Callers that
-    chain several runs in one process (e.g. `sweep`) pass False so Ctrl-C raises
-    KeyboardInterrupt immediately instead of only stopping the current run.
+    `overrides` maps dotted config keys to values (see `core.config.apply_overrides`)
+    and is applied on top of the `from_dir` baseline or the defaults. Callers that
+    chain several runs in one process (e.g. `sweep`) pass `training.interrupt.enabled:
+    False` (graceful Ctrl-C: finish the current batch, checkpoint, and stop) so Ctrl-C
+    raises KeyboardInterrupt immediately instead of only stopping the current run.
     """
     from cvbench.core import _console
 
@@ -79,41 +59,16 @@ def run_training(
 
     print_device_banner("training")
 
-    if seed is not None:
+    overrides = overrides or {}
+    # The dataset layout selects the task; a resumed/two-phase run (--from) keeps the
+    # task recorded in its baseline config (see core/task.py and cvbench.tasks).
+    cfg = build_config(data_dir, from_dir=from_dir, overrides=overrides)
+
+    if "training.seed" in overrides and cfg.training.seed is not None:
         import keras
-        keras.utils.set_random_seed(seed)
-        print(_console.dim(f" Seed: {seed} (reproducible run)"))
+        keras.utils.set_random_seed(cfg.training.seed)
+        print(_console.dim(f" Seed: {cfg.training.seed} (reproducible run)"))
 
-    cfg = build_config(
-        data_dir=data_dir,
-        from_dir=from_dir,
-        backbone=backbone,
-        weights=weights,
-        epochs=epochs,
-        lr=lr,
-        batch_size=batch_size,
-        input_size=input_size,
-        dropout=dropout,
-        class_weight=class_weight,
-        loss=loss,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        fine_tune_from_layer=fine_tune_from_layer,
-        val_split=val_split,
-        seed=seed,
-    )
-    if interrupt_enabled is not None:
-        cfg.training.interrupt.enabled = interrupt_enabled
-
-    if aug_file:
-        from cvbench.core.config import load_aug_file
-        cfg.augmentation = load_aug_file(aug_file)
-
-    # The dataset layout selects the task. A resumed/two-phase run (--from)
-    # keeps the task recorded in its baseline config instead of re-sniffing —
-    # see core/task.py and the module docstring in cvbench.tasks.
-    if from_dir is None:
-        cfg.task = detect_task_name(data_dir)
     task = get_task(cfg.task)
 
     errors = task.validate_config(cfg)

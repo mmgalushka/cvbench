@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from cvbench.core import present
-from cvbench.core.config import TransformConfig, load_config, update_run_status
+from cvbench.core.config import config_to_dict, load_config, update_run_status
 from cvbench.core.exp_store import (
     EXPERIMENTS_DIR,
     assert_name_available,
@@ -135,23 +135,7 @@ def get_run(name: str):
             else (eval_report or {}).get("overall_accuracy")
         )
 
-    summary = {
-        "name": cfg.run.name or run_path.name,
-        "task": cfg.task,
-        "backbone": cfg.model.backbone,
-        "lr": cfg.training.learning_rate,
-        "epochs": cfg.training.epochs,
-        "epochs_run": epochs_run,
-        "val_accuracy": cfg.run.val_accuracy,
-        "val_loss": cfg.run.val_loss,
-        "metrics": cfg.run.metrics,
-        "primary_metric": cfg.run.primary_metric,
-        "primary_value": primary_value,
-        "status": cfg.run.status,
-        "date": cfg.run.date,
-    }
-
-    return {
+    detail = {
         "name": cfg.run.name or run_path.name,
         "dir": run_dir,
         "sweep": run_path.parent.name if is_sweep_dir(run_path.parent) else None,
@@ -171,44 +155,16 @@ def get_run(name: str):
         "resumable": cfg.run.resumable,
         "notes": cfg.run.notes,
         "cli_command": cfg.run.cli_command or "",
-        "display": present.run_detail_display(summary),
         "advisories": present.run_advisories(run_path, eval_report) if eval_report else [],
         "eval_display": (
             present.eval_display(eval_report, cfg.run.val_accuracy) if eval_report else None
         ),
-        "config": {
-            "data": {
-                "data_dir": cfg.data.data_dir,
-                "classes": cfg.data.classes,
-                "batch_size": cfg.data.batch_size,
-                "input_size": cfg.model.input_size,
-            },
-            "model": {
-                "backbone": cfg.model.backbone,
-                "dropout": cfg.model.dropout,
-                "fine_tune_from_layer": cfg.model.fine_tune_from_layer,
-            },
-            "training": {
-                "epochs": cfg.training.epochs,
-                "learning_rate": cfg.training.learning_rate,
-                "seed": cfg.training.seed,
-                "class_weight": cfg.training.class_weight,
-                "checkpoints_strategy": cfg.training.checkpoints.strategy,
-                "lr_scheduler_patience": cfg.training.lr_scheduler.patience,
-            },
-            "augmentation": [
-                {"name": t.name, "prob": t.prob, **t.params}
-                if isinstance(t, TransformConfig)
-                else {
-                    "name": "one_of(" + ", ".join(c.name for c in t.candidates) + ")",
-                    "prob": t.prob,
-                }
-                for t in cfg.augmentation.transforms
-            ],
-        },
+        "config": config_to_dict(cfg),
         "training_log": training_log,
         "eval_report": eval_report,
     }
+    detail["display"] = present.run_detail_display(detail)
+    return detail
 
 
 @router.patch("/runs/{name}")

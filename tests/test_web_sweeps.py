@@ -25,7 +25,7 @@ def test_list_sweeps_and_runs_stay_separate(exps, sweep, write_exp):
 
 def test_get_sweep_rows_and_best(sweep):
     data = api.get_sweep("sw")
-    assert data["metric"] == "val_loss" and data["axes"] == {"lr": ["0.1", "0.01"]}
+    assert data["metric"] == "val_loss" and data["axes"] == {"training.learning_rate": ["0.1", "0.01"]}
     assert [t["dir"] for t in data["trials"]] == ["sw_001", "sw_002"]
     assert [t["is_best"] for t in data["trials"]] == [False, True]
 

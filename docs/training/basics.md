@@ -39,6 +39,24 @@ bare name is resolved under `data/`, and a literal path is used as-is.
 | `--fine-tune-from-layer N` | Unfreeze backbone from this layer index onward (`0`=frozen, `-1`=all layers) — see [Two-Phase Training](two-phase.md) |
 | `--val-split` | Fraction of train set used for validation when no `val/` directory exists (default: `0.2`) |
 | `--seed N` | Random seed for reproducibility (sets Python, NumPy, and TensorFlow seeds) |
+| `--set KEY=VALUE` | Set any config key by its dotted name (repeatable) — see below |
+
+## Setting any config key
+
+Every flag above is a shortcut for a key of the run's `config.yaml`. `--set`
+reaches the rest, using the same dotted names as the file:
+
+```bash
+train data/my_dataset --set training.optimizer.weight_decay=1e-4 --set model.dropout=0.3
+```
+
+`--lr` is `training.learning_rate`, `--epochs` is `training.epochs`,
+`--batch-size` is `data.batch_size`, and so on. Values are checked against the
+field's type, and a misspelt key is rejected with the closest valid one
+(`Did you mean 'training.learning_rate'?`). `--set` wins over a flag that sets
+the same key. Detection-only keys (`detection.*`) are accepted for detection
+datasets only. A `config.yaml` is validated the same way, so a typo in a
+hand-edited file is reported rather than silently ignored.
 
 !!! warning
     `--epochs N` means *end at* epoch N, not *run N more epochs*. This matters

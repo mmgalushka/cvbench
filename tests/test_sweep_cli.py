@@ -9,7 +9,7 @@ from click.testing import CliRunner
 
 from cvbench.cli.generate import generate
 from cvbench.cli.sweep import sweep
-from cvbench.core.config import build_config, save_config
+from cvbench.core.config import apply_overrides, build_config, save_config
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def _install_fake(monkeypatch, fail_lr=None, interrupt_lr=None):
     val_loss = lr * 1000 (so the smallest lr wins). If `fail_lr` matches, the trial is
     recorded as failed and the fake raises, like the real service does. If `interrupt_lr`
     matches, the trial is recorded as "interrupted" and the fake raises KeyboardInterrupt,
-    like Ctrl-C under `interrupt_enabled=False` (see services/training.py).
+    like Ctrl-C under `training.interrupt.enabled=False` (see services/training.py).
     """
     calls: list[dict] = []
 
@@ -47,11 +47,8 @@ def _install_fake(monkeypatch, fail_lr=None, interrupt_lr=None):
         cfg = build_config(str(data_dir))
         cfg.run.name = out.name
         cfg.run.date = "2026-01-01"
-        if kwargs.get("lr") is not None:
-            cfg.training.learning_rate = kwargs["lr"]
-        if kwargs.get("backbone"):
-            cfg.model.backbone = kwargs["backbone"]
-        lr = kwargs.get("lr") or 1.0
+        apply_overrides(cfg, kwargs["overrides"])
+        lr = kwargs["overrides"].get("training.learning_rate") or 1.0
         if fail_lr is not None and lr == fail_lr:
             cfg.run.status = "failed"
             save_config(cfg, str(out))
@@ -120,11 +117,11 @@ def test_grid_run_creates_layout(data_dir, workdir, monkeypatch):
     assert not (sweep_dir / "config.yaml").exists()
 
     assert [Path(c["output_dir"]).name for c in calls] == ["s1_001", "s1_002"]
-    assert [c["lr"] for c in calls] == [1e-3, 1e-4]
-    assert all(c["epochs"] == 2 for c in calls)  # single-valued flag applies to every trial
+    assert [c["overrides"]["training.learning_rate"] for c in calls] == [1e-3, 1e-4]
+    assert all(c["overrides"]["training.epochs"] == 2 for c in calls)  # single-valued flag applies to every trial
     # Ctrl-C must stop the whole sweep, not just finish the current trial's batch and
-    # move on — see services/training.py's `interrupt_enabled` and test_training_service.py.
-    assert all(c["interrupt_enabled"] is False for c in calls)
+    # move on — see services/training.py and test_training_service.py.
+    assert all(c["overrides"]["training.interrupt.enabled"] is False for c in calls)
 
 
 def test_manifest_axes_only_multi_valued(data_dir, workdir, monkeypatch):
@@ -136,8 +133,8 @@ def test_manifest_axes_only_multi_valued(data_dir, workdir, monkeypatch):
     assert manifest["strategy"] == "grid"
     assert manifest["metric"] == "val_loss"
     assert manifest["direction"] == "min"
-    assert list(manifest["axes"]) == ["lr"]
-    assert manifest["axes"]["lr"] == ["1e-3", "1e-4"]
+    assert list(manifest["axes"]) == ["training.learning_rate"]
+    assert manifest["axes"]["training.learning_rate"] == ["1e-3", "1e-4"]
 
 
 def test_summary_marks_best(data_dir, workdir, monkeypatch):
@@ -250,7 +247,7 @@ def test_random_overrides_default_axis(data_dir, workdir, monkeypatch):
         data_dir, "--strategy", "random", "--trials", "2", "--lr", "1e-3,1e-4", "--name", "s1",
     )
     assert result.exit_code == 0, result.output
-    assert {c["lr"] for c in calls} <= {1e-3, 1e-4}
+    assert {c["overrides"]["training.learning_rate"] for c in calls} <= {1e-3, 1e-4}
 
 
 def test_random_single_value_fixes_flag(data_dir, workdir, monkeypatch):
@@ -259,7 +256,7 @@ def test_random_single_value_fixes_flag(data_dir, workdir, monkeypatch):
         data_dir, "--strategy", "random", "--trials", "2", "--lr", "1e-3", "--name", "s1",
     )
     assert result.exit_code == 0, result.output
-    assert all(c["lr"] == 1e-3 for c in calls)
+    assert all(c["overrides"]["training.learning_rate"] == 1e-3 for c in calls)
 
 
 def test_random_trials_exceeds_space_rejected(data_dir, workdir, monkeypatch):
@@ -380,3 +377,49 @@ def test_missing_augmentation_file_exits_2(data_dir, workdir, monkeypatch):
     assert result.exit_code == 2, result.output
     assert "--augmentation" in result.output
     assert calls == []
+
+
+def test_set_sweeps_any_config_key_and_stores_dotted_keys(data_dir, workdir, monkeypatch):
+    calls = _install_fake(monkeypatch)
+    result = _run(data_dir, "--set", "training.optimizer.weight_decay=0,1e-4", "--set", "model.dropout=0.1",
+                  "--name", "s1")
+    assert result.exit_code == 0, result.output
+    manifest = yaml.safe_load((workdir / "experiments" / "s1" / "sweep.yaml").read_text())
+    assert manifest["axes"] == {"training.optimizer.weight_decay": ["0", "1e-4"]}
+    assert [c["overrides"]["training.optimizer.weight_decay"] for c in calls] == ["0", "1e-4"]
+    assert all(c["overrides"]["model.dropout"] == 0.1 for c in calls)
+
+
+def test_spec_flag_axis_is_stored_under_its_section_key(data_dir, workdir, monkeypatch):
+    calls = _install_fake(monkeypatch)
+    result = _run(data_dir, "--optimizer", "adam,sgd:momentum=0.5", "--name", "s1")
+    assert result.exit_code == 0, result.output
+    manifest = yaml.safe_load((workdir / "experiments" / "s1" / "sweep.yaml").read_text())
+    assert manifest["axes"] == {"training.optimizer": ["adam", "sgd:momentum=0.5"]}
+    assert [c["overrides"]["training.optimizer.type"] for c in calls] == ["adam", "sgd"]
+    assert calls[1]["overrides"]["training.optimizer.momentum"] == 0.5
+
+
+@pytest.mark.parametrize("args, fragment", [
+    (["--set", "training.learning_rte=1e-3,1e-4"], "training.learning_rate"),
+    (["--set", "training.epochs=1,many"], "--epochs"),
+    (["--set", "model.dropout=0.1,0.2", "--dropout", "0.3,0.4"], "more than once"),
+])
+def test_bad_set_is_rejected_before_training(data_dir, workdir, monkeypatch, args, fragment):
+    calls = _install_fake(monkeypatch)
+    result = _run(data_dir, *args, "--name", "s1")
+    assert result.exit_code != 0 and fragment in result.output
+    assert calls == [] and not (workdir / "experiments").exists()
+
+
+def test_old_manifest_with_flag_names_still_loads(tmp_path):
+    from cvbench.core.sweep_store import read_manifest
+
+    (tmp_path / "sweep.yaml").write_text(
+        "version: 1\nname: old\ndate: '2026-01-01'\ndata_dir: data\nstrategy: random\nmetric: val_loss\n"
+        "direction: min\naxes:\n  lr: ['1e-3', '1e-4']\n  optimizer: [adam, 'sgd:momentum=0.9']\n"
+        "trials:\n- {lr: 1e-3, optimizer: adam}\n- {lr: 1e-4, optimizer: 'sgd:momentum=0.9'}\n"
+    )
+    manifest = read_manifest(tmp_path)
+    assert list(manifest.axes) == ["training.learning_rate", "training.optimizer"]
+    assert manifest.trials[1] == {"training.learning_rate": "1e-4", "training.optimizer": "sgd:momentum=0.9"}

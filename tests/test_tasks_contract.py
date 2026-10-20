@@ -164,10 +164,10 @@ def test_task_lifecycle(name, task_dataset, tmp_path):
     assert task.layout_errors(data_dir) == []
     assert task.matches_layout(data_dir)
 
-    cfg = build_config(
-        str(data_dir), task=name, backbone="efficientnet_b0", weights="none",
-        epochs=1, batch_size=2, input_size=64,
-    )
+    cfg = build_config(str(data_dir), overrides={
+        "task": name, "model.backbone": "efficientnet_b0", "model.weights": "none",
+        "training.epochs": 1, "data.batch_size": 2, "model.input_size": 64,
+    })
     assert task.validate_config(cfg) == []
 
     spec = task.resolve_layout(cfg)
@@ -201,3 +201,13 @@ def test_task_lifecycle(name, task_dataset, tmp_path):
     assert set(headline) == {"val_accuracy", "val_loss"} and headline["val_loss"] == 0.5
 
     assert task.eval_summary(report) and task.per_class_table(report)["rows"] is not None
+
+
+@pytest.mark.parametrize("name", TASK_NAMES)
+def test_config_section_names_a_field_of_cvbench_config(name):
+    from cvbench.core.config import CVBenchConfig
+
+    section = get_task(name).config_section
+    if section is not None:
+        attr, cls = section
+        assert isinstance(getattr(CVBenchConfig(), attr), cls)

@@ -41,7 +41,6 @@ class _CrashingTask:
 
 def test_run_training_leaves_no_run_dir_on_dataset_crash(tmp_path, monkeypatch):
     exp_dir = tmp_path / "crashed_run"
-    monkeypatch.setattr(training_service, "detect_task_name", lambda data_dir: "classification")
     monkeypatch.setattr(training_service, "get_task", lambda name: _CrashingTask())
 
     with pytest.raises(RuntimeError, match="simulated crash"):
@@ -60,7 +59,6 @@ class _InterruptingTask(_CrashingTask):
 
 def test_run_training_leaves_no_run_dir_on_keyboard_interrupt(tmp_path, monkeypatch):
     exp_dir = tmp_path / "interrupted_run"
-    monkeypatch.setattr(training_service, "detect_task_name", lambda data_dir: "classification")
     monkeypatch.setattr(training_service, "get_task", lambda name: _InterruptingTask())
 
     with pytest.raises(KeyboardInterrupt):
@@ -69,9 +67,8 @@ def test_run_training_leaves_no_run_dir_on_keyboard_interrupt(tmp_path, monkeypa
     assert not exp_dir.exists()
 
 
-def test_run_training_interrupt_enabled_overrides_config(tmp_path, monkeypatch):
+def test_run_training_interrupt_override_reaches_config(tmp_path, monkeypatch):
     exp_dir = tmp_path / "run"
-    monkeypatch.setattr(training_service, "detect_task_name", lambda data_dir: "classification")
     seen_cfg = {}
 
     class _RecordingTask(_CrashingTask):
@@ -83,7 +80,8 @@ def test_run_training_interrupt_enabled_overrides_config(tmp_path, monkeypatch):
 
     with pytest.raises(RuntimeError, match="stop before"):
         training_service.run_training(
-            data_dir=str(tmp_path / "data"), output_dir=str(exp_dir), interrupt_enabled=False,
+            data_dir=str(tmp_path / "data"), output_dir=str(exp_dir),
+            overrides={"training.interrupt.enabled": False},
         )
 
     assert seen_cfg["enabled"] is False
@@ -101,7 +99,6 @@ class _TrainingCrashTask(_CrashingTask):
 
 def test_run_training_marks_status_failed_when_training_loop_crashes(tmp_path, monkeypatch):
     exp_dir = tmp_path / "crashed_run"
-    monkeypatch.setattr(training_service, "detect_task_name", lambda data_dir: "classification")
     monkeypatch.setattr(training_service, "get_task", lambda name: _TrainingCrashTask())
 
     def _boom(**kwargs):
@@ -130,7 +127,6 @@ def test_run_training_rejects_unsafe_run_name(tmp_path):
 
 
 def _patch_ok_task(monkeypatch):
-    monkeypatch.setattr(training_service, "detect_task_name", lambda data_dir: "classification")
     monkeypatch.setattr(training_service, "get_task", lambda name: _TrainingCrashTask())
     calls = []
     monkeypatch.setattr(training_service._trainer, "train", lambda **kw: calls.append(kw))

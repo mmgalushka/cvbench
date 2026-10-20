@@ -19,58 +19,36 @@ from __future__ import annotations
 import itertools
 import json
 import random
-from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from cvbench.core.config import CVBenchConfig, load_config
+from cvbench.core.config import FLAG_KEYS, KEY_FLAGS, key_type, resolve_key
+from cvbench.core.errors import CVBenchError
 from cvbench.core.exp_store import SWEEP_MANIFEST, _read_entry, sweep_dirs, validate_run_name
 from cvbench.tasks import task_for_metric
 
 MANIFEST_VERSION = 1
 
-# `train` flags that may be swept (click parameter names of cli/train.py).
-# Output/--from/--resume are intentionally excluded: they identify a run, not a hyper-parameter.
-SWEEPABLE_FLAGS: tuple[str, ...] = (
-    "backbone",
-    "weights",
-    "epochs",
-    "lr",
-    "batch_size",
-    "input_size",
-    "dropout",
-    "optimizer",
-    "loss",
-    "lr_scheduler",
-    "class_weight",
-    "fine_tune_from_layer",
-    "val_split",
-    "seed",
-    "augmentation",
-)
-
-# Curated base space for `--strategy random` (see sample_grid / cli/sweep.py). Any sweep flag the
-# user passes explicitly overrides the corresponding entry before sampling.
+# Curated base space for `--strategy random` (see sample_grid / cli/sweep.py), keyed by dotted
+# config key. Any axis the user passes explicitly overrides the corresponding entry before sampling.
 DEFAULT_RANDOM_SPACE: dict[str, list[str]] = {
     # 1e-2 was dropped: combined with sgd:momentum=0.9 and a fully unfrozen backbone
     # (fine_tune_from_layer=-1) it reliably diverges to NaN on a from-scratch detection
     # head within a handful of batches. 1e-3 (the `train` default) is a safer ceiling.
-    "lr": ["1e-3", "3e-4", "1e-4", "1e-5"],
-    "optimizer": ["adam", "sgd:momentum=0.9"],
-    "dropout": ["0.0", "0.2", "0.3", "0.5"],
-    "fine_tune_from_layer": ["0", "-1"],
-    "lr_scheduler": ["patience=2,factor=0.5", "patience=5,factor=0.3"],
-    "batch_size": ["16", "32", "64"],
-    "loss": ["crossentropy", "focal:gamma=2.0"],
+    "training.learning_rate": ["1e-3", "3e-4", "1e-4", "1e-5"],
+    "training.optimizer": ["adam", "sgd:momentum=0.9"],
+    "model.dropout": ["0.0", "0.2", "0.3", "0.5"],
+    "model.fine_tune_from_layer": ["0", "-1"],
+    "training.lr_scheduler": ["patience=2,factor=0.5", "patience=5,factor=0.3"],
+    "data.batch_size": ["16", "32", "64"],
+    "training.loss": ["crossentropy", "focal:gamma=2.0"],
 }
 
-# Flags whose value is a spec with comma-separated params (e.g. `sgd:momentum=0.9,weight_decay=1e-4`).
-_SPEC_FLAGS = ("optimizer", "loss", "lr_scheduler")
-# Numeric flags where `a:b` would be a range (not supported yet).
-_RANGE_FLAGS = ("epochs", "lr", "batch_size", "input_size", "dropout", "fine_tune_from_layer", "val_split", "seed")
+# Keys whose value is a spec with comma-separated params (e.g. `sgd:momentum=0.9,weight_decay=1e-4`).
+_SPEC_KEYS = ("training.optimizer", "training.loss", "training.lr_scheduler")
 
 # Names older manifests used for a metric, mapped to the name runs record it under.
 _METRIC_ALIASES = {"test_accuracy": "accuracy"}
@@ -84,18 +62,18 @@ class SweepError(ValueError):
 # Axis parsing / grid expansion
 # ---------------------------------------------------------------------------
 
-def _split_spec_items(flag: str, tokens: list[str]) -> list[str]:
+def _split_spec_items(key: str, tokens: list[str]) -> list[str]:
     """Re-join comma-split tokens belonging to one optimizer/loss/lr_scheduler spec."""
     items: list[str] = []
     for tok in tokens:
         continuation = False
         if items and "=" in tok and ":" not in tok:
-            if flag == "lr_scheduler":
+            if key == "training.lr_scheduler":
                 # Specs are bare `key=value,...` lists, so a token starts a new item
                 # only when its key already appeared in the current item.
-                key = tok.split("=", 1)[0].strip()
+                name = tok.split("=", 1)[0].strip()
                 seen = {p.split("=", 1)[0].strip() for p in items[-1].split(",")}
-                continuation = key not in seen
+                continuation = name not in seen
             else:
                 continuation = ":" in items[-1] or "=" in items[-1]
         if continuation:
@@ -127,7 +105,8 @@ def _split_braced(raw: str) -> list[str]:
 def split_axis_values(flag: str, raw: str) -> list[str]:
     """Split a comma-separated CLI value into stripped, non-empty items.
 
-    Plain flags split on every comma. Exceptions:
+    ``flag`` is a flag alias (`lr`) or any dotted config key; unknown names raise SweepError.
+    Plain keys split on every comma. Exceptions:
 
     * `optimizer` / `loss` / `lr_scheduler`: specs carry comma-separated params
       (`adam,sgd:momentum=0.9,weight_decay=1e-4`). A token containing `=` and no `:`
@@ -138,21 +117,24 @@ def split_axis_values(flag: str, raw: str) -> list[str]:
       (`patience=5,factor=0.5,patience=10` -> two items).
     * `class_weight`: commas inside `{...}` JSON dicts are preserved.
 
-    A `:` range such as `0.1:0.5` on numeric flags is not supported and raises SweepError.
+    A `:` range such as `0.1:0.5` on numeric keys is not supported and raises SweepError.
     Empty items (`a,,b`, trailing comma) raise SweepError.
     """
-    if flag not in SWEEPABLE_FLAGS:
-        raise SweepError(f"Unknown sweep flag '{flag}'. Sweepable flags: {', '.join(SWEEPABLE_FLAGS)}")
-    tokens = _split_braced(raw) if flag == "class_weight" else raw.split(",")
+    try:
+        key = resolve_key(flag)
+    except CVBenchError as e:
+        raise SweepError(e.message) from e
+    shown = f"--{flag.replace('_', '-')}" if flag in FLAG_KEYS else key
+    tokens = _split_braced(raw) if key == "training.class_weight" else raw.split(",")
     tokens = [t.strip() for t in tokens]
     if any(not t for t in tokens):
-        raise SweepError(f"--{flag.replace('_', '-')}: empty value in list {raw!r}")
-    if flag in _RANGE_FLAGS and any(":" in t for t in tokens):
+        raise SweepError(f"{shown}: empty value in list {raw!r}")
+    if key_type(key) in (int, float) and any(":" in t for t in tokens):
         raise SweepError(
-            f"--{flag.replace('_', '-')}: ranges are not supported under grid; "
+            f"{shown}: ranges are not supported under grid; "
             f"list explicit comma-separated values instead (got {raw!r})"
         )
-    return _split_spec_items(flag, tokens) if flag in _SPEC_FLAGS else tokens
+    return _split_spec_items(key, tokens) if key in _SPEC_KEYS else tokens
 
 
 def expand_grid(axes: dict[str, list[str]]) -> list[dict[str, str]]:
@@ -247,6 +229,16 @@ def write_manifest(sweep_dir: str | Path, manifest: SweepManifest) -> None:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
 
+def _canonical(name: str) -> str:
+    """Dotted key of a manifest axis; older manifests stored the `train` flag name (`lr`)."""
+    return FLAG_KEYS.get(str(name), str(name))
+
+
+def display_key(key: str) -> str:
+    """Short name of an axis key for tables: its flag alias when it has one (`lr`), else the dotted key."""
+    return KEY_FLAGS.get(key, key)
+
+
 def read_manifest(sweep_dir: str | Path) -> SweepManifest:
     """Read `sweep.yaml` from sweep_dir; raise SweepError if missing, invalid or unsupported."""
     path = Path(sweep_dir) / SWEEP_MANIFEST
@@ -281,8 +273,8 @@ def read_manifest(sweep_dir: str | Path) -> SweepManifest:
             strategy=str(raw.get("strategy", "grid")),
             metric=str(raw["metric"]),
             direction=str(raw["direction"]),
-            axes={str(k): [str(v) for v in vals] for k, vals in axes_raw.items()},
-            trials=trials,
+            axes={_canonical(k): [str(v) for v in vals] for k, vals in axes_raw.items()},
+            trials=[{_canonical(k): v for k, v in t.items()} for t in trials] if trials is not None else None,
             sample_seed=int(sample_seed_raw) if sample_seed_raw is not None else None,
         )
     except (KeyError, TypeError, ValueError) as e:
@@ -370,41 +362,6 @@ def summarize(sweep_dir: str | Path) -> tuple[SweepManifest, list[TrialRow]]:
     if tested:
         max(tested, key=lambda r: r.test_value).is_best_test = True  # type: ignore[arg-type,return-value]
     return manifest, rows
-
-
-# ---------------------------------------------------------------------------
-# Reading swept values back from a trial's config.yaml (for display)
-# ---------------------------------------------------------------------------
-
-_FLAG_READERS: dict[str, Callable[[CVBenchConfig], Any]] = {
-    "backbone": lambda c: c.model.backbone,
-    "weights": lambda c: c.model.weights,
-    "epochs": lambda c: c.training.epochs,
-    "lr": lambda c: c.training.learning_rate,
-    "batch_size": lambda c: c.data.batch_size,
-    "input_size": lambda c: c.model.input_size,
-    "dropout": lambda c: c.model.dropout,
-    "optimizer": lambda c: c.training.optimizer.type,
-    "loss": lambda c: c.training.loss.type,
-    "lr_scheduler": lambda c: c.training.lr_scheduler.patience,
-    "class_weight": lambda c: c.training.class_weight,
-    "fine_tune_from_layer": lambda c: c.model.fine_tune_from_layer,
-    "val_split": lambda c: c.data.val_split,
-    "seed": lambda c: c.training.seed,
-}
-
-
-def trial_config_values(trial_dir: str | Path, flags: list[str]) -> dict[str, Any]:
-    """Actual values of the given sweep flags as recorded in a trial's config.yaml.
-
-    Flags without a simple config field (e.g. `augmentation`) are omitted; returns {}
-    if the config cannot be read.
-    """
-    try:
-        cfg = load_config(str(trial_dir))
-    except Exception:
-        return {}
-    return {f: _FLAG_READERS[f](cfg) for f in flags if f in _FLAG_READERS}
 
 
 # ---------------------------------------------------------------------------
