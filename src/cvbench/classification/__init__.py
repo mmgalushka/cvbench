@@ -16,6 +16,9 @@ from cvbench.core.task import VAL_LOSS, DatasetSpec, MetricSpec, Task
 from cvbench.datasets.layout import classification_layout_errors, is_yolo_dataset
 from cvbench.datasets.stats import get_class_distribution, print_imbalance_warning, resolve_class_weights
 
+# A frozen run is flagged when its val accuracy is within this margin of chance.
+_NEAR_CHANCE_MARGIN = 0.10
+
 
 class ClassificationTask(Task):
     name = "classification"
@@ -80,7 +83,25 @@ class ClassificationTask(Task):
             "val_loss": final_metrics.get("val_loss"),
         }
 
-    def evaluate(self, model, eval_ds, cfg, spec: DatasetSpec, run_dir, output_dir=None, conf=None) -> dict:
+    def training_advisories(self, cfg, final_metrics: dict) -> list[str]:
+        """Flag a frozen-backbone run that ended near chance accuracy."""
+        val_acc = final_metrics.get("val_accuracy")
+        num_classes = cfg.model.num_classes
+        if val_acc is None or num_classes < 2 or cfg.model.fine_tune_from_layer != 0:
+            return []
+        chance = 1.0 / num_classes
+        if val_acc > chance + _NEAR_CHANCE_MARGIN:
+            return []
+        return [
+            f"val_accuracy {val_acc:.4f} is near chance ({chance:.4f} for {num_classes} classes) "
+            "and the backbone is frozen, so only the head was trained. "
+            "Try --fine-tune-from-layer -1 with a lower --lr (e.g. 1e-5), more --epochs, "
+            "or --augmentation."
+        ]
+
+    def evaluate(
+        self, model, eval_ds, cfg, spec: DatasetSpec, run_dir, output_dir=None, conf=None, listener=None,
+    ) -> dict:
         from cvbench.classification.evaluator import evaluate as _evaluate
 
         return _evaluate(
@@ -91,6 +112,7 @@ class ClassificationTask(Task):
             test_dir=cfg.data.test_dir,
             output_dir=output_dir,
             val_accuracy=cfg.run.val_accuracy,
+            listener=listener,
         )
 
     def test_score(self, report: dict) -> tuple[str, float | None]:

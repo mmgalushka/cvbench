@@ -14,10 +14,12 @@ from typing import Any
 import click
 
 from cvbench.cli import _help
+from cvbench.cli._listeners import ConsoleListener
 from cvbench.cli.train import parse_override, validate_dataset
 from cvbench.core import _console, present
 from cvbench.core.config import FLAG_KEYS, build_config, resolve_key
 from cvbench.core.errors import CVBenchError
+from cvbench.core.events import Event, SweepFinished, SweepInterrupted, TrialFailed, TrialStarted
 from cvbench.core.exp_store import EXPERIMENTS_DIR, assert_name_available, make_unique_dir
 from cvbench.core.sweep_store import (
     DEFAULT_RANDOM_SPACE,
@@ -34,7 +36,6 @@ from cvbench.core.sweep_store import (
     summarize,
     trial_dir_name,
     validate_sweep_name,
-    write_manifest,
 )
 
 # NOTE: cvbench.services.training / evaluation (and cvbench.tasks) are imported inside
@@ -92,47 +93,6 @@ def print_trial_table(
             " ★ = best on that score. The sweep's pick is the val ★; the test ★ is only an indicator."
             if show_test else " ★ = the sweep's pick (best on the selection metric)."
         ))
-
-
-def _evaluate_on_val(trial_dir: str) -> None:
-    """Score a trained detection trial on its VAL split and record mAP@50 in config.yaml.
-
-    `run_evaluation` only ever scores the test split, and picking a hyper-parameter
-    by test score would leak the test set into model selection. So this reuses the
-    same task API on a spec whose `test_dir` points at the val split. The report is
-    written to a throw-away directory (not the trial's eval_report.json, which is
-    reserved for the real test evaluation) and only the headline score is stored,
-    in `run.metrics` under the task's primary metric name (e.g. `map50`) — where
-    `sweep_store.summarize` reads it for that selection metric. Running `evaluate <trial>`
-    later overwrites them with the real test mAP@50.
-    """
-    import dataclasses
-    import tempfile
-
-    from cvbench.core.config import load_config, update_run_status
-    from cvbench.tasks import resolve_task
-
-    cfg = load_config(trial_dir)
-    task = resolve_task(cfg)
-    spec = task.resolve_layout(cfg)
-    if not spec.val_dir:
-        _console.warning("No val split for this dataset; mAP@50 unavailable.")
-        return
-    best_path = Path(trial_dir) / "best.keras"
-    if not best_path.is_file():
-        raise ValueError(
-            f"no checkpoint was saved ({best_path} is missing) — the monitored metric "
-            "likely never improved (check training_log.csv for a NaN/diverging loss)"
-        )
-    val_spec = dataclasses.replace(spec, test_dir=spec.val_dir)
-    val_ds = task.build_eval_dataset(cfg, val_spec)
-    model = task.load_model(str(best_path))
-    with tempfile.TemporaryDirectory() as tmp:
-        report = task.evaluate(
-            model=model, eval_ds=val_ds, cfg=cfg, spec=val_spec, run_dir=trial_dir, output_dir=tmp,
-        )
-    metric, value = task.test_score(report)
-    update_run_status(trial_dir, metrics={metric: value}, primary_metric=metric)
 
 
 @_help.command(
@@ -214,7 +174,7 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
     """
     from cvbench.core.config import load_config
     from cvbench.core.data_store import resolve_data_dir
-    from cvbench.tasks import check_selection_metric, detect_task_name, get_task
+    from cvbench.tasks import check_selection_metric, detect_task_name
 
     try:
         if strategy == "random":
@@ -278,10 +238,6 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
             check_selection_metric(metric, task)
         except ValueError as e:
             raise click.ClickException(str(e)) from e
-        # The task's primary metric only exists after an evaluation, so a sweep ranking on
-        # it scores each trial on its val split once training finishes.
-        post_hoc_metric = get_task(task).primary_metric.name
-
         if name is None:
             name = make_unique_dir(EXPERIMENTS_DIR, f"sweep_{date.today().strftime('%Y_%m_%d')}").name
         validate_sweep_name(name)
@@ -308,51 +264,37 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
         print(_console.dim(f" --show: nothing was trained. Total: {len(trials)} trials."))
         return
 
-    sweep_dir = Path(EXPERIMENTS_DIR) / name
-    sweep_dir.mkdir(parents=True, exist_ok=False)
-    write_manifest(sweep_dir, SweepManifest(
+    from cvbench.services.sweep import run_sweep  # deferred: pulls in TensorFlow
+
+    manifest = SweepManifest(
         version=1, name=name, date=date.today().strftime("%Y-%m-%d"), data_dir=str(data_dir),
         strategy=strategy, metric=metric, direction=direction, axes=axes,
         trials=trials if strategy == "random" else None,
         sample_seed=sample_seed if strategy == "random" else None,
-    ))
+    )
+    run_sweep(manifest, trials, trial_values, task_name=task, fixed=fixed, from_dir=from_dir,
+              listener=_SweepPrinter())
 
-    from cvbench.services.training import run_training  # deferred: pulls in TensorFlow
 
-    for i, (values, plan) in enumerate(zip(trial_values, trials, strict=True), start=1):
-        trial_name = trial_dir_name(name, i)
-        trial_dir = str(sweep_dir / trial_name)
-        print()
-        print(f" {_console.bold(f'[{i}/{len(trials)}] {trial_name}')}  "
-              + ", ".join(f"{display_key(k)}={v}" for k, v in plan.items()))
-        try:
-            # training.interrupt.enabled=False: a standalone `train` catches Ctrl-C to finish the
-            # current batch and checkpoint gracefully, but under a sweep that would only
-            # stop the current trial and silently move on to the next one. Disabling it
-            # lets Ctrl-C raise KeyboardInterrupt immediately, caught below to stop the
-            # whole sweep right away.
-            run_training(data_dir=data_dir, output_dir=trial_dir, from_dir=from_dir,
-                         overrides={**fixed, **values, "training.interrupt.enabled": False})
-        except KeyboardInterrupt:
-            _console.warning(f"\n Interrupted — stopping the sweep (trial {trial_name} did not finish).")
-            break
-        except Exception as e:  # noqa: BLE001 - one bad trial must not stop the sweep
-            _console.error(f"Trial {trial_name} failed: {type(e).__name__}: {e}")
-            continue
-        # Evaluation is a separate step from training: a trial that trained fine but has
-        # no best.keras (e.g. the monitored metric never improved) must be reported as a
-        # val-evaluation failure, not misattributed as "training failed".
-        if metric == post_hoc_metric:
-            try:
-                _evaluate_on_val(trial_dir)
-            except KeyboardInterrupt:
-                _console.warning(f"\n Interrupted — stopping the sweep (evaluating {trial_name}).")
-                break
-            except Exception as e:  # noqa: BLE001 - one bad trial must not stop the sweep
-                _console.error(f"Trial {trial_name} trained but val evaluation failed: {type(e).__name__}: {e}")
-                continue
+class _SweepPrinter(ConsoleListener):
+    """Terminal output of a sweep: the trial headers, failures and the final ranking."""
 
-    _finish(sweep_dir)
+    def __call__(self, event: Event) -> None:
+        if isinstance(event, TrialStarted):
+            print()
+            print(f" {_console.bold(f'[{event.index}/{event.total}] {event.name}')}  "
+                  + ", ".join(f"{display_key(k)}={v}" for k, v in event.params.items()))
+        elif isinstance(event, TrialFailed):
+            what = "failed" if event.stage == "training" else "trained but val evaluation failed"
+            _console.error(f"Trial {event.name} {what}: {event.error_type}: {event.message}")
+        elif isinstance(event, SweepInterrupted):
+            detail = (f"trial {event.name} did not finish" if event.stage == "training"
+                      else f"evaluating {event.name}")
+            _console.warning(f"\n Interrupted — stopping the sweep ({detail}).")
+        elif isinstance(event, SweepFinished):
+            _finish(Path(event.sweep_dir))
+        else:
+            super().__call__(event)
 
 
 def _finish(sweep_dir: Path) -> None:

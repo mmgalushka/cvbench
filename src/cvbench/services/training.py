@@ -8,38 +8,20 @@ from typing import Any
 
 from cvbench.core import trainer as _trainer
 from cvbench.core.config import build_config, save_config, update_run_status
+from cvbench.core.events import Listener, SeedSet, emit
 from cvbench.core.exp_store import EXPERIMENTS_DIR, check_output_dir, make_run_name, make_unique_dir
-from cvbench.services._runtime import print_device_banner
+from cvbench.services._runtime import report_devices
 from cvbench.tasks import get_task
 
 
 def run_training(
     data_dir: str,
     output_dir: str | None = None,
-    # NOTE: on_epoch_end is reserved for the WebUI progress streaming.
-    # When the WebUI calls run_training() it should pass a callable:
-    #
-    #   on_epoch_end(epoch: int, logs: dict) -> None
-    #
-    # The trainer will fire it after every epoch. The WebUI implementation
-    # should push the logs dict to an SSE event queue so the browser receives
-    # live metrics (loss, val_accuracy, etc.) without polling.
-    #
-    # The CLI leaves this as None — Keras verbose=1 handles stdout output.
-    #
-    # To wire this up, core/trainer.py needs a small _ProgressEmitter callback:
-    #
-    #   class _ProgressEmitter(keras.callbacks.Callback):
-    #       def __init__(self, fn): self._fn = fn
-    #       def on_epoch_end(self, epoch, logs=None):
-    #           if self._fn: self._fn(epoch, logs or {})
-    #
-    # TODO: add on_epoch_end parameter and _ProgressEmitter when implementing
-    #       the WebUI training endpoint (tracked in a follow-up GitHub issue).
     from_dir: str | None = None,
     overrides: dict[str, Any] | None = None,
     resume: str | None = None,
     overwrite: bool = False,
+    listener: Listener | None = None,
 ) -> str:
     """Orchestrate a full training run.
 
@@ -51,13 +33,13 @@ def run_training(
     chain several runs in one process (e.g. `sweep`) pass `training.interrupt.enabled:
     False` (graceful Ctrl-C: finish the current batch, checkpoint, and stop) so Ctrl-C
     raises KeyboardInterrupt immediately instead of only stopping the current run.
-    """
-    from cvbench.core import _console
 
+    Prints nothing: progress is reported to `listener` as `cvbench.core.events` events.
+    """
     if output_dir is not None:
         check_output_dir(output_dir, resume=bool(resume), overwrite=overwrite)
 
-    print_device_banner("training")
+    report_devices("training", listener)
 
     overrides = overrides or {}
     # The dataset layout selects the task; a resumed/two-phase run (--from) keeps the
@@ -67,7 +49,7 @@ def run_training(
     if "training.seed" in overrides and cfg.training.seed is not None:
         import keras
         keras.utils.set_random_seed(cfg.training.seed)
-        print(_console.dim(f" Seed: {cfg.training.seed} (reproducible run)"))
+        emit(listener, SeedSet(cfg.training.seed))
 
     task = get_task(cfg.task)
 
@@ -120,6 +102,7 @@ def run_training(
             resume_checkpoint=resume,
             num_train_samples=num_train,
             class_weight=resolved_weights,
+            listener=listener,
         )
     except KeyboardInterrupt:
         update_run_status(exp_dir, status="interrupted")

@@ -37,14 +37,19 @@ Rules that must stay true as the WebUI grows
      c. Call it from the frontend JS
    The CLI gets the same feature for free by calling the same service.
 
-Planned API endpoints (implement in separate issues)
-----------------------------------------------------
-    GET  /api/runs                    list all experiment runs
-    GET  /api/runs/{name}             single run detail (config + metrics)
-    POST /api/train                   start a training run
-    GET  /api/train/{name}/status     live training status / log tail
-    POST /api/evaluate/{name}         trigger evaluation on a run
-    POST /api/predict                 upload image → prediction result
+API routes (one module per resource under web/api/)
+-----------------------------------------------------
+    runs.py        GET /api/present, /api/runs, /api/runs/{name}, /api/sweeps,
+                   /api/sweeps/{name}, /api/runs/{name}/images/{path};
+                   PATCH, DELETE /api/runs/{name}
+    prediction.py  GET /api/augmentations; POST /api/predict/{single,augmented,xai}
+    explain.py     POST /api/runs/{name}/explain/gradcam
+    export.py      GET, POST /api/runs/{name}/exports; download and DELETE of one export
+    datasets.py    GET /api/datasets and its images; POST, DELETE dataset images
+
+Training, evaluation and sweeps are not exposed yet. They report progress as
+cvbench.core.events events through a ``listener`` argument, which a job runner
+here can queue for live updates.
 
 Running (once web extras are installed)
 ---------------------------------------

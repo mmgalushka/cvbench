@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     import tensorflow as tf
 
     from cvbench.core.config import CVBenchConfig
+    from cvbench.core.events import Listener
 
 
 @dataclass(frozen=True)
@@ -189,6 +190,10 @@ class Task(abc.ABC):
     def headline_metrics(self, final_metrics: dict) -> dict:
         """Map a Keras History's final-epoch metrics to update_run_status() kwargs."""
 
+    def training_advisories(self, cfg: CVBenchConfig, final_metrics: dict) -> list[str]:
+        """Advice for a run that finished training with FINAL_METRICS (none by default)."""
+        return []
+
     @abc.abstractmethod
     def evaluate(
         self,
@@ -199,10 +204,12 @@ class Task(abc.ABC):
         run_dir: str,
         output_dir: str | None,
         conf: float | None = None,
+        listener: Listener | None = None,
     ) -> dict:
         """Run evaluation and return the report dict (also written to disk).
 
         CONF overrides the detection score threshold; tasks without one ignore it.
+        LISTENER receives an ``EvalProgress`` event per predicted batch.
         """
 
     @abc.abstractmethod

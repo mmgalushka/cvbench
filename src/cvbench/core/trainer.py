@@ -9,81 +9,21 @@ import keras
 from cvbench.core import _console
 from cvbench.core.checkpoint import build_checkpoint_callback, load_best_history, prune_checkpoints
 from cvbench.core.config import CVBenchConfig, update_run_status
+from cvbench.core.events import (
+    EpochEnded,
+    InterruptRequested,
+    Listener,
+    Notice,
+    RunFinished,
+    RunStarted,
+    emit,
+)
 
 if TYPE_CHECKING:
     from cvbench.core.task import Task
 
 
-# A frozen run is flagged when its val accuracy is within this margin of chance.
-_NEAR_CHANCE_MARGIN = 0.10
-# Below this many validation images, val metrics are too noisy to trust.
-_SMALL_VAL_IMAGES = 30
-
-
-def _fine_tune_label(fine_tune_from_layer: int) -> str:
-    if fine_tune_from_layer == 0:
-        return "frozen backbone (only the head trains)"
-    if fine_tune_from_layer == -1:
-        return "all layers unfrozen"
-    return f"unfrozen from layer {fine_tune_from_layer}"
-
-
-def _near_chance_advisory(cfg: CVBenchConfig, final_metrics: dict) -> str | None:
-    """Return an advisory when a frozen-backbone run ended near chance accuracy."""
-    val_acc = final_metrics.get("val_accuracy")
-    num_classes = cfg.model.num_classes
-    if val_acc is None or num_classes < 2 or cfg.model.fine_tune_from_layer != 0:
-        return None
-    chance = 1.0 / num_classes
-    if val_acc > chance + _NEAR_CHANCE_MARGIN:
-        return None
-    return (
-        f"val_accuracy {val_acc:.4f} is near chance ({chance:.4f} for {num_classes} classes) "
-        "and the backbone is frozen, so only the head was trained. "
-        "Try --fine-tune-from-layer -1 with a lower --lr (e.g. 1e-5), more --epochs, "
-        "or --augmentation."
-    )
-
-
-def _print_header(exp_dir: str, cfg: CVBenchConfig, val_images: int | None = None):
-    print(_console.rule())
-    print(f" {_console.bold('CVBench — train')}")
-    print(_console.rule())
-    print(f" Task      : {cfg.task}")
-    print(f" Data      : {_console.dim(cfg.data.data_dir)}")
-    print(f" Backbone  : {cfg.model.backbone}  (weights: {cfg.model.weights})")
-    print(f" Fine-tune : {_fine_tune_label(cfg.model.fine_tune_from_layer)}")
-    print(f" Input size: {cfg.model.input_size}px   Batch size: {cfg.data.batch_size}")
-    print(f" Epochs    : {cfg.training.epochs}")
-    seed = cfg.training.seed
-    print(f" Seed      : {seed if seed is not None else 'none (not reproducible)'}")
-    opt = cfg.training.optimizer
-    opt_label = opt.type.upper()
-    if opt.weight_decay > 0:
-        opt_label += f"  weight_decay={opt.weight_decay}"
-    if opt.type == "sgd":
-        opt_label += f"  momentum={opt.momentum}"
-    print(f" Optimizer : {opt_label}")
-    lrs = cfg.training.lr_scheduler
-    if lrs.patience > 0:
-        print(
-            f" LR        : {cfg.training.learning_rate}  →  reduce by {lrs.factor}x after"
-            f" {lrs.patience} flat epoch(s) (min {lrs.min_lr})"
-        )
-    else:
-        print(f" LR        : {cfg.training.learning_rate}")
-    n_transforms = len(cfg.augmentation.transforms)
-    print(f" Aug       : {n_transforms} transform(s)")
-    print(f" Output    : {_console.dim(exp_dir)}")
-    print(_console.rule())
-    if val_images is not None and val_images < _SMALL_VAL_IMAGES:
-        _console.warning(
-            f"Validation set has only {val_images} image(s); val metrics will be noisy."
-        )
-    print()  # breathing room before epoch output
-
-
-def _apply_fine_tune_flags(model: keras.Model, fine_tune_from_layer: int) -> None:
+def _apply_fine_tune_flags(model: keras.Model, fine_tune_from_layer: int, listener: Listener | None = None) -> None:
     """Re-apply backbone trainable flags to a loaded checkpoint model.
 
     Needed when resuming with a different fine_tune_from_layer than Phase 1
@@ -99,10 +39,10 @@ def _apply_fine_tune_flags(model: keras.Model, fine_tune_from_layer: int) -> Non
             None,
         )
     if backbone is None:
-        _console.warning(
+        emit(listener, Notice(
             "Could not locate the backbone layer to apply fine_tune_from_layer;"
             " leaving the reloaded checkpoint's trainable flags unchanged."
-        )
+        ))
         return
     if fine_tune_from_layer == 0:
         backbone.trainable = False
@@ -125,28 +65,32 @@ def train(
     resume_checkpoint: str | None = None,
     num_train_samples: int | None = None,
     class_weight: dict | None = None,
+    listener: Listener | None = None,
 ) -> str:
-    """Run the training loop. Returns the experiment directory path."""
+    """Run the training loop. Returns the experiment directory path.
+
+    Prints nothing: progress goes to LISTENER as ``RunStarted``, ``EpochEnded`` and
+    ``RunFinished`` events (see ``cvbench.core.events``).
+    """
 
     run_dir = Path(exp_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
 
     val_images = task.count_images(cfg.data.val_dir) if cfg.data.val_dir else None
-    _print_header(exp_dir, cfg, val_images)
+    emit(listener, RunStarted(exp_dir, cfg, val_images, resume_checkpoint))
 
     # Resume from checkpoint if requested
     initial_epoch = 0
     if resume_checkpoint:
-        print(f" Resuming from: {resume_checkpoint}")
         # Load the full model (weights + Adam moment accumulators) so the head's
         # optimizer state carries over smoothly. model.load_weights() would restore
         # weight values but reset all moments to zero, causing an amplified effective
         # LR at the start of the resumed run (identical to the zero-moment problem
         # we're trying to avoid in the backbone during two-phase training).
-        model = keras.saving.load_model(resume_checkpoint)
+        model = task.load_model(resume_checkpoint)
         # Re-apply trainable flags — the checkpoint reflects Phase 1's config
         # (backbone frozen); Phase 2 may need a different setting.
-        _apply_fine_tune_flags(model, cfg.model.fine_tune_from_layer)
+        _apply_fine_tune_flags(model, cfg.model.fine_tune_from_layer, listener)
         # Sync the optimizer LR to the current config. Phase 2 typically uses
         # a much lower LR; without this the checkpoint's Phase 1 LR would persist.
         model.optimizer.learning_rate.assign(cfg.training.learning_rate)
@@ -179,16 +123,17 @@ def train(
             verbose=1 if _console.is_tty() else 2,
         ))
 
+    class _EpochEmitter(keras.callbacks.Callback):
+        def on_epoch_end(self, epoch, logs=None):
+            emit(listener, EpochEnded(epoch, {k: float(v) for k, v in (logs or {}).items()}))
+
+    callbacks.append(_EpochEmitter())
+
     # Graceful interrupt
     _stop_flag = {"value": False}
 
     def _sigint_handler(signum, frame):
-        # \r\033[K is cursor control (clear the in-progress progress-bar line),
-        # not color — left as a deliberate exception to the "route color
-        # through _console" rule. The warning itself still goes through
-        # _console.warning() so NO_COLOR/non-TTY gating still applies.
-        print("\r\033[K")
-        _console.warning("Interrupt received — finishing current batch then saving...\n")
+        emit(listener, InterruptRequested())
         _stop_flag["value"] = True
 
     if cfg.training.interrupt.enabled:
@@ -227,12 +172,6 @@ def train(
         ckpt_name = f"interrupt_epoch{last_epoch:03d}.keras"
         interrupt_ckpt = str(run_dir / ckpt_name)
         model.save(interrupt_ckpt)
-        print(f"\n {_console.green('Checkpoint saved')} → {_console.dim(interrupt_ckpt)}")
-        print(
-            f" To resume: train {cfg.data.data_dir}"
-            f" --from {exp_dir}"
-            f" --resume {interrupt_ckpt}\n"
-        )
 
     prune_checkpoints(str(run_dir), cfg)
 
@@ -251,31 +190,16 @@ def train(
         **task.headline_metrics(final_metrics),
     )
 
-    status_label = "interrupted" if interrupted else "complete"
-    status_color = _console.yellow if interrupted else _console.green
-    print()  # breathing room after last epoch line
-    print(_console.rule())
-    print(f" {_console.bold(f'Training {status_color(status_label)}')}")
-    if final_metrics:
-        max_k = max(len(k) for k in final_metrics)
-        for k, v in final_metrics.items():
-            print(f"   {_console.bold(f'{k:<{max_k}}')} : {v:.4f}")
-    best_events = load_best_history(str(run_dir))
-    if best_events:
-        metric_name = best_events[0]["metric"]
-        print(f"\n {_console.bold('Best weights history')}  ({_console.dim(metric_name)})")
-        for e in best_events:
-            val_str = f"{e['value']:.4f}" if e["value"] is not None else "—"
-            epoch_str = f"{e['epoch']:>4}"
-            print(f"   epoch {_console.bold(epoch_str)}  →  {val_str}")
-    advisory = None if interrupted else _near_chance_advisory(cfg, final_metrics)
-    if advisory:
-        print()
-        _console.warning(advisory)
-    print(f"\n Run name      : {_console.bold(cfg.run.name)}")
-    print(f" Run directory → {_console.dim(str(run_dir))}")
-    if not interrupted:
-        print(f" Next          : {_console.green(f'evaluate {cfg.run.name}')}")
-    print(_console.rule())
+    status = "interrupted" if interrupted else "done"
+    emit(listener, RunFinished(
+        exp_dir=str(exp_dir),
+        run_name=cfg.run.name,
+        status=status,
+        final_metrics=final_metrics,
+        best_events=load_best_history(str(run_dir)),
+        advisories=[] if interrupted else task.training_advisories(cfg, final_metrics),
+        interrupt_checkpoint=interrupt_ckpt,
+        data_dir=cfg.data.data_dir,
+    ))
 
     return str(run_dir)
