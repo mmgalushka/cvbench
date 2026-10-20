@@ -5,7 +5,6 @@ A sweep is a directory of ordinary experiments plus a ``sweep.yaml`` manifest
 """
 from __future__ import annotations
 
-import os
 import random
 import sys
 from datetime import date
@@ -15,24 +14,19 @@ from typing import Any
 import click
 
 from cvbench.cli import _help
-from cvbench.cli.train import (
-    FLAG_TYPES,
-    _parse_class_weight,
-    _parse_loss,
-    _parse_lr_scheduler,
-    _parse_optimizer,
-    validate_dataset,
-)
+from cvbench.cli.train import parse_override, validate_dataset
 from cvbench.core import _console, present
+from cvbench.core.config import FLAG_KEYS, build_config, resolve_key
+from cvbench.core.errors import CVBenchError
 from cvbench.core.exp_store import EXPERIMENTS_DIR, assert_name_available, make_unique_dir
 from cvbench.core.sweep_store import (
     DEFAULT_RANDOM_SPACE,
-    SWEEPABLE_FLAGS,
     SweepError,
     SweepManifest,
     TrialRow,
     best_trial,
     default_metric,
+    display_key,
     expand_grid,
     metric_direction,
     sample_grid,
@@ -55,33 +49,12 @@ def _selection_metric_names() -> list[str]:
     return list(selection_metrics())
 
 
-def _convert(flag: str, raw: str) -> Any:
-    """Convert one string value of a sweepable flag to the type `run_training` expects."""
-    opt = f"--{flag.replace('_', '-')}"
-    if flag in FLAG_TYPES:  # same range / choice checks as `train`
-        try:
-            return FLAG_TYPES[flag].convert(raw, None, None)
-        except click.BadParameter as e:
-            raise click.BadParameter(e.message, param_hint=opt) from None
-    if flag == "augmentation":
-        if not os.path.isfile(raw):
-            raise click.BadParameter(f"augmentation file not found: {raw!r}", param_hint=opt)
-        return raw
-    if flag == "optimizer":
-        return _parse_optimizer(raw)
-    if flag == "loss":
-        return _parse_loss(raw)
-    if flag == "lr_scheduler":
-        return _parse_lr_scheduler(raw)
-    return _parse_class_weight(raw)  # class_weight
-
-
-# `run_training` keyword for each sweep flag (only the ones that differ from the flag name).
-_KWARG = {"augmentation": "aug_file"}
-
-
-def _kwargs(values: dict[str, Any]) -> dict[str, Any]:
-    return {_KWARG.get(f, f): v for f, v in values.items()}
+def _overrides(params: dict[str, str]) -> dict[str, Any]:
+    """Text values of axis keys -> the dotted overrides `run_training` applies (spec keys expand to several)."""
+    out: dict[str, Any] = {}
+    for key, raw in params.items():
+        out.update(parse_override(key, raw))
+    return out
 
 
 def print_trial_table(
@@ -92,7 +65,7 @@ def print_trial_table(
     The val star is the sweep's pick; the test star is only an indicator (a trial
     that hasn't been evaluated yet shows a dash). A legend is printed under the table.
     """
-    columns: list[Any] = [("#", "right"), "Trial", *axes]
+    columns: list[Any] = [("#", "right"), "Trial", *map(display_key, axes)]
     if metric is not None:
         if show_test:
             test_metric = next((r.test_metric for r in rows if r.test_metric), None)
@@ -222,11 +195,14 @@ def _evaluate_on_val(trial_dir: str) -> None:
 @click.option("--val-split", default=None,
               help="Validation split fraction(s), comma-separated (when no val/ directory exists).")
 @click.option("--seed", default=None, help="Random seed(s), comma-separated.")
-def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, show, **flag_values):
+@click.option("--set", "set_options", multiple=True, metavar="KEY=V1,V2",
+              help="Sweep any config key by its dotted name, e.g. --set training.optimizer.weight_decay=0,1e-4 "
+                   "(repeatable; the flags above are shortcuts for common keys).")
+def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, show, set_options, **flag_values):
     """Train every combination (grid) or a sample of combinations (random) on DATA_DIR.
 
-    Each sweepable flag takes a comma-separated list: one value fixes the
-    setting, two or more make a grid axis. Under --strategy grid, at least one
+    Each sweep flag, and each --set KEY=V1,V2 for any other config key, takes a
+    comma-separated list: one value fixes the setting, two or more make a grid axis. Under --strategy grid, at least one
     flag needs two or more values. Under --strategy random, a curated default
     search space is used for any flag not explicitly passed; --trials picks how
     many combinations to sample from it. Trials run one after another into
@@ -253,10 +229,21 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
         # Random search starts from the curated default space; any flag the user passes
         # explicitly overrides the corresponding entry (grid starts from nothing).
         space: dict[str, list[str]] = dict(DEFAULT_RANDOM_SPACE) if strategy == "random" else {}
-        for flag in SWEEPABLE_FLAGS:
-            raw = flag_values.get(flag)
-            if raw is not None:
-                space[flag] = split_axis_values(flag, raw)
+        given: list[tuple[str, str]] = [(f, flag_values[f]) for f in FLAG_KEYS if flag_values.get(f) is not None]
+        for item in set_options:
+            key, sep, raw = item.partition("=")
+            if not sep:
+                raise click.BadParameter(
+                    f"expected key=v1,v2, got {item!r} (e.g. training.epochs=5,10)", param_hint="--set"
+                )
+            given.append((key.strip(), raw))
+        explicit: set[str] = set()
+        for flag, raw in given:
+            key = resolve_key(flag)
+            if key in explicit:
+                raise click.ClickException(f"{key} was given more than once.")
+            explicit.add(key)
+            space[key] = split_axis_values(flag, raw)
         axes: dict[str, list[str]] = {}
         fixed_raw: dict[str, str] = {}
         for flag, values in space.items():
@@ -269,17 +256,19 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
                 "Nothing to sweep: give at least one flag two or more comma-separated values "
                 "(e.g. --lr 1e-3,1e-4). For a single configuration use 'train'."
             )
-        fixed = {f: _convert(f, v) for f, v in fixed_raw.items()}
+        fixed = _overrides(fixed_raw)
         if strategy == "random":
             if sample_seed is None:
                 sample_seed = random.randrange(2**31)
             trials = sample_grid(axes, n_trials, sample_seed)
         else:
             trials = expand_grid(axes)
-        trial_values = [{f: _convert(f, v) for f, v in t.items()} for t in trials]
+        trial_values = [_overrides(t) for t in trials]
 
         data_dir = resolve_data_dir(data_dir)
         validate_dataset(data_dir, from_dir)
+        for values in trial_values:  # type-check every override now, before anything is created or trained
+            build_config(data_dir, from_dir, {**fixed, **values})
         task = load_config(from_dir).task if from_dir is not None else detect_task_name(data_dir)
         if metric is None:
             metric, direction = default_metric(task)
@@ -299,7 +288,7 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
         assert_name_available(name)
         for i in range(1, len(trials) + 1):
             assert_name_available(trial_dir_name(name, i))
-    except (SweepError, ValueError) as e:
+    except (SweepError, CVBenchError, ValueError) as e:
         raise click.ClickException(str(e)) from e
 
     planned = [TrialRow(i, trial_dir_name(name, i), t, "planned", None) for i, t in enumerate(trials, start=1)]
@@ -308,10 +297,10 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
     print(_console.rule(79, "white"))
     print(f" {_console.bold(f'CVBench — sweep {name}')}")
     print(_console.rule(79, "white"))
-    print(f" {len(trials)} trials ({' x '.join(f'{len(v)} {k}' for k, v in axes.items())}), "
+    print(f" {len(trials)} trials ({' x '.join(f'{len(v)} {display_key(k)}' for k, v in axes.items())}), "
           f"strategy {strategy}, metric {metric} ({direction})")
     if fixed_raw:
-        print(_console.dim(" fixed: " + ", ".join(f"{k}={v}" for k, v in fixed_raw.items())))
+        print(_console.dim(" fixed: " + ", ".join(f"{display_key(k)}={v}" for k, v in fixed_raw.items())))
     if strategy == "random":
         print(_console.dim(f" sample-seed {sample_seed} (recorded in sweep.yaml; reuse it to repeat these trials)"))
     if show:
@@ -335,15 +324,15 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
         trial_dir = str(sweep_dir / trial_name)
         print()
         print(f" {_console.bold(f'[{i}/{len(trials)}] {trial_name}')}  "
-              + ", ".join(f"{k}={v}" for k, v in plan.items()))
+              + ", ".join(f"{display_key(k)}={v}" for k, v in plan.items()))
         try:
-            # interrupt_enabled=False: a standalone `train` catches Ctrl-C to finish the
+            # training.interrupt.enabled=False: a standalone `train` catches Ctrl-C to finish the
             # current batch and checkpoint gracefully, but under a sweep that would only
             # stop the current trial and silently move on to the next one. Disabling it
             # lets Ctrl-C raise KeyboardInterrupt immediately, caught below to stop the
             # whole sweep right away.
             run_training(data_dir=data_dir, output_dir=trial_dir, from_dir=from_dir,
-                         interrupt_enabled=False, **_kwargs({**fixed, **values}))
+                         overrides={**fixed, **values, "training.interrupt.enabled": False})
         except KeyboardInterrupt:
             _console.warning(f"\n Interrupted — stopping the sweep (trial {trial_name} did not finish).")
             break

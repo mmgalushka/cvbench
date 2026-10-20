@@ -137,7 +137,7 @@ def list_runs(experiments_dir, sort):
 def _show_sweep(sweep_dir):
     """`runs show` for a sweep: manifest intent plus the trial table (no per-run details)."""
     from cvbench.cli.sweep import print_trial_table
-    from cvbench.core.sweep_store import SweepError, best_trial, summarize
+    from cvbench.core.sweep_store import SweepError, best_trial, display_key, summarize
 
     try:
         manifest, rows = summarize(sweep_dir)
@@ -152,7 +152,7 @@ def _show_sweep(sweep_dir):
         ("Data", manifest.data_dir),
         ("Strategy", manifest.strategy),
         ("Metric", f"{manifest.metric} ({manifest.direction})"),
-        ("Axes", ", ".join(f"{k}={','.join(v)}" for k, v in manifest.axes.items())),
+        ("Axes", ", ".join(f"{display_key(k)}={','.join(v)}" for k, v in manifest.axes.items())),
     ]:
         print(f" {_console.dim(f'{label:<10}')} {value}")
     print()

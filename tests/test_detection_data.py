@@ -222,7 +222,7 @@ def test_detection_task_resolve_layout(yolo_root):
     from cvbench.core.config import build_config
     from cvbench.tasks import get_task
 
-    cfg = build_config(str(yolo_root), task="detection", input_size=64, batch_size=2)
+    cfg = build_config(str(yolo_root), overrides={"model.input_size": 64, "data.batch_size": 2})
     task = get_task("detection")
     spec = task.resolve_layout(cfg)
 
@@ -241,9 +241,9 @@ def test_detection_task_resolve_layout_respects_explicit_backbone(yolo_root):
     from cvbench.core.config import build_config
     from cvbench.tasks import get_task
 
-    cfg = build_config(
-        str(yolo_root), task="detection", backbone="efficientnet_b0", input_size=64, batch_size=2,
-    )
+    cfg = build_config(str(yolo_root), overrides={
+        "model.backbone": "efficientnet_b0", "model.input_size": 64, "data.batch_size": 2,
+    })
     task = get_task("detection")
     task.resolve_layout(cfg)
     assert cfg.model.backbone == "efficientnet_b0"
@@ -256,7 +256,7 @@ def test_detection_task_validate_config_requires_val_split(tmp_path):
     root = tmp_path / "yolo"
     (root / "images" / "train").mkdir(parents=True)
 
-    cfg = build_config(str(root), task="detection")
+    cfg = build_config(str(root), overrides={"task": "detection"})
     task = get_task("detection")
     errors = task.validate_config(cfg)
     assert any("images/val" in e for e in errors)
@@ -285,9 +285,9 @@ def test_detection_task_build_model_delegates_to_detection_model():
     from cvbench.core.config import build_config
     from cvbench.tasks import get_task
 
-    cfg = build_config(
-        "data", task="detection", backbone="resnet_18", input_size=64, weights="none",
-    )
+    cfg = build_config("data", overrides={
+        "task": "detection", "model.backbone": "resnet_18", "model.input_size": 64, "model.weights": "none",
+    })
     cfg.model.num_classes = 3
     cfg.detection.strides = _STRIDES
     cfg.detection.anchors = _ANCHORS

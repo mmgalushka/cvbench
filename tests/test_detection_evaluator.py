@@ -15,7 +15,10 @@ def test_train_then_evaluate_produces_a_valid_envelope(yolo_project):
     from cvbench.services.training import run_training
 
     exp_dir = run_training(
-        "data/yolo", backbone="efficientnet_b0", epochs=1, batch_size=2, input_size=64,
+        "data/yolo", overrides={
+            "model.backbone": "efficientnet_b0", "training.epochs": 1,
+            "data.batch_size": 2, "model.input_size": 64,
+        },
     )
 
     report = run_evaluation(exp_dir)
@@ -69,7 +72,10 @@ def test_scan_experiments_surfaces_the_detection_run(yolo_project):
     from cvbench.services.evaluation import run_evaluation
     from cvbench.services.training import run_training
 
-    exp_dir = run_training("data/yolo", backbone="efficientnet_b0", epochs=1, batch_size=2, input_size=64)
+    exp_dir = run_training("data/yolo", overrides={
+            "model.backbone": "efficientnet_b0", "training.epochs": 1,
+            "data.batch_size": 2, "model.input_size": 64,
+        })
     run_evaluation(exp_dir)
 
     entries = scan_experiments("experiments")
@@ -93,10 +99,10 @@ def test_detector_learns_synthetic_shapes(tmp_path, monkeypatch):
     )
     assert result.exit_code == 0, result.output
 
-    exp_dir = run_training(
-        "data/yolo", backbone="efficientnet_b0", weights="imagenet", epochs=60, batch_size=16,
-        input_size=96, seed=1,
-    )
+    exp_dir = run_training("data/yolo", overrides={
+        "model.backbone": "efficientnet_b0", "model.weights": "imagenet", "training.epochs": 60,
+        "data.batch_size": 16, "model.input_size": 96, "training.seed": 1,
+    })
     report = run_evaluation(exp_dir)
 
     # Seeded run reaches ~0.30; the floor leaves headroom for platform noise but fails if

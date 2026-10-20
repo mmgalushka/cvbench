@@ -53,6 +53,11 @@ def no_training(monkeypatch, tmp_path):
     (["--lr-scheduler", "patience=2,factor=1.5"], "--lr-scheduler"),
     (["--class-weight", "{oops"], "--class-weight"),
     (["--class-weight", '{"cat": -1}'], "--class-weight"),
+    (["--set", "training.epochs"], "--set"),
+    (["--set", "training.learning_rte=1e-3"], "training.learning_rate"),
+    (["--set", "training.epochs=many"], "--epochs"),
+    (["--set", "training.epochs=0"], "--epochs"),
+    (["--set", "detection.conf_threshold=0.3"], "detection runs"),
 ])
 def test_bad_option_exits_2(data_dir, tmp_path, args, fragment):
     result = CliRunner().invoke(train, [str(data_dir), *args])
@@ -178,3 +183,30 @@ def test_classification_task_validate_config(data_dir):
     task = ClassificationTask()
     assert task.validate_config(build_config(str(data_dir))) == []
     assert task.validate_config(build_config(str(data_dir / "missing")))
+
+
+def _captured_overrides(monkeypatch):
+    seen = {}
+    monkeypatch.setattr("cvbench.services.training.run_training", lambda **kw: seen.update(kw))
+    return seen
+
+
+def test_flags_and_set_resolve_into_dotted_overrides(data_dir, monkeypatch):
+    seen = _captured_overrides(monkeypatch)
+    result = CliRunner().invoke(train, [
+        str(data_dir), "--lr", "1e-3", "--optimizer", "sgd:momentum=0.8", "--class-weight", "auto",
+        "--set", "training.optimizer.weight_decay=1e-4", "--set", "model.dropout=0.4",
+    ])
+    assert result.exit_code == 0, result.output
+    assert seen["overrides"] == {
+        "training.learning_rate": 1e-3, "training.class_weight": "auto",
+        "training.optimizer.type": "sgd", "training.optimizer.momentum": 0.8,
+        # a key with a flag is converted like the flag; any other --set text stays text until apply_overrides
+        "training.optimizer.weight_decay": "1e-4", "model.dropout": 0.4,
+    }
+
+
+def test_set_accepts_a_flag_name_as_the_key(data_dir, monkeypatch):
+    seen = _captured_overrides(monkeypatch)
+    assert CliRunner().invoke(train, [str(data_dir), "--set", "lr=5e-4"]).exit_code == 0
+    assert seen["overrides"] == {"training.learning_rate": 5e-4}

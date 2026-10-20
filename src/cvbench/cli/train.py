@@ -1,4 +1,7 @@
+import dataclasses
 import json
+import os
+from collections.abc import Callable
 from typing import Any
 
 import click
@@ -6,13 +9,18 @@ import click
 from cvbench.cli import _help
 from cvbench.core.config import (
     BACKBONE_NAMES,
+    FLAG_KEYS,
+    KEY_FLAGS,
     DataConfig,
     LossConfig,
     LRSchedulerConfig,
     ModelConfig,
     OptimizerConfig,
     TrainingConfig,
+    build_config,
+    resolve_key,
 )
+from cvbench.core.errors import CVBenchError
 
 _DATA = DataConfig()
 _MODEL = ModelConfig()
@@ -145,6 +153,49 @@ def _parse_loss(value: str | None) -> LossConfig | None:
     )
 
 
+# Flags whose text is a `type:k=v` spec naming a whole section; each expands to one override per field.
+_SPEC_PARSERS: dict[str, Callable[[str], Any]] = {
+    "training.optimizer": _parse_optimizer,
+    "training.loss": _parse_loss,
+    "training.lr_scheduler": _parse_lr_scheduler,
+}
+
+
+def parse_override(key: str, raw: Any) -> dict[str, Any]:
+    """Command-line text for the canonical config ``key`` -> dotted overrides for ``apply_overrides``.
+
+    Keys with a flag are checked like that flag (ranges, choices, specs); any other key
+    passes through and is type-checked against its dataclass field later.
+    """
+    hint = f"--{KEY_FLAGS[key].replace('_', '-')}" if key in KEY_FLAGS else "--set"
+    flag = KEY_FLAGS.get(key)
+    if key in _SPEC_PARSERS:
+        section = _SPEC_PARSERS[key](raw)
+        return {f"{key}.{f.name}": getattr(section, f.name) for f in dataclasses.fields(section)}
+    if key == "training.class_weight" and isinstance(raw, str):
+        return {key: _parse_class_weight(raw)}
+    if key == "augmentation" and not os.path.isfile(raw):
+        raise click.BadParameter(f"augmentation file not found: {raw!r}", param_hint=hint)
+    if flag in FLAG_TYPES and isinstance(raw, str):
+        try:
+            raw = FLAG_TYPES[flag].convert(raw, None, None)
+        except click.BadParameter as e:
+            raise click.BadParameter(e.message, param_hint=hint) from None
+    return {key: raw}
+
+
+def parse_set_option(item: str) -> dict[str, Any]:
+    """One ``--set key=value`` -> overrides; ``key`` may be a dotted config key or a flag name."""
+    key, sep, raw = item.partition("=")
+    if not sep or not key.strip():
+        raise click.BadParameter(f"expected key=value, got {item!r} (e.g. training.epochs=5)", param_hint="--set")
+    try:
+        key = resolve_key(key.strip())
+    except CVBenchError as e:
+        raise click.BadParameter(e.message, param_hint="--set") from None
+    return parse_override(key, raw.strip())
+
+
 def validate_dataset(data_dir: str, from_dir: str | None = None) -> None:
     """Fail with a usage error (exit 2) if DATA_DIR cannot be trained on.
 
@@ -205,20 +256,20 @@ def validate_dataset(data_dir: str, from_dir: str | None = None) -> None:
 @click.option("--input-size", default=None, type=FLAG_TYPES["input_size"],
               help=f"Image input size in pixels (default: {_MODEL.input_size}).")
 @click.option("--dropout", default=None, type=FLAG_TYPES["dropout"], help=f"Dropout rate (default: {_MODEL.dropout}).")
-@click.option("--augmentation", "aug_file", default=None,
+@click.option("--augmentation", default=None,
               type=click.Path(exists=True, dir_okay=False),
               help="Path to an augmentation YAML file, see 'data aug' (default: none).")
 @click.option("--resume", default=None, type=click.Path(exists=True, dir_okay=False),
               help="Path to a checkpoint file to resume training from (default: none).")
-@click.option("--class-weight", "class_weight_raw", default=None,
+@click.option("--class-weight", default=None,
               help="Class weighting: null | auto | '{\"cat\": 1.0, \"dog\": 2.5}' (default: null).")
-@click.option("--loss", "loss_raw", default=None,
+@click.option("--loss", default=None,
               help="Loss function: crossentropy | focal | focal:gamma=2.0 | "
                    "focal:gamma=2.0,label_smoothing=0.1 (default: crossentropy)")
-@click.option("--optimizer", "optimizer_raw", default=None,
+@click.option("--optimizer", default=None,
               help="Optimizer: adam | sgd | adam:weight_decay=1e-4 | "
                    "sgd:weight_decay=1e-4,momentum=0.9 (default: adam)")
-@click.option("--lr-scheduler", "lr_scheduler_raw", default=None,
+@click.option("--lr-scheduler", default=None,
               help="LR scheduler: patience=5 | patience=5,factor=0.5,min=1e-7 (default: disabled).")
 @click.option("--fine-tune-from-layer", default=None, type=FLAG_TYPES["fine_tune_from_layer"],
               help="Unfreeze the backbone from this layer index onward: 0 keeps it FROZEN "
@@ -232,11 +283,10 @@ def validate_dataset(data_dir: str, from_dir: str | None = None) -> None:
 @click.option("--seed", default=None, type=FLAG_TYPES["seed"],
               help="Random seed for reproducibility, sets Python, NumPy and TensorFlow seeds "
                    "(default: none, not seeded).")
-def train(
-    data_dir, output_dir, overwrite, from_dir, backbone, weights, epochs, lr,
-    batch_size, input_size, dropout, aug_file, resume, class_weight_raw,
-    loss_raw, optimizer_raw, lr_scheduler_raw, fine_tune_from_layer, val_split, seed,
-):
+@click.option("--set", "set_options", multiple=True, metavar="KEY=VALUE",
+              help="Set any config key by its dotted name, e.g. --set training.optimizer.weight_decay=1e-4 "
+                   "(repeatable; the flags above are shortcuts for common keys; --set wins over a flag).")
+def train(data_dir, output_dir, overwrite, from_dir, resume, set_options, **flags):
     """Train a model on DATA_DIR.
 
     DATA_DIR must contain a train/ subdirectory. val/ is optional (without it,
@@ -263,11 +313,17 @@ def train(
         except ValueError as e:
             raise click.BadParameter(str(e), param_hint="--output") from e
 
-    class_weight = _parse_class_weight(class_weight_raw)
-    loss = _parse_loss(loss_raw)
-    optimizer = _parse_optimizer(optimizer_raw)
-    lr_scheduler = _parse_lr_scheduler(lr_scheduler_raw)
+    overrides: dict[str, Any] = {}
+    for flag, value in flags.items():
+        if value is not None:
+            overrides.update(parse_override(FLAG_KEYS[flag], value))
+    for item in set_options:
+        overrides.update(parse_set_option(item))
     validate_dataset(data_dir, from_dir)
+    try:
+        build_config(data_dir, from_dir, overrides)  # reject a bad --set before TensorFlow loads
+    except CVBenchError as e:
+        raise click.BadParameter(e.message, param_hint=e.param_hint) from None
 
     from cvbench.services.training import run_training  # deferred: pulls in TensorFlow
 
@@ -275,21 +331,7 @@ def train(
         data_dir=data_dir,
         output_dir=output_dir,
         from_dir=from_dir,
-        backbone=backbone,
-        weights=weights,
-        epochs=epochs,
-        lr=lr,
-        batch_size=batch_size,
-        input_size=input_size,
-        dropout=dropout,
-        aug_file=aug_file,
+        overrides=overrides,
         resume=resume,
-        class_weight=class_weight,
-        loss=loss,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        fine_tune_from_layer=fine_tune_from_layer,
-        val_split=val_split,
-        seed=seed,
         overwrite=overwrite,
     )

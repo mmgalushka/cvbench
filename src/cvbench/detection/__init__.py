@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cvbench.core.config import TransformConfig
+from cvbench.core.config import DetectionConfig, TransformConfig
 from cvbench.core.task import VAL_LOSS, DatasetSpec, MetricSpec, Task
 from cvbench.datasets.layout import detection_layout_errors, is_yolo_dataset, list_images, yolo_class_names
 from cvbench.detection import predict as _predict
@@ -35,7 +35,7 @@ class DetectionTask(Task):
     primary_metric = MetricSpec("map50", "mAP@50", "max")
     sweep_metric = "map50"
     selection_metric_names = ("val_loss", "map50")
-    config_section = "detection"
+    config_section = ("detection", DetectionConfig)
     hidden_config_prefixes = ("detection.anchors",)
     predict_option_names = frozenset({"conf"})
 

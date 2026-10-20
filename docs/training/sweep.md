@@ -35,6 +35,16 @@ as `train` (see [Optimizer & Loss](optimizer-loss.md) and
 sweep data/shapes --optimizer adam,sgd:momentum=0.9 --lr 1e-3,1e-4
 ```
 
+Any other config key can be swept with `--set KEY=V1,V2` (repeatable), using
+its dotted name from `config.yaml`:
+
+```bash
+sweep data/shapes --set training.optimizer.weight_decay=0,1e-4,1e-3 --set model.dropout=0.2,0.5
+```
+
+The flags above are shortcuts for dotted keys (`--lr` is
+`training.learning_rate`); passing a key both ways is an error.
+
 Flags you do not pass use the same defaults as `train`. To start from an
 existing run instead, use `--from`:
 
@@ -125,7 +135,9 @@ experiments/
 ```
 
 `sweep.yaml` records what you asked for: name, date, data directory, strategy,
-metric, direction (min or max) and the axes — plus, for `random`, the sampled
+metric, direction (min or max) and the axes, keyed by dotted config key
+(`training.learning_rate`; manifests written with flag names such as `lr` still
+load) — plus, for `random`, the sampled
 `trials` and `sample_seed`. It does not duplicate results; those are read live
 from each trial's `config.yaml`, so a trial's status and metrics are always
 current.
