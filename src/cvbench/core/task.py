@@ -138,7 +138,11 @@ class Task(abc.ABC):
     def build_datasets(
         self, cfg: CVBenchConfig, spec: DatasetSpec
     ) -> tuple[tf.data.Dataset, tf.data.Dataset, int]:
-        """Build (train_ds, val_ds, num_train_samples)."""
+        """Build (train_ds, val_ds, num_train_samples).
+
+        Both go through ``core.input_pipeline.build_image_dataset``; train_ds
+        is augmented with ``self.filter_transforms(cfg.augmentation.transforms)``.
+        """
 
     @abc.abstractmethod
     def build_eval_dataset(self, cfg: CVBenchConfig, spec: DatasetSpec) -> tf.data.Dataset:

@@ -8,8 +8,6 @@ shaping never loads TensorFlow.
 """
 from __future__ import annotations
 
-import contextlib
-import io
 from pathlib import Path
 
 from cvbench.classification import predict as _predict
@@ -57,14 +55,14 @@ class ClassificationTask(Task):
     def build_datasets(self, cfg, spec: DatasetSpec):
         from cvbench.classification.data import build_datasets as _build_datasets
 
-        train_ds, val_ds, _class_names, num_train = _build_datasets(cfg)
+        transforms = self.filter_transforms(cfg.augmentation.transforms)
+        train_ds, val_ds, _class_names, num_train = _build_datasets(cfg, transforms)
         return train_ds, val_ds, num_train
 
     def build_eval_dataset(self, cfg, spec: DatasetSpec):
         from cvbench.classification.data import build_dataset as _build_dataset
 
-        with contextlib.redirect_stdout(io.StringIO()):
-            return _build_dataset(cfg.data.test_dir, spec.class_names, cfg, training=False)
+        return _build_dataset(cfg.data.test_dir, spec.class_names, cfg, training=False)
 
     def fit_class_weight(self, cfg, spec: DatasetSpec):
         class_dist = get_class_distribution(cfg.data.train_dir)

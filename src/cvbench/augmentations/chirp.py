@@ -32,10 +32,6 @@ def aug_chirp_artifacts(
             f"justification must be one of {(*_JUSTIFY_MODES, 'random')}, got {justification!r}"
         )
 
-    if seed is not None:
-        random.seed(seed)
-        np.random.seed(seed)
-
     float_input = img.dtype in (np.float32, np.float64)
     img_u8 = (np.clip(img, 0.0, 1.0) * 255).astype(np.uint8) if float_input else img.astype(np.uint8)
 
@@ -68,6 +64,8 @@ def aug_chirp_artifacts(
         cluster_spread=cluster_spread,
         justification=justification,
         num_anchors=num_anchors,
+        rnd=random.Random(seed),
+        rng=np.random.default_rng(seed),
     )
 
     img_f = img_u8.astype(np.float32) / 255.0
@@ -102,27 +100,29 @@ def _render_chirp_mask(
     cluster_spread: float,
     justification: str,
     num_anchors: int,
+    rnd: random.Random,
+    rng: np.random.Generator,
 ) -> np.ndarray:
     mask_img = Image.new("RGB", (width, height), (0, 0, 0))
     draw = ImageDraw.Draw(mask_img)
 
     if cluster_vertically:
         k = max(1, num_clusters)
-        cluster_centers = [random.randint(20, height - 20) for _ in range(k)]
+        cluster_centers = [rnd.randint(20, height - 20) for _ in range(k)]
 
     if justification != "random":
-        anchors = [random.randint(0, width - 1) for _ in range(max(1, num_anchors))]
+        anchors = [rnd.randint(0, width - 1) for _ in range(max(1, num_anchors))]
 
     lo_t, hi_t = min(min_thickness, max_thickness), max(min_thickness, max_thickness)
     lo_l, hi_l = min(min_length, max_length), max(min_length, max_length)
     for i in range(num_chirps):
-        length = random.randint(lo_l, hi_l)
-        thickness = random.randint(lo_t, hi_t)
+        length = rnd.randint(lo_l, hi_l)
+        thickness = rnd.randint(lo_t, hi_t)
 
-        mode = random.choice(_JUSTIFY_MODES) if justification == "random" else justification
+        mode = rnd.choice(_JUSTIFY_MODES) if justification == "random" else justification
 
         anchor = (
-            random.randint(0, width - 1)
+            rnd.randint(0, width - 1)
             if justification == "random"
             else anchors[i % len(anchors)]
         )
@@ -139,11 +139,11 @@ def _render_chirp_mask(
         if cluster_vertically:
             center = cluster_centers[i % len(cluster_centers)]
             y0 = int(np.clip(
-                np.random.normal(center, cluster_spread),
+                rng.normal(center, cluster_spread),
                 thickness, height - thickness,
             ))
         else:
-            y0 = random.randint(thickness, height - thickness)
+            y0 = rnd.randint(thickness, height - thickness)
 
         _draw_chirp(draw, x0, y0, length, thickness, brightness, fade_ratio, width)
 

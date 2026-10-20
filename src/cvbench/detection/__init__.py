@@ -84,7 +84,8 @@ class DetectionTask(Task):
         from cvbench.detection.data import build_detection_dataset
 
         train_ds = build_detection_dataset(
-            spec.train_dir, cfg.data.data_dir, spec.class_names, cfg, training=True
+            spec.train_dir, cfg.data.data_dir, spec.class_names, cfg, training=True,
+            transforms=self.filter_transforms(cfg.augmentation.transforms),
         )
         val_ds = build_detection_dataset(
             spec.val_dir, cfg.data.data_dir, spec.class_names, cfg, training=False

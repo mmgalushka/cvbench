@@ -39,6 +39,7 @@ import numpy as np
 import tensorflow as tf
 
 from cvbench.core.config import CVBenchConfig
+from cvbench.core.input_pipeline import build_image_dataset
 from cvbench.datasets.layout import list_images, read_yolo_boxes, yolo_label_dir
 from cvbench.detection.anchors import _iou_wh
 
@@ -147,6 +148,7 @@ def build_detection_dataset(
     class_names: list[str],
     cfg: CVBenchConfig,
     training: bool = False,
+    transforms: list | None = None,
 ) -> tf.data.Dataset:
     """Build a tf.data pipeline yielding (image, targets) pairs for one YOLO
     split, where TARGETS is a tuple of per-scale target tensors (see
@@ -158,7 +160,9 @@ def build_detection_dataset(
         class_names: ordered class list (index = one-hot class channel).
         cfg: resolved experiment config — ``cfg.detection.anchors`` must
             already be resolved (see ``detection/anchors.py::resolve_anchors``).
-        training: if True, shuffle and repeat.
+        training: if True, shuffle every epoch, augment and repeat.
+        transforms: augmentation transforms applied when training — already
+            filtered to the box-safe ones (``DetectionTask.filter_transforms``).
 
     Returns:
         Batched, prefetched tf.data.Dataset yielding
@@ -171,39 +175,21 @@ def build_detection_dataset(
     label_paths = [str(label_dir / f"{Path(p).stem}.txt") for p in image_paths]
 
     size = cfg.model.input_size
-    num_classes = len(class_names)
-    strides = cfg.detection.strides
-    anchors = cfg.detection.anchors
-    ignore_iou = cfg.detection.ignore_iou_threshold
-    grids = [size // s for s in strides]
-    channels = [len(anchors[i]) * (6 + num_classes) for i in range(len(strides))]
-    batch = cfg.data.batch_size
 
     # Encode every label file once, up front — see _encode_all_targets — so
-    # the tf.data pipeline below only ever loads/resizes images and never
-    # falls back to tf.numpy_function per sample, per epoch (issue #67).
-    all_targets = _encode_all_targets(label_paths, num_classes, anchors, strides, size, ignore_iou)
+    # the tf.data pipeline only ever loads/resizes images and never falls
+    # back to tf.numpy_function per sample, per epoch (issue #67).
+    all_targets = _encode_all_targets(
+        label_paths, len(class_names), cfg.detection.anchors, cfg.detection.strides,
+        size, cfg.detection.ignore_iou_threshold,
+    )
 
-    ds = tf.data.Dataset.from_tensor_slices((image_paths, *all_targets))
-    if training:
-        ds = ds.shuffle(
-            max(len(image_paths), 1), seed=cfg.training.seed, reshuffle_each_iteration=True
-        )
-
-    def _load(img_path, *targets):
-        img_bytes = tf.io.read_file(img_path)
-        img = tf.image.decode_image(img_bytes, channels=3, expand_animations=False)
-        img = tf.image.resize(img, (size, size))  # stretch resize; no letterboxing
-        img = tf.cast(img, tf.float32)
-        img.set_shape((size, size, 3))
-
-        for t, g, ch in zip(targets, grids, channels, strict=True):
-            t.set_shape((g, g, ch))
-        return img, tuple(targets)
-
-    ds = ds.map(_load, num_parallel_calls=tf.data.AUTOTUNE)
-    ds = ds.cache()
-    ds = ds.batch(batch)
-    if training:
-        ds = ds.repeat()
-    return ds.prefetch(tf.data.AUTOTUNE)
+    return build_image_dataset(
+        image_paths,
+        tuple(all_targets),
+        image_size=size,
+        batch_size=cfg.data.batch_size,
+        training=training,
+        seed=cfg.training.seed,
+        transforms=transforms,
+    )
