@@ -1,6 +1,4 @@
 """Augmentation pipeline: probabilities, one_of weighting, parameter sampling, tf-graph split."""
-import random
-
 import numpy as np
 import pytest
 
@@ -108,32 +106,41 @@ def test_param_ranges_are_sampled_per_call(recorded):
     assert {k["fixed"] for k in kwargs} == {7}
 
 
-def test_pipeline_decisions_are_reproducible_under_the_global_seed(recorded):
+def test_pipeline_decisions_are_reproducible_under_the_same_seed(recorded):
     transforms = [
         _t("aug_a", prob=0.6, n=[1, 9], x=[0.0, 1.0]),
         _one_of(("aug_a", 1.0, {"n": [1, 9]}), ("aug_b", 2.0, {})),
     ]
 
-    def run():
+    def run(seed):
         recorded.clear()
-        random.seed(11)
-        fn = pipeline.build_aug_pipeline(transforms)
+        fn = pipeline.build_aug_pipeline(transforms, seed=seed)
         for _ in range(30):
             fn(IMG)
         return list(recorded)
 
-    first = run()
-    assert first and run() == first
+    first = run(11)
+    assert first and run(11) == first
+    assert run(12) != first
 
 
-def test_custom_fn_handles_single_images_and_batches():
+def test_seeded_aug_functions_get_a_seed_from_the_pipeline_generator():
+    # aug_salt_pepper has its own `seed` param: left unset it would draw OS entropy.
+    def run(seed):
+        fn = pipeline.build_aug_pipeline([_t("aug_salt_pepper", density=0.2)], seed=seed)
+        return [fn(IMG) for _ in range(3)]
+
+    first = run(5)
+    assert all(np.array_equal(a, b) for a, b in zip(first, run(5), strict=True))
+    assert not np.array_equal(first[0], first[1])  # each call draws a new seed
+
+
+def test_custom_fn_takes_a_single_image_and_a_generator():
     fn = pipeline.build_custom_aug_fn([_t("aug_blur", radius=1.0)])
 
-    single = fn(IMG)
-    batch = fn(np.stack([IMG, IMG]))
+    out = fn(IMG, np.random.default_rng(0))
 
-    assert single.shape == IMG.shape and single.dtype == np.float32
-    assert batch.shape == (2, *IMG.shape) and batch.dtype == np.float32
+    assert out.shape == IMG.shape and out.dtype == np.float32
 
 
 def test_unknown_names_are_rejected_with_the_valid_options():
@@ -153,19 +160,19 @@ def test_custom_and_keras_builders_split_the_transform_list():
     assert pipeline.build_custom_aug_fn([_one_of(("keras_flip", 1.0, {}))]) is None
 
 
-def test_keras_fn_runs_inside_a_tf_data_map_and_keeps_shapes():
+def test_keras_fn_runs_per_image_inside_a_tf_data_map_and_keeps_shapes():
     import tensorflow as tf
 
     fn = pipeline.build_keras_aug_fn([_t("keras_brightness", factor=0.3), _t("keras_noise", stddev=0.1)])
-    ds = tf.data.Dataset.from_tensor_slices(np.stack([IMG] * 4)).batch(2).map(fn)
+    ds = tf.data.Dataset.zip((
+        tf.data.Dataset.from_tensor_slices(np.stack([IMG] * 4)),
+        tf.data.Dataset.random(seed=0),
+    )).map(fn)
 
-    batches = list(ds)
-
-    assert [b.shape for b in batches] == [(2, 16, 16, 3)] * 2
+    assert [x.shape for x in ds] == [IMG.shape] * 4
 
 
-def test_keras_steps_wrap_single_images_and_batches():
+def test_keras_steps_take_a_single_image():
     fn = pipeline.build_aug_pipeline([_t("keras_noise", stddev=0.1)])
 
     assert fn(IMG).shape == IMG.shape
-    assert fn(np.stack([IMG, IMG])).shape == (2, *IMG.shape)

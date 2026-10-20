@@ -16,20 +16,16 @@ _TOP3_MIN_CLASSES = 6
 
 
 def _collect_test_paths(test_dir: str, class_names: list[str]) -> list[tuple[str, int]]:
-    """Return (relative_path, class_idx) pairs in the same order image_dataset_from_directory uses.
+    """Return (relative_path, class_idx) pairs in the order the test dataset yields them.
 
-    Order matches: sorted class_names, then sorted filenames within each class.
-    Paths are relative to test_dir.
+    Shares ``list_labeled_images`` with ``data.build_dataset``, so the two
+    orders cannot drift apart. Paths are relative to test_dir.
     """
-    result = []
+    from cvbench.classification.data import list_labeled_images
+
+    paths, labels = list_labeled_images(test_dir, class_names)
     test_root = Path(test_dir)
-    for idx, cls in enumerate(class_names):
-        cls_dir = test_root / cls
-        if cls_dir.is_dir():
-            for f in sorted(cls_dir.iterdir()):
-                if f.is_file():
-                    result.append((str(f.relative_to(test_root)), idx))
-    return result
+    return [(str(Path(p).relative_to(test_root)), idx) for p, idx in zip(paths, labels, strict=True)]
 
 
 def _collect_samples(

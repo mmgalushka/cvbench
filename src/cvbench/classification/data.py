@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-import contextlib
-import io
-import math
 import os
-import random
 from pathlib import Path
 
+import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 from cvbench.core import _console
 from cvbench.core.config import CVBenchConfig
+from cvbench.core.input_pipeline import build_image_dataset
+
+# The formats tf.image.decode_image reads (and image_dataset_from_directory lists).
+_IMAGE_EXTS = (".bmp", ".gif", ".jpeg", ".jpg", ".png")
 
 
 def get_class_names(train_dir: str) -> list[str]:
@@ -19,59 +20,41 @@ def get_class_names(train_dir: str) -> list[str]:
     return sorted(p.name for p in Path(train_dir).iterdir() if p.is_dir())
 
 
-def stratified_image_dataset_from_directory(
-    directory,
-    labels="inferred",
-    label_mode="categorical",
-    class_names=None,
-    image_size=(256, 256),
-    batch_size=32,
-    seed=None,
-    validation_split=None,
-    subset=None,
-    shuffle=True,
-) -> tf.data.Dataset:
-    """Like tf.keras.utils.image_dataset_from_directory but with stratified random split.
+def list_labeled_images(directory: str, class_names: list[str]) -> tuple[list[str], list[int]]:
+    """List every image under DIRECTORY/<class>/ as (paths, class indices).
 
-    Guarantees each class is proportionally represented in both train and val subsets,
-    regardless of class imbalance or filename ordering.
+    Ordered by class, then by path — a stable order for unshuffled datasets.
     """
-    directory = Path(directory)
-    if class_names is None:
-        class_names = sorted(p.name for p in directory.iterdir() if p.is_dir())
-
-    all_paths, all_labels = [], []
+    paths, labels = [], []
     for class_idx, class_name in enumerate(class_names):
-        for f in sorted((directory / class_name).iterdir()):
-            if f.is_file():
-                all_paths.append(str(f))
-                all_labels.append(class_idx)
+        class_dir = Path(directory) / class_name
+        if not class_dir.is_dir():
+            continue
+        for f in sorted(class_dir.rglob("*")):
+            if f.is_file() and f.suffix.lower() in _IMAGE_EXTS:
+                paths.append(str(f))
+                labels.append(class_idx)
+    return paths, labels
 
-    train_paths, val_paths, train_labels, val_labels = train_test_split(
-        all_paths, all_labels,
-        test_size=validation_split,
-        stratify=all_labels,
-        random_state=seed,
+
+def _dataset(
+    paths: list[str],
+    labels: list[int],
+    class_names: list[str],
+    cfg: CVBenchConfig,
+    training: bool,
+    transforms: list | None = None,
+) -> tf.data.Dataset:
+    one_hot = np.eye(len(class_names), dtype=np.float32)[np.asarray(labels, dtype=np.int64)]
+    return build_image_dataset(
+        paths,
+        one_hot,
+        image_size=cfg.model.input_size,
+        batch_size=cfg.data.batch_size,
+        training=training,
+        seed=cfg.training.seed,
+        transforms=transforms,
     )
-
-    paths, label_indices = (
-        (train_paths, train_labels) if subset == "training" else (val_paths, val_labels)
-    )
-
-    one_hot_labels = tf.one_hot(label_indices, len(class_names))
-    ds = tf.data.Dataset.from_tensor_slices((tf.constant(paths), one_hot_labels))
-
-    if shuffle:
-        ds = ds.shuffle(len(paths), seed=seed, reshuffle_each_iteration=True)
-
-    def load(path, label):
-        img = tf.io.read_file(path)
-        img = tf.image.decode_image(img, channels=3, expand_animations=False)
-        img = tf.image.resize(img, image_size)
-        img = tf.cast(img, tf.float32)
-        return img, label
-
-    return ds.map(load, num_parallel_calls=tf.data.AUTOTUNE).cache().batch(batch_size)
 
 
 def build_dataset(
@@ -79,6 +62,7 @@ def build_dataset(
     class_names: list[str],
     cfg: CVBenchConfig,
     training: bool = False,
+    transforms: list | None = None,
 ) -> tf.data.Dataset:
     """Build a tf.data pipeline from an image directory.
 
@@ -86,49 +70,33 @@ def build_dataset(
         directory: Path containing one subdirectory per class.
         class_names: Ordered list of class names (derived from train dir).
         cfg: Resolved experiment config.
-        training: If True, apply shuffle and repeat; if False, no shuffle.
+        training: If True, shuffle every epoch, augment and repeat.
+        transforms: Augmentation transforms applied when training.
 
     Returns:
-        Batched, prefetched tf.data.Dataset yielding (image, label) pairs.
+        Batched, prefetched tf.data.Dataset yielding (image, one-hot label) pairs.
         Images are RGB float32 in [0, 255] — the model's Rescaling layer normalizes.
     """
-    size = cfg.model.input_size
-    batch = cfg.data.batch_size
-
-    ds = tf.keras.utils.image_dataset_from_directory(
-        directory,
-        labels="inferred",
-        label_mode="categorical",
-        class_names=class_names,
-        image_size=(size, size),
-        batch_size=batch,
-        shuffle=training,
-        seed=cfg.training.seed if training else None,
-    )
-
-    ds = ds.cache()
-
-    if training:
-        ds = ds.repeat()
-
-    return ds.prefetch(tf.data.AUTOTUNE)
+    paths, labels = list_labeled_images(directory, class_names)
+    return _dataset(paths, labels, class_names, cfg, training, transforms)
 
 
 def build_datasets(
     cfg: CVBenchConfig,
+    transforms: list | None = None,
 ) -> tuple[tf.data.Dataset, tf.data.Dataset, list[str], int]:
     """Build train and val datasets and return class names and training sample count.
 
-    When val/ directory is absent, splits training data using cfg.data.val_split.
+    When val/ directory is absent, splits training data using cfg.data.val_split
+    (stratified, so every class is proportionally represented in both subsets).
+    TRANSFORMS augment the training dataset only.
 
     Returns:
         (train_ds, val_ds, class_names, num_train_samples)
     """
     class_names = get_class_names(cfg.data.train_dir)
-    size = cfg.model.input_size
-    batch = cfg.data.batch_size
-
-    total_train = sum(1 for _ in Path(cfg.data.train_dir).glob("*/*"))
+    all_paths, all_labels = list_labeled_images(cfg.data.train_dir, class_names)
+    total_train = len(all_paths)
 
     if os.path.isdir(cfg.data.val_dir):
         if cfg.data.val_split_explicit:
@@ -136,45 +104,27 @@ def build_datasets(
                 f"--val-split ignored: a val/ directory was found at {cfg.data.val_dir!r}."
                 " Remove val/ or omit --val-split to silence this warning."
             )
-        n_val = sum(1 for _ in Path(cfg.data.val_dir).glob("*/*"))
-        with contextlib.redirect_stdout(io.StringIO()):
-            train_ds = build_dataset(cfg.data.train_dir, class_names, cfg, training=True)
-            val_ds = build_dataset(cfg.data.val_dir, class_names, cfg, training=False)
+        val_paths, val_labels = list_labeled_images(cfg.data.val_dir, class_names)
+        train_paths, train_labels = all_paths, all_labels
         print(_console.dim(f" Found {total_train} files for training ({len(class_names)} classes)."))
-        print(_console.dim(f" Found {n_val} files for validation ({len(class_names)} classes)."))
-        num_train_samples = total_train
+        print(_console.dim(f" Found {len(val_paths)} files for validation ({len(class_names)} classes)."))
     else:
         split = cfg.data.val_split
         pct_train = int((1 - split) * 100)
         pct_val = int(split * 100)
-        seed = cfg.training.seed if cfg.training.seed is not None else random.randint(0, 2**31 - 1)
-
-        common_kwargs = dict(
-            labels="inferred",
-            label_mode="categorical",
-            class_names=class_names,
-            image_size=(size, size),
-            batch_size=batch,
-            seed=seed,
-            validation_split=split,
+        train_paths, val_paths, train_labels, val_labels = train_test_split(
+            all_paths, all_labels,
+            test_size=split,
+            stratify=all_labels,
+            random_state=cfg.training.seed,
         )
-        train_ds = (
-            stratified_image_dataset_from_directory(
-                cfg.data.train_dir, subset="training", shuffle=True, **common_kwargs
-            )
-            .repeat()
-            .prefetch(tf.data.AUTOTUNE)
-        )
-        val_ds = stratified_image_dataset_from_directory(
-            cfg.data.train_dir, subset="validation", shuffle=False, **common_kwargs
-        ).prefetch(tf.data.AUTOTUNE)
-        num_train_samples = math.floor(total_train * (1 - split))
-        n_val_samples = total_train - num_train_samples
         print(_console.dim(
             f" Found {total_train} files belonging to {len(class_names)} classes"
             f" — auto-splitting ({pct_train}/{pct_val})"
         ))
-        print(_console.dim(f"   ├─ {num_train_samples} for training"))
-        print(_console.dim(f"   └─ {n_val_samples} for validation"))
+        print(_console.dim(f"   ├─ {len(train_paths)} for training"))
+        print(_console.dim(f"   └─ {len(val_paths)} for validation"))
 
-    return train_ds, val_ds, class_names, num_train_samples
+    train_ds = _dataset(train_paths, train_labels, class_names, cfg, True, transforms)
+    val_ds = _dataset(val_paths, val_labels, class_names, cfg, False)
+    return train_ds, val_ds, class_names, len(train_paths)

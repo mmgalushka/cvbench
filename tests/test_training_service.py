@@ -103,7 +103,6 @@ def test_run_training_marks_status_failed_when_training_loop_crashes(tmp_path, m
     exp_dir = tmp_path / "crashed_run"
     monkeypatch.setattr(training_service, "detect_task_name", lambda data_dir: "classification")
     monkeypatch.setattr(training_service, "get_task", lambda name: _TrainingCrashTask())
-    monkeypatch.setattr(training_service, "apply_augmentation", lambda ds, t: ds)
 
     def _boom(**kwargs):
         raise RuntimeError("simulated crash in training loop")
@@ -133,7 +132,6 @@ def test_run_training_rejects_unsafe_run_name(tmp_path):
 def _patch_ok_task(monkeypatch):
     monkeypatch.setattr(training_service, "detect_task_name", lambda data_dir: "classification")
     monkeypatch.setattr(training_service, "get_task", lambda name: _TrainingCrashTask())
-    monkeypatch.setattr(training_service, "apply_augmentation", lambda ds, t: ds)
     calls = []
     monkeypatch.setattr(training_service._trainer, "train", lambda **kw: calls.append(kw))
     return calls

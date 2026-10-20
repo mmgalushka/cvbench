@@ -1,4 +1,4 @@
-import random
+import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -18,28 +18,42 @@ _KERAS_MAP: dict[str, tuple[type, dict[str, Any]]] = {
     "keras_noise":       (keras.layers.GaussianNoise,     {"stddev": 0.05}),
 }
 
+# Upper bound for seeds handed to aug_* functions (np.random.default_rng and
+# random.Random both accept any non-negative int; keep it in uint32 range).
+_SEED_BOUND = 2**32
 
-def build_aug_pipeline(transforms: list) -> Callable:
+Step = tuple[Callable[[np.ndarray, np.random.Generator], np.ndarray], float]
+
+
+def build_aug_pipeline(transforms: list, seed: int | None = None) -> Callable:
     """
     Build an augmentation pipeline from a list of TransformConfig / OneOfConfig objects.
 
-    Returns apply(img: np.ndarray float32 [0,255]) -> np.ndarray float32 [0,255].
+    Returns apply(img: np.ndarray float32 [0,255], HxWxC) -> np.ndarray float32 [0,255].
     Each step fires independently with its own prob; one_of groups pick one candidate.
+    Every random decision draws from one generator seeded with SEED (a fresh
+    seed when None), so the same SEED replays the same sequence of outputs.
     """
-    steps = []
+    steps: list[Step] = []
     for t in transforms:
         if isinstance(t, OneOfConfig):
             steps.append((_make_one_of_fn(t.candidates), t.prob))
         else:
             steps.append((_resolve(t.name, t.params), t.prob))
 
+    rng = np.random.default_rng(seed)
+
     def apply(img):
-        for fn, prob in steps:
-            if random.random() < prob:
-                img = fn(img)
-        return img
+        return _run_steps(steps, img, rng)
 
     return apply
+
+
+def _run_steps(steps: list[Step], img: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    for fn, prob in steps:
+        if rng.random() < prob:
+            img = fn(img, rng)
+    return img
 
 
 def _make_one_of_fn(candidates: list):
@@ -47,47 +61,52 @@ def _make_one_of_fn(candidates: list):
     fns_weights = [(_resolve(c.name, c.params), c.weight) for c in candidates]
     total = sum(w for _, w in fns_weights)
 
-    def one_of_fn(img):
-        r = random.uniform(0, total)
+    def one_of_fn(img, rng):
+        r = rng.uniform(0, total)
         cumul = 0.0
         for fn, w in fns_weights:
             cumul += w
             if r <= cumul:
-                return fn(img)
-        return fns_weights[-1][0](img)
+                return fn(img, rng)
+        return fns_weights[-1][0](img, rng)
 
     return one_of_fn
 
 
-def build_keras_aug_fn(transforms: list):
+def build_keras_aug_fn(transforms: list, seed: int | None = None):
     """
-    Build a tf-graph-compatible function from keras_* transforms only.
+    Build a tf-graph-compatible per-image function from keras_* transforms only.
 
-    Returns a callable suitable for use directly in tf.data.map (no numpy_function
-    wrapper needed), or None if the list contains no keras_* transforms.
+    Returns apply(img (H, W, C), element_seed int64 scalar) -> img, suitable for
+    use directly in tf.data.map (no numpy_function wrapper needed), or None if
+    the list contains no keras_* transforms. Each step's prob gate is a
+    stateless draw from ELEMENT_SEED, so it is decided per image and replays
+    under the same seed. SEED seeds the layers' own random transformations.
     Keras preprocessing layers must be applied this way — calling them inside
     tf.numpy_function strips graph context and causes internal shape errors.
     """
     import tensorflow as tf
 
-    keras_steps = []
+    keras_steps: list[tuple[keras.layers.Layer, float]] = []
     for t in transforms:
         if isinstance(t, OneOfConfig):
             continue  # one_of groups contain only aug_* custom transforms
         if t.name in _KERAS_MAP:
             cls, defaults = _KERAS_MAP[t.name]
             merged = {**defaults, **t.params}
-            layer = cls(**merged)
-            keras_steps.append((layer, float(t.prob)))
+            if seed is not None:
+                merged.setdefault("seed", seed + len(keras_steps))
+            keras_steps.append((cls(**merged), float(t.prob)))
 
     if not keras_steps:
         return None
 
-    def apply(x):
-        for layer, prob in keras_steps:
+    def apply(x, element_seed):
+        for i, (layer, prob) in enumerate(keras_steps):
+            gate = tf.random.stateless_uniform((), seed=tf.stack([element_seed, tf.constant(i, tf.int64)]))
             x = tf.cond(
-                tf.random.uniform(()) < prob,
-                true_fn=lambda x=x, layer=layer: layer(x, training=True),
+                gate < prob,
+                true_fn=lambda x=x, layer=layer: layer(x[None], training=True)[0],
                 false_fn=lambda x=x: x,
             )
         return x
@@ -97,12 +116,14 @@ def build_keras_aug_fn(transforms: list):
 
 def build_custom_aug_fn(transforms: list):
     """
-    Build a numpy-compatible function from aug_* transforms only.
+    Build a numpy-compatible per-image function from aug_* transforms only.
 
-    Returns apply(img: np.ndarray) -> np.ndarray, or None if the list contains
-    no aug_* transforms.
+    Returns apply(img: np.ndarray (H, W, C), rng: np.random.Generator) -> np.ndarray,
+    or None if the list contains no aug_* transforms. Every random decision —
+    prob gates, one_of picks, sampled params and the aug_* functions' own
+    seeds — draws from RNG.
     """
-    steps = []
+    steps: list[Step] = []
     for t in transforms:
         if isinstance(t, OneOfConfig):
             aug_candidates = [c for c in t.candidates if c.name.startswith("aug_")]
@@ -114,13 +135,30 @@ def build_custom_aug_fn(transforms: list):
     if not steps:
         return None
 
-    def apply(img):
-        for fn, prob in steps:
-            if random.random() < prob:
-                img = fn(img)
-        return img
+    def apply(img, rng):
+        return _run_steps(steps, img, rng)
 
     return apply
+
+
+def _sample_params(params: dict, rng: np.random.Generator) -> dict:
+    """Draw one value for each ranged/choice param; pass fixed values through."""
+    resolved = {}
+    for k, v in params.items():
+        if isinstance(v, (list, tuple)) and len(v) >= 2 and all(isinstance(e, str) for e in v):
+            resolved[k] = v[int(rng.integers(len(v)))]
+        elif isinstance(v, (list, tuple)) and len(v) == 2:
+            lo, hi = v
+            # bool must be checked before int — bool is a subclass of int
+            if isinstance(lo, bool) or isinstance(hi, bool):
+                resolved[k] = v[int(rng.integers(2))]
+            elif isinstance(lo, int) and isinstance(hi, int):
+                resolved[k] = int(rng.integers(lo, hi + 1))
+            else:
+                resolved[k] = float(rng.uniform(float(lo), float(hi)))
+        else:
+            resolved[k] = v
+    return resolved
 
 
 def _resolve(name: str, params: dict) -> Callable:
@@ -129,10 +167,8 @@ def _resolve(name: str, params: dict) -> Callable:
         merged = {**defaults, **params}
         layer = cls(**merged)
 
-        def keras_fn(img, _layer=layer):
-            if img.ndim == 3:
-                return _layer(img[None], training=True)[0].numpy()
-            return _layer(img, training=True).numpy()
+        def keras_fn(img, rng, _layer=layer):
+            return _layer(img[None], training=True)[0].numpy()
 
         return keras_fn
 
@@ -143,31 +179,18 @@ def _resolve(name: str, params: dict) -> Callable:
             available = [n for n in dir(aug_mod) if n.startswith("aug_")]
             raise ValueError(f"Unknown augmentation '{name}'. Available: {available}")
 
-        def _resolve_params(_params):
-            resolved = {}
-            for k, v in _params.items():
-                if isinstance(v, (list, tuple)) and len(v) >= 2 and all(isinstance(e, str) for e in v):
-                    resolved[k] = random.choice(v)
-                elif isinstance(v, (list, tuple)) and len(v) == 2:
-                    lo, hi = v
-                    # bool must be checked before int — bool is a subclass of int
-                    if isinstance(lo, bool) or isinstance(hi, bool):
-                        resolved[k] = random.choice(v)
-                    elif isinstance(lo, int) and isinstance(hi, int):
-                        resolved[k] = random.randint(lo, hi)
-                    else:
-                        resolved[k] = random.uniform(float(lo), float(hi))
-                else:
-                    resolved[k] = v
-            return resolved
+        # An aug_* function with its own `seed` gets one drawn from the
+        # pipeline's generator, so its internal randomness replays too.
+        try:
+            takes_seed = "seed" in inspect.signature(fn).parameters and "seed" not in params
+        except (TypeError, ValueError):
+            takes_seed = False
 
-        def custom_fn(img, _fn=fn, _params=params):
-            if img.ndim == 4:
-                return np.stack([
-                    _fn(im.astype(np.uint8), **_resolve_params(_params)).astype(np.float32)
-                    for im in img
-                ])
-            return _fn(img.astype(np.uint8), **_resolve_params(_params)).astype(np.float32)
+        def custom_fn(img, rng, _fn=fn, _params=params):
+            kwargs = _sample_params(_params, rng)
+            if takes_seed:
+                kwargs["seed"] = int(rng.integers(_SEED_BOUND))
+            return _fn(img.astype(np.uint8), **kwargs).astype(np.float32)
 
         return custom_fn
 

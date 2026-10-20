@@ -6,7 +6,6 @@ import sys
 from datetime import date
 
 from cvbench.core import trainer as _trainer
-from cvbench.core.augment import apply_augmentation
 from cvbench.core.config import (
     LossConfig,
     LRSchedulerConfig,
@@ -138,7 +137,6 @@ def run_training(
     if resume and not os.path.isfile(resume):
         raise FileNotFoundError(f"Resume checkpoint not found: {resume}")
     train_ds, val_ds, num_train = task.build_datasets(cfg, spec)
-    train_ds = apply_augmentation(train_ds, task.filter_transforms(cfg.augmentation.transforms))
     model = task.build_model(cfg)
 
     if overwrite and not resume and os.path.isdir(exp_dir):

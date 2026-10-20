@@ -17,12 +17,13 @@ from cvbench.augmentations.tone import aug_fog, aug_gamma
 from cvbench.augmentations.transmission import aug_rf_transmission
 from cvbench.core.config import TransformConfig
 
-# TF's image_dataset_from_directory always produces explicit channel dim:
-# grayscale -> (H, W, 1), colour -> (H, W, 3); batches add B as the first axis.
+# Images always carry an explicit channel dim: grayscale -> (H, W, 1),
+# colour -> (H, W, 3). The training pipeline hands the augmentation pipeline
+# one float32 image at a time, never a batch.
 GRAY = np.full((16, 16, 1), 128, dtype=np.uint8)
 COLOR = np.full((16, 16, 3), 128, dtype=np.uint8)
-BATCH_GRAY = np.full((4, 16, 16, 1), 128, dtype=np.float32)
-BATCH_COLOR = np.full((4, 16, 16, 3), 128, dtype=np.float32)
+FLOAT_GRAY = GRAY.astype(np.float32)
+FLOAT_COLOR = COLOR.astype(np.float32)
 
 
 @pytest.mark.parametrize("img", [GRAY, COLOR], ids=["gray", "color"])
@@ -97,44 +98,44 @@ class TestEachAugFunction:
         assert out.shape == img.shape
 
 
-@pytest.mark.parametrize("batch", [BATCH_GRAY, BATCH_COLOR], ids=["gray", "color"])
-class TestPipelineBatch:
-    """Pipeline receives batches (B, H, W) or (B, H, W, C) from tf.data."""
+@pytest.mark.parametrize("img", [FLOAT_GRAY, FLOAT_COLOR], ids=["gray", "color"])
+class TestPipelineSingleImage:
+    """Pipeline receives single float32 (H, W, C) images from tf.data."""
 
     def _t(self, name, **params):
         return TransformConfig(name=name, prob=1.0, params=params)
 
-    def test_blur_batch(self, batch):
+    def test_blur(self, img):
         fn = build_aug_pipeline([self._t("aug_blur", radius=1.0)])
-        out = fn(batch)
-        assert out.shape == batch.shape
+        out = fn(img)
+        assert out.shape == img.shape and out.dtype == np.float32
 
-    def test_salt_pepper_batch(self, batch):
+    def test_salt_pepper(self, img):
         fn = build_aug_pipeline([self._t("aug_salt_pepper", density=0.05)])
-        out = fn(batch)
-        assert out.shape == batch.shape
+        out = fn(img)
+        assert out.shape == img.shape and out.dtype == np.float32
 
-    def test_random_profile_h_batch(self, batch):
+    def test_random_profile_h(self, img):
         fn = build_aug_pipeline([self._t("aug_random_profile_h", n_changes=3, max_delta=20.0)])
-        out = fn(batch)
-        assert out.shape == batch.shape
+        out = fn(img)
+        assert out.shape == img.shape and out.dtype == np.float32
 
-    def test_random_profile_v_batch(self, batch):
+    def test_random_profile_v(self, img):
         fn = build_aug_pipeline([self._t("aug_random_profile_v", n_changes=3, max_delta=20.0)])
-        out = fn(batch)
-        assert out.shape == batch.shape
+        out = fn(img)
+        assert out.shape == img.shape and out.dtype == np.float32
 
-    def test_fade_horizontal_batch(self, batch):
+    def test_fade_horizontal(self, img):
         fn = build_aug_pipeline([self._t("aug_fade_horizontal", side="both", strength=0.5)])
-        out = fn(batch)
-        assert out.shape == batch.shape
+        out = fn(img)
+        assert out.shape == img.shape and out.dtype == np.float32
 
-    def test_gamma_batch(self, batch):
+    def test_gamma(self, img):
         fn = build_aug_pipeline([self._t("aug_gamma", gamma=1.2)])
-        out = fn(batch)
-        assert out.shape == batch.shape
+        out = fn(img)
+        assert out.shape == img.shape and out.dtype == np.float32
 
-    def test_rf_transmission_batch(self, batch):
+    def test_rf_transmission(self, img):
         fn = build_aug_pipeline([self._t("aug_rf_transmission", bandwidth=0.06)])
-        out = fn(batch)
-        assert out.shape == batch.shape
+        out = fn(img)
+        assert out.shape == img.shape and out.dtype == np.float32
