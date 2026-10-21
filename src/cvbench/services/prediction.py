@@ -119,15 +119,18 @@ def _infer_onnx(model_path: Path, images: list[str], size: int) -> list[list[np.
             "onnxruntime is required for ONNX inference. "
             "Install it with: pip install onnxruntime"
         ) from None
-    sess = ort.InferenceSession(str(model_path))
-    input_name = sess.get_inputs()[0].name
-    return [
-        [
-            np.asarray(o[0], dtype=np.float32)
-            for o in sess.run(None, {input_name: _load_image(p, size)})
+    try:
+        sess = ort.InferenceSession(str(model_path))
+        input_name = sess.get_inputs()[0].name
+        return [
+            [
+                np.asarray(o[0], dtype=np.float32)
+                for o in sess.run(None, {input_name: _load_image(p, size)})
+            ]
+            for p in images
         ]
-        for p in images
-    ]
+    except RuntimeError as e:  # onnxruntime raises RuntimeError subclasses for a broken model
+        raise ExportError(f"ONNX inference failed: {e}") from e
 
 
 def _infer_tflite(model_path: Path, images: list[str], size: int) -> list[list[np.ndarray]]:
@@ -135,18 +138,21 @@ def _infer_tflite(model_path: Path, images: list[str], size: int) -> list[list[n
         import tensorflow as tf
     except ImportError:
         raise ExportError("tensorflow is required for TFLite inference.") from None
-    interp = tf.lite.Interpreter(model_path=str(model_path))
-    interp.allocate_tensors()
-    inp = interp.get_input_details()
-    out = interp.get_output_details()
-    results = []
-    for p in images:
-        interp.set_tensor(inp[0]["index"], _load_image(p, size))
-        interp.invoke()
-        results.append([
-            np.asarray(interp.get_tensor(o["index"])[0], dtype=np.float32) for o in out
-        ])
-    return results
+    try:
+        interp = tf.lite.Interpreter(model_path=str(model_path))
+        interp.allocate_tensors()
+        inp = interp.get_input_details()
+        out = interp.get_output_details()
+        results = []
+        for p in images:
+            interp.set_tensor(inp[0]["index"], _load_image(p, size))
+            interp.invoke()
+            results.append([
+                np.asarray(interp.get_tensor(o["index"])[0], dtype=np.float32) for o in out
+            ])
+        return results
+    except RuntimeError as e:  # the TFLite interpreter raises RuntimeError for a broken model
+        raise ExportError(f"TFLite inference failed: {e}") from e
 
 
 def run_experiment_prediction(

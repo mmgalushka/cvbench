@@ -24,6 +24,12 @@ from cvbench.web.app import create_app  # noqa: E402
 
 @pytest.fixture
 def client():
+    return TestClient(create_app())
+
+
+@pytest.fixture
+def client_500():
+    """Client that returns unexpected server errors as 500 responses instead of re-raising them."""
     return TestClient(create_app(), raise_server_exceptions=False)
 
 
@@ -83,13 +89,14 @@ def test_conflict_error_maps_to_409(client, monkeypatch):
     assert resp.json() == {"detail": "A run named 'x' already exists."}
 
 
-def test_unexpected_exception_maps_to_500_json_and_is_logged(client, monkeypatch, caplog):
+def test_unexpected_exception_maps_to_500_json_and_is_logged(client_500, monkeypatch, caplog):
+
     def boom(_name, *_a, **_k):
         raise RuntimeError("kaboom")
 
     monkeypatch.setattr("cvbench.web.api.runs.resolve_run_dir", boom)
     with caplog.at_level("ERROR", logger="cvbench.web"):
-        resp = client.get("/api/runs/x")
+        resp = client_500.get("/api/runs/x")
     assert resp.status_code == 500
     assert resp.json() == {"detail": "kaboom"}
     assert any(r.name == "cvbench.web" and r.exc_info for r in caplog.records)
@@ -423,14 +430,14 @@ def test_create_export_runs_the_service_and_lists_the_result(client, cls_run, mo
     assert calls == [("cls_run", "tflite", "float16", {"calib_total": 1024, "calib_strategy": "stratified"})]
 
 
-def test_create_export_service_failure_is_500(client, cls_run, monkeypatch):
+def test_create_export_service_failure_is_500(client_500, cls_run, monkeypatch):
     (cls_run / "best.keras").write_bytes(b"checkpoint")
 
     def failing(*_a, **_k):
         raise RuntimeError("converter exploded")
 
     monkeypatch.setattr("cvbench.services.export.run_export", failing)
-    resp = client.post("/api/runs/cls_run/exports", json={"format": "onnx"})
+    resp = client_500.post("/api/runs/cls_run/exports", json={"format": "onnx"})
     assert resp.status_code == 500 and resp.json()["detail"] == "converter exploded"
 
 
@@ -573,8 +580,8 @@ def test_predict_xai_returns_a_heatmap(client, cls_run_with_model):
 
 
 @pytest.mark.tf
-def test_predict_xai_corrupt_image_is_500(client, cls_run_with_model):
-    resp = client.post(
+def test_predict_xai_corrupt_image_is_500(client_500, cls_run_with_model):
+    resp = client_500.post(
         "/api/predict/xai", data={"run": "cls_run", "class_index": 0},
         files={"file": ("a.png", b"not an image")},
     )
@@ -608,6 +615,6 @@ def test_gradcam_returns_a_heatmap(client, cls_run_with_model):
 
 
 @pytest.mark.tf
-def test_gradcam_bad_class_index_is_500(client, cls_run_with_model):
-    resp = _gradcam(client, image_path=_first_test_image(cls_run_with_model), class_index=999)
+def test_gradcam_bad_class_index_is_500(client_500, cls_run_with_model):
+    resp = _gradcam(client_500, image_path=_first_test_image(cls_run_with_model), class_index=999)
     assert resp.status_code == 500
