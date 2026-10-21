@@ -16,11 +16,6 @@ from cvbench.detection import predict as _predict
 from cvbench.detection import view as _view
 from cvbench.detection.anchors import resolve_anchors
 
-# EfficientNet's Swish/SiLU activations are known to quantize poorly to
-# INT8 — detection defaults to a pure-ReLU backbone instead, unless the user
-# passed --backbone explicitly (classification keeps its own default).
-_DEFAULT_DETECTION_BACKBONE = "resnet_18"
-
 # The 5 geometric transforms move pixels, so they'd desynchronize an image
 # from its (untouched) boxes. The 18 custom aug_* transforms and the 3
 # photometric keras_* ones (brightness/contrast/noise) are box-safe.
@@ -32,6 +27,9 @@ _GEOMETRIC_KERAS_TRANSFORMS = frozenset({
 class DetectionTask(Task):
     name = "detection"
     short_name = "det"
+    # EfficientNet's Swish/SiLU activations quantize poorly to INT8, so detection
+    # defaults to a pure-ReLU backbone.
+    default_backbone = "resnet_18"
     primary_metric = MetricSpec("map50", "mAP@50", "max")
     sweep_metric = "map50"
     selection_metric_names = ("val_loss", "map50")
@@ -54,9 +52,6 @@ class DetectionTask(Task):
         class_names = yolo_class_names(root)
         cfg.data.classes = class_names
         cfg.model.num_classes = len(class_names)
-
-        if not cfg.model.backbone_explicit:
-            cfg.model.backbone = _DEFAULT_DETECTION_BACKBONE
 
         train_dir = root / "images" / "train"
         val_dir = root / "images" / "val"

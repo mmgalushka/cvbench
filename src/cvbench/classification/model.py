@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import keras
 
-from cvbench.core.backbone import build_backbone_stem, build_optimizer
+from cvbench.core.backbone import build_stem
 from cvbench.core.config import CVBenchConfig, LossConfig
+from cvbench.core.optim import build_optimizer
 
 
 def _build_loss(loss_cfg: LossConfig) -> keras.losses.Loss:
@@ -26,7 +27,7 @@ def build_model(cfg: CVBenchConfig) -> keras.Model:
     Returns:
         Compiled keras.Model ready for training.
     """
-    inputs, backbone, x = build_backbone_stem(cfg)
+    inputs, backbone, x = build_stem(cfg)
 
     x = keras.layers.GlobalAveragePooling2D()(x)
     x = keras.layers.Dropout(cfg.model.dropout)(x)

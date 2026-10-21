@@ -23,6 +23,7 @@ _NEAR_CHANCE_MARGIN = 0.10
 class ClassificationTask(Task):
     name = "classification"
     short_name = "cls"
+    default_backbone = "efficientnet_b0"
     primary_metric = MetricSpec("accuracy", "Accuracy", "max")
     sweep_metric = "val_loss"
     selection_metric_names = ("val_loss", "val_accuracy")

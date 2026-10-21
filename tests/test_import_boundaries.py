@@ -37,6 +37,18 @@ def test_datasets_package_does_not_import_tensorflow():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_backbone_registry_does_not_import_tensorflow():
+    code = (
+        "import sys\n"
+        "import cvbench.core.backbone as b\n"
+        "assert b.backbone_names()\n"
+        "bad = sorted(m for m in sys.modules if m.split('.')[0] in ('tensorflow', 'keras', 'keras_hub'))\n"
+        "assert not bad, bad\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_cli_package_never_imports_tensorflow_at_module_scope():
     # `commands` enumerates every CLI module to build the overview; if any of
     # them pulled TensorFlow at import time, the overview (and every --help)

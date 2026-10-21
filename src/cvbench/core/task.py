@@ -64,6 +64,7 @@ class Task(abc.ABC):
 
     name: ClassVar[str]
     short_name: ClassVar[str]  # run-name / table prefix, e.g. "cls"
+    default_backbone: ClassVar[str]  # backbone used when --backbone is not passed
     primary_metric: ClassVar[MetricSpec]  # the run's single headline test score
     sweep_metric: ClassVar[str]  # default selection metric of a sweep
     # Metrics a sweep may rank trials on — never the test score of a task that also has a

@@ -4,7 +4,6 @@ from click.testing import CliRunner
 
 from cvbench.cli import train as train_mod
 from cvbench.cli.train import train
-from cvbench.core.config import BACKBONE_NAMES
 from cvbench.datasets.layout import classification_layout_errors, detection_layout_errors
 
 
@@ -113,10 +112,21 @@ def test_missing_from_config_is_a_usage_error(data_dir, tmp_path):
     assert "--from" in result.output
 
 
-def test_backbone_names_match_presets():
-    from cvbench.core.backbone import _BACKBONE_PRESETS
+def test_backbone_flag_choices_come_from_the_registry():
+    from cvbench.core.backbone import backbone_names
 
-    assert set(BACKBONE_NAMES) == set(_BACKBONE_PRESETS)
+    result = CliRunner().invoke(train, ["data", "--backbone", "nope"])
+    assert result.exit_code == 2
+    assert all(name in result.output for name in backbone_names())
+
+
+def test_backbone_help_shows_the_task_defaults():
+    from cvbench.tasks import get_task
+
+    flat = " ".join(CliRunner().invoke(train, ["--help"]).output.split())
+    assert "task default (efficientnet_b0; resnet_18 for detection)" in flat
+    assert get_task("classification").default_backbone == "efficientnet_b0"
+    assert get_task("detection").default_backbone == "resnet_18"
 
 
 # ---- layout validators ------------------------------------------------------

@@ -11,6 +11,7 @@ class _CrashingTask:
     partway through run_training (before the real training loop even starts)."""
 
     name = "classification"
+    default_backbone = "efficientnet_b0"
     primary_metric = MetricSpec("accuracy", "Accuracy", "max")
 
     def validate_config(self, cfg):
@@ -168,3 +169,32 @@ def test_run_training_auto_names_run_under_experiments(tmp_path, monkeypatch):
     exp_dir = training_service.run_training(data_dir=str(tmp_path / "data"))
 
     assert exp_dir.endswith("auto_run") and calls
+
+
+def test_run_training_resolves_the_task_default_backbone_before_naming(tmp_path, monkeypatch):
+    calls = _patch_ok_task(monkeypatch)
+    monkeypatch.setattr(training_service, "EXPERIMENTS_DIR", str(tmp_path / "experiments"))
+    names = []
+
+    def _name(cfg):
+        names.append(cfg.model.backbone)
+        return "auto_run"
+
+    monkeypatch.setattr(training_service, "make_run_name", _name)
+
+    exp_dir = training_service.run_training(data_dir=str(tmp_path / "data"))
+
+    assert names == ["efficientnet_b0"]
+    assert load_config(exp_dir).model.backbone == "efficientnet_b0" and calls
+
+
+def test_run_training_keeps_an_explicit_backbone(tmp_path, monkeypatch):
+    _patch_ok_task(monkeypatch)
+    exp_dir = tmp_path / "run"
+
+    training_service.run_training(
+        data_dir=str(tmp_path / "data"), output_dir=str(exp_dir),
+        overrides={"model.backbone": "resnet_50"},
+    )
+
+    assert load_config(str(exp_dir)).model.backbone == "resnet_50"

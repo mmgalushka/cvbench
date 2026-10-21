@@ -18,7 +18,7 @@ def test_build_config_defaults():
     assert cfg.data.train_dir == "data/train"
     assert cfg.data.val_dir == "data/val"
     assert cfg.data.test_dir == "data/test"
-    assert cfg.model.backbone == "efficientnet_b0"
+    assert cfg.model.backbone == ""  # "" = the task default, resolved by run_training
     assert cfg.training.epochs == 10
     assert cfg.training.learning_rate == 1e-4
     assert cfg.augmentation.transforms == []
@@ -419,7 +419,7 @@ def test_apply_overrides_sets_nested_keys_and_parses_text():
     assert cfg.training.optimizer.weight_decay == 1e-4
     assert cfg.training.seed == 5 and cfg.training.interrupt.enabled is False
     assert cfg.training.class_weight == "auto"
-    assert cfg.model.backbone_explicit is True  # setting the backbone marks it as the user's choice
+    assert cfg.model.backbone == "resnet_18"
 
 
 def test_apply_overrides_none_for_optional_field():
@@ -473,3 +473,10 @@ def test_keys_removed_from_the_dataclasses_still_load(tmp_path):
         "task: detection\nmodel:\n  use_lcn: true\ntraining:\n  mixup:\n    alpha: 0.2\ndetection:\n  grid_stride: 4\n"
     )
     assert load_config(str(tmp_path)).task == "detection"
+
+
+def test_legacy_backbone_explicit_key_still_loads(tmp_path):
+    (tmp_path / "config.yaml").write_text(
+        "model:\n  backbone: resnet_18\n  backbone_explicit: true\n"
+    )
+    assert load_config(str(tmp_path)).model.backbone == "resnet_18"
