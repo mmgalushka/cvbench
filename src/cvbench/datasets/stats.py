@@ -27,7 +27,7 @@ def get_dataset_overview(data_dir: str | Path) -> dict[str, dict[str, int]]:
             split_dir = root / layout.IMAGES_DIRNAME / split_name
             if split_dir.is_dir():
                 overview[split_name] = {
-                    "images": len(layout.list_images(split_dir)),
+                    "images": len(layout.list_images(split_dir, recursive=True, exts=layout.READABLE_IMAGE_EXTS)),
                     "classes": n_classes,
                 }
         return overview
@@ -38,7 +38,7 @@ def get_dataset_overview(data_dir: str | Path) -> dict[str, dict[str, int]]:
             continue
         n_classes = sum(1 for p in split_dir.iterdir() if p.is_dir())
         overview[split_name] = {
-            "images": len(layout.list_images(split_dir)),
+            "images": len(layout.list_images(split_dir, recursive=True, exts=layout.READABLE_IMAGE_EXTS)),
             "classes": n_classes,
         }
     return overview

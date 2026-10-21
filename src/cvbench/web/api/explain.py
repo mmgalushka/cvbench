@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from cvbench.core.config import load_config
 from cvbench.core.exp_store import resolve_run_dir
+from cvbench.tasks import resolve_task
 
 router = APIRouter()
 
@@ -44,6 +45,7 @@ def gradcam(name: str, body: GradCamRequest):
         checkpoint=str(checkpoint),
         image_path=str(img_path),
         class_index=body.class_index,
+        task=resolve_task(cfg),
     )
 
     return JSONResponse({"heatmap_b64": heatmap_b64})

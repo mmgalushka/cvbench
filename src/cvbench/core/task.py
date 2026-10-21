@@ -169,20 +169,23 @@ class Task(abc.ABC):
     def build_model(self, cfg: CVBenchConfig) -> keras.Model:
         """Build and compile a model for this task."""
 
-    def load_model(self, path: str) -> keras.Model:
-        """Load a saved model for evaluation/prediction/export.
+    def custom_objects(self) -> dict[str, Any]:
+        """Custom losses/layers ``load_model`` needs to deserialize this task's models.
 
-        Overriding this is how a task forces the import of the module that
-        registers its custom losses/layers via
-        ``keras.saving.register_keras_serializable`` *before* deserialization
-        — Keras 3.5 only resolves a registered name if its defining module
-        has already been imported.
+        A method, not an attribute, so an override can import them lazily.
+        Passing them explicitly also forces the defining module to be imported
+        *before* deserialization — Keras 3.5 only resolves a name registered
+        via ``keras.saving.register_keras_serializable`` once its module is loaded.
         """
+        return {}
+
+    def load_model(self, path: str) -> keras.Model:
+        """Load a saved model for evaluation/prediction/export."""
         import keras
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
-            return keras.saving.load_model(path)
+            return keras.saving.load_model(path, custom_objects=self.custom_objects())
 
     # ---- reporting --------------------------------------------------------
 
@@ -212,9 +215,9 @@ class Task(abc.ABC):
         LISTENER receives an ``EvalProgress`` event per predicted batch.
         """
 
-    @abc.abstractmethod
     def test_score(self, report: dict) -> tuple[str, float | None]:
         """Return (metric_name, value) — the run's single primary test score."""
+        return self.primary_metric.name, report["overall"]["value"]
 
     # ---- prediction ---------------------------------------------------------
 

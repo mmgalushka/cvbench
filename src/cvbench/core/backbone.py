@@ -49,7 +49,7 @@ def build_optimizer(cfg: CVBenchConfig) -> keras.optimizers.Optimizer:
     )
 
 
-def _apply_freeze(backbone: keras.Model, fine_tune_from_layer: int) -> None:
+def apply_freeze(backbone: keras.Model, fine_tune_from_layer: int) -> None:
     # fine_tune_from_layer == 0  → fully frozen
     # fine_tune_from_layer == -1 → fully unfrozen
     # fine_tune_from_layer >  0  → layers[:N] frozen, rest trainable
@@ -75,7 +75,7 @@ def _load_backbone(cfg: CVBenchConfig, name: str | None = None) -> keras.Model:
     if name is not None:
         kwargs["name"] = name
     backbone = backbone_cls.from_preset(preset, **kwargs)
-    _apply_freeze(backbone, cfg.model.fine_tune_from_layer)
+    apply_freeze(backbone, cfg.model.fine_tune_from_layer)
     return backbone
 
 

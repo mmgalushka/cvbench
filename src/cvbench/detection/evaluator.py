@@ -53,7 +53,7 @@ def evaluate(
 
     test_path = Path(test_dir)
     label_dir = yolo_label_dir(test_path, Path(ds_root))
-    image_paths = list_images(test_path)
+    image_paths = list_images(test_path, recursive=True)
 
     # model.predict on a multi-output model returns a list of per-scale
     # arrays — accumulate each scale separately across batches.

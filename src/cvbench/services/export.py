@@ -4,16 +4,15 @@ import functools
 import json
 import os
 import random
-import warnings
 from datetime import datetime
 from pathlib import Path
-
-import keras
 
 from cvbench.core import _console
 from cvbench.core.config import load_config
 from cvbench.core.errors import ConfigError, DatasetError, ExportError, NotFoundError
 from cvbench.core.exp_store import resolve_run_dir
+from cvbench.datasets.layout import list_images
+from cvbench.tasks import resolve_task
 
 _TFLITE_QUANTIZE_SUFFIX = {"none": "", "float16": "_float16", "int8": "_int8"}
 
@@ -105,11 +104,7 @@ def _prepare_plan_package(run_dir: Path, cfg) -> Path:
     if onnx_path.exists():
         print(_console.dim("  Reusing   model.onnx"))
     else:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message="Skipping variable loading for optimizer"
-            )
-            model = keras.saving.load_model(str(run_dir / "best.keras"))
+        model = resolve_task(cfg).load_model(str(run_dir / "best.keras"))
         print(_console.dim("  Converting to ONNX (opset=13)..."))
         _export_onnx(model, onnx_path, cfg.model.input_size)
 
@@ -177,14 +172,6 @@ def _print_onnx_snippet(model_name: str, input_size: int) -> None:
     print()
 
 
-def _collect_images(directory: Path) -> list[Path]:
-    exts = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.JPG", "*.JPEG", "*.PNG")
-    files: list[Path] = []
-    for ext in exts:
-        files.extend(directory.rglob(ext))
-    return files
-
-
 def _build_calibration_set(
     cfg, output_path: Path, total: int = 1024, strategy: str = "stratified"
 ) -> tuple[int, int]:
@@ -203,12 +190,12 @@ def _build_calibration_set(
     class_dirs = sorted(p for p in source_dir.iterdir() if p.is_dir())
     if class_dirs:
         per_class: dict[str, list[Path]] = {
-            d.name: _collect_images(d) for d in class_dirs
+            d.name: list_images(d, recursive=True) for d in class_dirs
         }
         per_class = {k: v for k, v in per_class.items() if v}
     else:
         # Flat dataset — treat as a single bucket.
-        all_files = _collect_images(source_dir)
+        all_files = list_images(source_dir, recursive=True)
         per_class = {"_all": all_files}
 
     if not per_class:
@@ -340,11 +327,7 @@ def _prepare_hailo_package(
     if tflite_path.exists():
         print(_console.dim("  Reusing   model.tflite"))
     else:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message="Skipping variable loading for optimizer"
-            )
-            model = keras.saving.load_model(str(run_dir / "best.keras"))
+        model = resolve_task(cfg).load_model(str(run_dir / "best.keras"))
         print(_console.dim("  Converting to TFLite (float32)..."))
         _export_tflite(model, tflite_path, quantize="none")
 
@@ -553,11 +536,7 @@ def run_export(
     print(_console.rule())
     print(_console.dim(f"  Loading   {checkpoint}"))
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message="Skipping variable loading for optimizer"
-        )
-        model = keras.saving.load_model(str(checkpoint))
+    model = resolve_task(cfg).load_model(str(checkpoint))
 
     if format == "tflite":
         model_filename = (

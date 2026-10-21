@@ -21,7 +21,6 @@ from cvbench.datasets import split as split_mod
 from cvbench.datasets.catalog import scan_datasets
 from cvbench.datasets.stats import print_class_distribution
 
-_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
 _TOKEN_LEN = 16
 _MAX_RETRIES = 10
 
@@ -148,7 +147,7 @@ def _explore_split(split_dir: Path, bad: set[Path]) -> bool:
         raise click.ClickException(f"No class subdirectories found in '{split_dir}'")
 
     all_images = {
-        cls_dir: [f for f in cls_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS]
+        cls_dir: layout_mod.list_images(cls_dir, exts=layout_mod.READABLE_IMAGE_EXTS)
         for cls_dir in class_dirs
     }
     readable = {cls_dir: [f for f in images if f not in bad] for cls_dir, images in all_images.items()}
@@ -255,7 +254,8 @@ def explore(data_dir, split):
     root = Path(data_dir)
     if not root.is_dir():
         raise click.ClickException(f"Dataset directory not found: '{root}'")
-    with _console.progress(len(layout_mod.list_images(root)), "Checking integrity") as advance:
+    n_images = len(layout_mod.list_images(root, recursive=True, exts=layout_mod.READABLE_IMAGE_EXTS))
+    with _console.progress(n_images, "Checking integrity") as advance:
         issues = prep_mod.find_integrity_issues(root, progress=advance)
     bad = {root / rel for rel, _ in issues.corrupt}
 
@@ -359,7 +359,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
     if not src.is_dir():
         raise click.ClickException(f"Source directory not found: '{src}'")
 
-    images = sorted(f for f in src.iterdir() if f.suffix.lower() in _IMAGE_EXTS)
+    images = layout_mod.list_images(src, exts=layout_mod.READABLE_IMAGE_EXTS)
     if not images:
         raise click.ClickException(f"No images found in '{src}'")
 
@@ -372,7 +372,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
         )
 
     if dst.exists():
-        existing = [f for f in dst.iterdir() if f.suffix.lower() in _IMAGE_EXTS]
+        existing = layout_mod.list_images(dst, exts=layout_mod.READABLE_IMAGE_EXTS)
         if existing:
             raise click.ClickException(
                 f"Destination '{dst}' already contains {len(existing)} image(s). "
@@ -507,7 +507,8 @@ def prep(src, dst, no_hash, no_duplicates, on_incompatible, dry_run):
             "Provide an empty or non-existent directory."
         )
 
-    with _console.progress(len(layout_mod.list_images(src_dir)), "Scanning") as advance:
+    n_images = len(layout_mod.list_images(src_dir, recursive=True, exts=layout_mod.READABLE_IMAGE_EXTS))
+    with _console.progress(n_images, "Scanning") as advance:
         plan = prep_mod.build_plan(
             src_dir, hash_names=not no_hash, remove_duplicates=no_duplicates, progress=advance,
             on_incompatible=on_incompatible,

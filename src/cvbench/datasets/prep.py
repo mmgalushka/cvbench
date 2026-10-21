@@ -201,7 +201,8 @@ def find_integrity_issues(src: Path, progress: Callable[[int], None] | None = No
 
     PROGRESS, if given, is called with 1 per image scanned.
     """
-    groups, corrupt, incompatible = _find_corrupt(src, layout.list_images(src), progress)
+    images = layout.list_images(src, recursive=True, exts=layout.READABLE_IMAGE_EXTS)
+    groups, corrupt, incompatible = _find_corrupt(src, images, progress)
     conflicts = _find_label_conflicts(src, groups, layout.is_yolo_dataset(src))
     leaks = {
         h: leak
@@ -235,7 +236,7 @@ def build_plan(
     ``plan.label_conflicts``.
     """
     is_yolo = layout.is_yolo_dataset(src)
-    images = layout.list_images(src)
+    images = layout.list_images(src, recursive=True, exts=layout.READABLE_IMAGE_EXTS)
     groups, corrupt, incompatible = _find_corrupt(src, images, progress)
 
     plan = PrepPlan(

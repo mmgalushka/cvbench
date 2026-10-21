@@ -10,8 +10,10 @@ pytestmark = pytest.mark.tf
 
 from cvbench.core.errors import ConfigError
 from cvbench.services import gradcam  # noqa: E402
+from cvbench.tasks import get_task  # noqa: E402
 
 SIZE = 32
+TASK = get_task("classification")
 
 
 def _flat_model(n_classes=3, activation="relu"):
@@ -69,7 +71,7 @@ def _decode(b64: str) -> np.ndarray:
 def test_compute_gradcam_returns_a_model_sized_rgb_png(build, tmp_path, image_path):
     checkpoint = _save(build(), tmp_path)
 
-    out = _decode(gradcam.compute_gradcam(checkpoint, image_path, class_index=1))
+    out = _decode(gradcam.compute_gradcam(checkpoint, image_path, class_index=1, task=TASK))
 
     assert out.shape == (SIZE, SIZE, 3) and out.dtype == np.uint8
 
@@ -77,8 +79,8 @@ def test_compute_gradcam_returns_a_model_sized_rgb_png(build, tmp_path, image_pa
 def test_compute_gradcam_is_deterministic(tmp_path, image_path):
     checkpoint = _save(_nested_model(), tmp_path)
 
-    first = gradcam.compute_gradcam(checkpoint, image_path, 0)
-    assert gradcam.compute_gradcam(checkpoint, image_path, 0) == first
+    first = gradcam.compute_gradcam(checkpoint, image_path, 0, TASK)
+    assert gradcam.compute_gradcam(checkpoint, image_path, 0, TASK) == first
 
 
 def test_gradcam_depends_on_the_target_class(tmp_path, image_path):
@@ -86,7 +88,7 @@ def test_gradcam_depends_on_the_target_class(tmp_path, image_path):
     model.layers[-1].set_weights([np.eye(4, 3, dtype="float32"), np.zeros(3, "float32")])  # class c <- channel c
     checkpoint = _save(model, tmp_path)
 
-    by_class = {gradcam.compute_gradcam(checkpoint, image_path, c) for c in range(3)}
+    by_class = {gradcam.compute_gradcam(checkpoint, image_path, c, TASK) for c in range(3)}
 
     assert len(by_class) > 1
 
@@ -97,11 +99,11 @@ def test_compute_gradcam_from_bytes_matches_the_path_variant_and_cleans_up(tmp_p
         raw = f.read()
     seen = []
     real = gradcam.compute_gradcam
-    monkeypatch.setattr(gradcam, "compute_gradcam", lambda c, p, i: seen.append(p) or real(c, p, i))
+    monkeypatch.setattr(gradcam, "compute_gradcam", lambda c, p, i, t: seen.append(p) or real(c, p, i, t))
 
-    via_bytes = gradcam.compute_gradcam_from_bytes(checkpoint, raw, 2)
+    via_bytes = gradcam.compute_gradcam_from_bytes(checkpoint, raw, 2, TASK)
 
-    assert via_bytes == real(checkpoint, image_path, 2)
+    assert via_bytes == real(checkpoint, image_path, 2, TASK)
     import os
     assert len(seen) == 1 and not os.path.exists(seen[0])
 
@@ -109,7 +111,7 @@ def test_compute_gradcam_from_bytes_matches_the_path_variant_and_cleans_up(tmp_p
 def test_compute_gradcam_from_bytes_cleans_up_when_the_model_fails(tmp_path, monkeypatch):
     seen = []
 
-    def failing(_checkpoint, path, _index):
+    def failing(_checkpoint, path, _index, _task):
         seen.append(path)
         raise RuntimeError("boom")
 
@@ -118,7 +120,7 @@ def test_compute_gradcam_from_bytes_cleans_up_when_the_model_fails(tmp_path, mon
     Image.new("RGB", (8, 8)).save(buf, format="PNG")
 
     with pytest.raises(RuntimeError, match="boom"):
-        gradcam.compute_gradcam_from_bytes("ignored.keras", buf.getvalue(), 0)
+        gradcam.compute_gradcam_from_bytes("ignored.keras", buf.getvalue(), 0, TASK)
 
     import os
     assert not os.path.exists(seen[0])
@@ -128,7 +130,7 @@ def test_compute_gradcam_requires_a_conv_layer(tmp_path, image_path):
     checkpoint = _save(_dense_only_model(), tmp_path)
 
     with pytest.raises(ConfigError, match="No Conv2D layer"):
-        gradcam.compute_gradcam(checkpoint, image_path, 0)
+        gradcam.compute_gradcam(checkpoint, image_path, 0, TASK)
 
 
 def test_find_backbone_and_last_conv():

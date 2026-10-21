@@ -69,7 +69,7 @@ def _classification_pool(src: Path) -> dict[str, list[Path]]:
     """class name -> image paths, read from a flat pool (SRC/<class>/*)."""
     pool: dict[str, list[Path]] = defaultdict(list)
     for cls_dir in sorted(p for p in src.iterdir() if p.is_dir()):
-        pool[cls_dir.name].extend(layout.list_images(cls_dir))
+        pool[cls_dir.name].extend(layout.list_images(cls_dir, recursive=True, exts=layout.READABLE_IMAGE_EXTS))
     return pool
 
 
@@ -98,7 +98,7 @@ def _yolo_pool(src: Path) -> list[tuple[Path, Path | None, Path]]:
     images_root = src / layout.IMAGES_DIRNAME
     labels_root = src / layout.LABELS_DIRNAME
     pairs: list[tuple[Path, Path | None, Path]] = []
-    for img in layout.list_images(images_root):
+    for img in layout.list_images(images_root, recursive=True, exts=layout.READABLE_IMAGE_EXTS):
         rel = img.relative_to(images_root)
         label_path = labels_root / rel.with_suffix(".txt")
         pairs.append((img, label_path if label_path.is_file() else None, rel))

@@ -114,7 +114,7 @@ def _stub_run_export(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(export, "resolve_run_dir", lambda _name: str(run_dir))
     monkeypatch.setattr(export, "load_config", lambda _path: cfg)
-    monkeypatch.setattr(export.keras.saving, "load_model", lambda _path: object())
+    monkeypatch.setattr(export, "resolve_task", lambda _cfg: SimpleNamespace(load_model=lambda _path: object()))
     monkeypatch.setattr(export, "_export_tflite", lambda _m, p, quantize: p.write_bytes(b"t"))
     monkeypatch.setattr(export, "_export_onnx", lambda _m, p, _size: p.write_bytes(b"o"))
     return export, run_dir, json

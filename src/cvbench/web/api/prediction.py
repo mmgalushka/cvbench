@@ -88,7 +88,11 @@ async def predict_xai(
     if checkpoint is None:
         raise HTTPException(status_code=404, detail="No model checkpoint found for this run")
 
+    from cvbench.core.config import load_config
     from cvbench.services.gradcam import compute_gradcam_from_bytes
-    heatmap_b64 = compute_gradcam_from_bytes(str(checkpoint), image_bytes, class_index)
+    from cvbench.tasks import resolve_task
+
+    task = resolve_task(load_config(run_dir))
+    heatmap_b64 = compute_gradcam_from_bytes(str(checkpoint), image_bytes, class_index, task)
 
     return JSONResponse({"heatmap_b64": heatmap_b64})

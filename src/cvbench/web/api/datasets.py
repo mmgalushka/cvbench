@@ -109,7 +109,7 @@ def _list_yolo_images(root: Path, ds_root: Path, cls: str | None,
     label_dir = dataset_layout.yolo_label_dir(root, ds_root)
     names = dataset_layout.yolo_class_names(ds_root)
 
-    all_images = dataset_layout.list_images(root)
+    all_images = dataset_layout.list_images(root, recursive=True, exts=dataset_layout.READABLE_IMAGE_EXTS)
 
     if cls:
         if cls not in names:
@@ -162,7 +162,7 @@ def list_images(
     else:
         search_dir = root
 
-    all_images = dataset_layout.list_images(search_dir)
+    all_images = dataset_layout.list_images(search_dir, recursive=True, exts=dataset_layout.READABLE_IMAGE_EXTS)
 
     classes = sorted(p.name for p in root.iterdir() if p.is_dir())
 
@@ -235,7 +235,7 @@ async def upload_images(
         if not upload.filename:
             continue
         suffix = Path(upload.filename).suffix.lower()
-        if suffix not in dataset_layout.IMAGE_EXTS:
+        if suffix not in dataset_layout.READABLE_IMAGE_EXTS:
             continue
         dest = _fresh_token(suffix)
         with dest.open('wb') as f:

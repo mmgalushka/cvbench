@@ -81,3 +81,30 @@ def test_list_images_sorted_and_filtered(tmp_path):
     (tmp_path / "notes.txt").write_bytes(b"")
     names = [p.name for p in layout.list_images(tmp_path)]
     assert names == ["a.png", "b.jpg"]
+
+
+def test_list_images_matches_extensions_case_insensitively(tmp_path):
+    for name in ("a.JPG", "b.Png", "c.gif", "d.webp", "e.txt"):
+        (tmp_path / name).write_bytes(b"")
+
+    trainable = [p.name for p in layout.list_images(tmp_path)]
+    readable = [p.name for p in layout.list_images(tmp_path, exts=layout.READABLE_IMAGE_EXTS)]
+    only_png = [p.name for p in layout.list_images(tmp_path, exts={".png"})]
+
+    assert trainable == ["a.JPG", "b.Png", "c.gif"]  # webp is not TF-decodable
+    assert readable == ["a.JPG", "b.Png", "c.gif", "d.webp"]
+    assert only_png == ["b.Png"]
+
+
+def test_list_images_recurses_only_on_request(tmp_path):
+    (tmp_path / "top.png").write_bytes(b"")
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "deep.PNG").write_bytes(b"")
+
+    assert [p.name for p in layout.list_images(tmp_path)] == ["top.png"]
+    assert [p.name for p in layout.list_images(tmp_path, recursive=True)] == ["deep.PNG", "top.png"]
+
+
+def test_trainable_extensions_are_a_subset_of_readable_ones():
+    assert layout.IMAGE_EXTS < layout.READABLE_IMAGE_EXTS
+    assert {".tif", ".tiff", ".webp"} == layout.READABLE_IMAGE_EXTS - layout.IMAGE_EXTS

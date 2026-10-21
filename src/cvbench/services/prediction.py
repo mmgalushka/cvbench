@@ -5,15 +5,18 @@ import io
 import json
 import warnings
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from cvbench.core.config import load_config
 from cvbench.core.errors import ConfigError, DatasetError, ExportError, NotFoundError
 from cvbench.core.exp_store import resolve_run_dir
+from cvbench.datasets.layout import READABLE_IMAGE_EXTS, list_images
 from cvbench.tasks import check_predict_options, resolve_task
 
-_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp"}
+if TYPE_CHECKING:
+    from cvbench.core.task import Task
 
 FORMATS = ("keras", "onnx", "tflite")
 
@@ -27,12 +30,12 @@ _TFLITE_VARIANTS = [
 def _collect_images(path: str) -> list[str]:
     p = Path(path)
     if p.is_file():
-        return [str(p)] if p.suffix.lower() in _IMAGE_EXTS else []
-    return sorted(str(f) for f in p.rglob("*") if f.suffix.lower() in _IMAGE_EXTS)
+        return [str(p)] if p.suffix.lower() in READABLE_IMAGE_EXTS else []
+    return [str(f) for f in list_images(p, recursive=True, exts=READABLE_IMAGE_EXTS)]
 
 
 def _supported_extensions() -> str:
-    return ", ".join(sorted(_IMAGE_EXTS))
+    return ", ".join(sorted(READABLE_IMAGE_EXTS))
 
 
 def _unreadable_reason(img_path: str) -> str | None:
@@ -98,11 +101,8 @@ def _load_image(img_path: str, size: int) -> np.ndarray:
     return arr[None]  # (1, H, W, 3) RGB
 
 
-def _infer_keras(model_path: Path, images: list[str], size: int) -> list[list[np.ndarray]]:
-    import keras
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
-        model = keras.saving.load_model(str(model_path))
+def _infer_keras(model_path: Path, images: list[str], size: int, task: Task) -> list[list[np.ndarray]]:
+    model = task.load_model(str(model_path))
     results = []
     for p in images:
         out = model.predict(_load_image(p, size), verbose=0)
@@ -237,7 +237,7 @@ def run_experiment_prediction(
         try:
             size, class_names = _get_run_info(run_dir, f)
             if f == "keras":
-                outputs_list = _infer_keras(path, images, size)
+                outputs_list = _infer_keras(path, images, size, task)
             elif f == "onnx":
                 outputs_list = _infer_onnx(path, images, size)
             else:
@@ -256,34 +256,6 @@ def run_experiment_prediction(
         "formats_skipped": formats_skipped,
         "inputs_skipped": inputs_skipped,
     }
-
-
-# ---------------------------------------------------------------------------
-# Legacy single-model inference (kept for the top-level `predict` command)
-# ---------------------------------------------------------------------------
-
-def run_prediction(checkpoint: str, input_path: str) -> list[dict]:
-    """Run inference on an image or folder using a .keras checkpoint."""
-    import keras
-
-    model = keras.saving.load_model(checkpoint)
-    size = model.input_shape[1]
-
-    paths = _collect_images(input_path)
-    if not paths:
-        raise DatasetError(f"No images found at: {input_path}")
-
-    results = []
-    for img_path in paths:
-        arr = _load_image(img_path, size)
-        probs = model.predict(arr, verbose=0)[0]
-        top_idx = int(np.argmax(probs))
-        results.append({
-            "filename": Path(img_path).name,
-            "class_index": top_idx,
-            "confidence": float(probs[top_idx]),
-        })
-    return results
 
 
 # ---------------------------------------------------------------------------

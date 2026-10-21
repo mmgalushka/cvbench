@@ -56,7 +56,7 @@ def det_run(tmp_path, monkeypatch):
 
 def _stub_outputs(monkeypatch, outputs, fmts=("keras", "onnx", "tflite")):
     for name in fmts:
-        monkeypatch.setattr(prediction, f"_infer_{name}", lambda p, i, s: [outputs])
+        monkeypatch.setattr(prediction, f"_infer_{name}", lambda p, i, s, *_: [outputs])
 
 
 def test_decode_reorders_scales_and_applies_conf(det_run, monkeypatch):
@@ -118,7 +118,7 @@ def test_cli_conf_out_of_range_is_usage_error(det_run):
 def test_cli_all_formats_flags_disagreement(det_run, monkeypatch):
     agree = [_head(4, (1, 2)), _head(2)]
     drift = [_head(4), _head(2)]  # tflite lost the box
-    monkeypatch.setattr(prediction, "_infer_keras", lambda p, i, s: [agree])
+    monkeypatch.setattr(prediction, "_infer_keras", lambda p, i, s, t: [agree])
     monkeypatch.setattr(prediction, "_infer_onnx", lambda p, i, s: [agree])
     monkeypatch.setattr(prediction, "_infer_tflite", lambda p, i, s: [drift])
 

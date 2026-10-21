@@ -13,7 +13,10 @@ from pathlib import Path
 
 import yaml
 
-IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp'}
+# Trainable: what ``tf.image.decode_image`` (the input pipeline) can decode.
+IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.gif'}
+# Readable: what PIL can open — for ``predict`` inputs and the ``data`` commands.
+READABLE_IMAGE_EXTS = IMAGE_EXTS | {'.tif', '.tiff', '.webp'}
 SPLIT_NAMES = ('train', 'val', 'test')
 
 IMAGES_DIRNAME = 'images'
@@ -22,12 +25,15 @@ LABELS_DIRNAME = 'labels'
 NAME_SCAN_LIMIT = 500
 
 
-def list_images(directory: Path) -> list[Path]:
-    """Sorted list of image files anywhere under DIRECTORY."""
-    return sorted(
-        f for f in directory.rglob('*')
-        if f.is_file() and f.suffix.lower() in IMAGE_EXTS
-    )
+def list_images(
+    directory: Path, *, recursive: bool = False, exts: set[str] = IMAGE_EXTS,
+) -> list[Path]:
+    """Sorted image files in DIRECTORY (and below, if RECURSIVE) whose extension is in EXTS.
+
+    Extensions are matched case-insensitively.
+    """
+    found = directory.rglob('*') if recursive else directory.glob('*')
+    return sorted(f for f in found if f.is_file() and f.suffix.lower() in exts)
 
 
 def is_yolo_dataset(data_dir: Path) -> bool:
@@ -137,14 +143,6 @@ def _class_dirs(split_dir: Path) -> list[Path]:
     return sorted(p for p in split_dir.iterdir() if p.is_dir())
 
 
-def _has_images(directory: Path) -> bool:
-    return any(f.is_file() and f.suffix.lower() in IMAGE_EXTS for f in directory.iterdir())
-
-
-def _count_images(directory: Path) -> int:
-    return sum(1 for f in directory.iterdir() if f.is_file() and f.suffix.lower() in IMAGE_EXTS)
-
-
 def classification_layout_errors(root: Path) -> list[str]:
     """Human-readable problems that stop `root` from training as a classification dataset.
 
@@ -164,7 +162,7 @@ def classification_layout_errors(root: Path) -> list[str]:
     classes = _class_dirs(train)
     if not classes:
         return [f"'{train}' has no class subfolders (expected train/<class>/<image>)."]
-    empty = [c.name for c in classes if not _has_images(c)]
+    empty = [c.name for c in classes if not list_images(c)]
     if empty:
         return [f"Class folder(s) in '{train}' contain no images: {', '.join(empty)}."]
     errors = []
@@ -176,7 +174,7 @@ def classification_layout_errors(root: Path) -> list[str]:
             errors.append(f"'{val}' has no class subfolders (expected val/<class>/<image>). "
                           "Remove val/ to split it off train/ with --val-split.")
     else:
-        small = [c.name for c in classes if _count_images(c) < 2]
+        small = [c.name for c in classes if len(list_images(c)) < 2]
         if small:
             errors.append(
                 f"No val/ folder, so train/ is split in two, which needs at least 2 images per "
