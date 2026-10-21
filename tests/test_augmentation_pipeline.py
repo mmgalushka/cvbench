@@ -6,6 +6,7 @@ pytestmark = pytest.mark.tf
 
 from cvbench.augmentations import pipeline  # noqa: E402
 from cvbench.core.config import OneOfCandidateConfig, OneOfConfig, TransformConfig  # noqa: E402
+from cvbench.core.errors import ConfigError
 
 IMG = np.full((16, 16, 3), 100.0, dtype=np.float32)
 
@@ -144,9 +145,9 @@ def test_custom_fn_takes_a_single_image_and_a_generator():
 
 
 def test_unknown_names_are_rejected_with_the_valid_options():
-    with pytest.raises(ValueError, match="Unknown augmentation 'aug_nope'"):
+    with pytest.raises(ConfigError, match="Unknown augmentation 'aug_nope'"):
         pipeline.build_aug_pipeline([_t("aug_nope")])
-    with pytest.raises(ValueError, match="Unknown transform 'rotate_wildly'"):
+    with pytest.raises(ConfigError, match="Unknown transform 'rotate_wildly'"):
         pipeline.build_aug_pipeline([_t("rotate_wildly")])
 
 

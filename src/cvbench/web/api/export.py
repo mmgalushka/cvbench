@@ -88,17 +88,14 @@ async def create_export(name: str, req: ExportRequest):
 
     from cvbench.services.export import run_export
     loop = asyncio.get_event_loop()
-    try:
-        await loop.run_in_executor(
-            None,
-            lambda: run_export(
-                name, req.format, req.quantize,
-                calib_total=req.calib_total,
-                calib_strategy=req.calib_strategy,
-            ),
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    await loop.run_in_executor(
+        None,
+        lambda: run_export(
+            name, req.format, req.quantize,
+            calib_total=req.calib_total,
+            calib_strategy=req.calib_strategy,
+        ),
+    )
 
     return _scan_exports(run_dir)
 

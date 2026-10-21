@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from cvbench.core.config import load_config
+from cvbench.core.errors import ConfigError, DatasetError, ExportError, NotFoundError
 from cvbench.core.exp_store import resolve_run_dir
 from cvbench.tasks import check_predict_options, resolve_task
 
@@ -62,7 +63,7 @@ def _model_path(run_dir: Path, fmt: str) -> Path | None:
                 return p
         # Relocated or custom-named exports still live somewhere under export/.
         return next(iter(sorted((run_dir / "export").rglob("*.tflite"))), None)
-    raise ValueError(f"Unknown format: {fmt}")
+    raise ConfigError(f"Unknown format: {fmt}")
 
 
 def _export_info_path(run_dir: Path, fmt: str) -> Path | None:
@@ -114,38 +115,44 @@ def _infer_onnx(model_path: Path, images: list[str], size: int) -> list[list[np.
     try:
         import onnxruntime as ort
     except ImportError:
-        raise RuntimeError(
+        raise ExportError(
             "onnxruntime is required for ONNX inference. "
             "Install it with: pip install onnxruntime"
         ) from None
-    sess = ort.InferenceSession(str(model_path))
-    input_name = sess.get_inputs()[0].name
-    return [
-        [
-            np.asarray(o[0], dtype=np.float32)
-            for o in sess.run(None, {input_name: _load_image(p, size)})
+    try:
+        sess = ort.InferenceSession(str(model_path))
+        input_name = sess.get_inputs()[0].name
+        return [
+            [
+                np.asarray(o[0], dtype=np.float32)
+                for o in sess.run(None, {input_name: _load_image(p, size)})
+            ]
+            for p in images
         ]
-        for p in images
-    ]
+    except RuntimeError as e:  # onnxruntime raises RuntimeError subclasses for a broken model
+        raise ExportError(f"ONNX inference failed: {e}") from e
 
 
 def _infer_tflite(model_path: Path, images: list[str], size: int) -> list[list[np.ndarray]]:
     try:
         import tensorflow as tf
     except ImportError:
-        raise RuntimeError("tensorflow is required for TFLite inference.") from None
-    interp = tf.lite.Interpreter(model_path=str(model_path))
-    interp.allocate_tensors()
-    inp = interp.get_input_details()
-    out = interp.get_output_details()
-    results = []
-    for p in images:
-        interp.set_tensor(inp[0]["index"], _load_image(p, size))
-        interp.invoke()
-        results.append([
-            np.asarray(interp.get_tensor(o["index"])[0], dtype=np.float32) for o in out
-        ])
-    return results
+        raise ExportError("tensorflow is required for TFLite inference.") from None
+    try:
+        interp = tf.lite.Interpreter(model_path=str(model_path))
+        interp.allocate_tensors()
+        inp = interp.get_input_details()
+        out = interp.get_output_details()
+        results = []
+        for p in images:
+            interp.set_tensor(inp[0]["index"], _load_image(p, size))
+            interp.invoke()
+            results.append([
+                np.asarray(interp.get_tensor(o["index"])[0], dtype=np.float32) for o in out
+            ])
+        return results
+    except RuntimeError as e:  # the TFLite interpreter raises RuntimeError for a broken model
+        raise ExportError(f"TFLite inference failed: {e}") from e
 
 
 def run_experiment_prediction(
@@ -185,7 +192,7 @@ def run_experiment_prediction(
 
     found = _collect_images(input_path)
     if not found:
-        raise ValueError(
+        raise DatasetError(
             f"No images found at: {input_path} "
             f"(supported extensions: {_supported_extensions()})"
         )
@@ -204,13 +211,13 @@ def run_experiment_prediction(
             if len(inputs_skipped) == 1
             else f"all {len(inputs_skipped)} files at {input_path} are unreadable"
         )
-        raise ValueError(f"Cannot read image: {detail}")
+        raise DatasetError(f"Cannot read image: {detail}")
 
     if model_path is not None:
         if fmt not in FORMATS:
-            raise ValueError("--model needs a single format (keras, onnx or tflite)")
+            raise ConfigError("--model needs a single format (keras, onnx or tflite)")
         if not Path(model_path).is_file():
-            raise ValueError(f"Model file not found: {model_path}")
+            raise NotFoundError(f"Model file not found: {model_path}")
 
     formats_to_run = list(FORMATS) if fmt == "all" else [fmt]
     formats_run: list[dict] = []
@@ -237,7 +244,7 @@ def run_experiment_prediction(
                 outputs_list = _infer_tflite(path, images, size)
             results = task.predict(images, outputs_list, run_cfg, class_names, conf, top_k)
             formats_run.append({"format": f, "model_path": str(path), "results": results})
-        except RuntimeError as e:
+        except ExportError as e:
             formats_skipped.append({"format": f, "reason": str(e)})
 
     return {
@@ -264,7 +271,7 @@ def run_prediction(checkpoint: str, input_path: str) -> list[dict]:
 
     paths = _collect_images(input_path)
     if not paths:
-        raise ValueError(f"No images found at: {input_path}")
+        raise DatasetError(f"No images found at: {input_path}")
 
     results = []
     for img_path in paths:
@@ -289,7 +296,7 @@ def _load_run_model(run_name: str):
     cfg = load_config(str(run_dir))
     checkpoint = _model_path(run_dir, "keras")
     if checkpoint is None:
-        raise ValueError(f"No keras checkpoint found for run '{run_name}'")
+        raise NotFoundError(f"No keras checkpoint found for run '{run_name}'")
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
@@ -336,7 +343,7 @@ def predict_augmented(
     for aug in augmentations:
         fn = getattr(aug_mod, aug["name"], None)
         if fn is None:
-            raise ValueError(f"Unknown augmentation: {aug['name']}")
+            raise ConfigError(f"Unknown augmentation: {aug['name']}")
         img_arr = fn(img_arr, **aug.get("params", {}))
 
     augmented_b64 = _numpy_to_base64_png(img_arr)

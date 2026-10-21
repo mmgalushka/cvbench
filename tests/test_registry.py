@@ -3,6 +3,7 @@ import pytest
 
 from cvbench.augmentations.pipeline import build_aug_pipeline
 from cvbench.core.config import TransformConfig
+from cvbench.core.errors import ConfigError
 
 
 def _transform(name, prob=1.0, **params):
@@ -11,13 +12,13 @@ def _transform(name, prob=1.0, **params):
 
 def test_unknown_name_raises():
     t = _transform("bad_name")
-    with pytest.raises(ValueError, match="Unknown transform"):
+    with pytest.raises(ConfigError, match="Unknown transform"):
         build_aug_pipeline([t])
 
 
 def test_unknown_aug_raises_at_build_time():
     t = _transform("aug_does_not_exist")
-    with pytest.raises(ValueError, match="Unknown augmentation"):
+    with pytest.raises(ConfigError, match="Unknown augmentation"):
         build_aug_pipeline([t])
 
 

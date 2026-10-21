@@ -16,7 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from cvbench.core._names import validate_slug
-from cvbench.core.errors import NotFoundError
+from cvbench.core.errors import ConflictError, NotFoundError
 
 
 class Registry:
@@ -53,7 +53,7 @@ class Registry:
         return path.is_file() if self.ext else path.exists()
 
     def validate_name(self, name: str, what: str = "Name") -> str:
-        """Raise ValueError if name is not safe to use as an entry name."""
+        """Raise ConfigError if name is not safe to use as an entry name."""
         return validate_slug(name, what=what)
 
     def resolve(self, name_or_path: str) -> str:
@@ -103,7 +103,7 @@ class Registry:
         return msg
 
     def assert_available(self, new_name: str, current_dir: Path | None = None) -> None:
-        """Raise ValueError if new_name conflicts with an existing directory entry."""
+        """Raise ConflictError if new_name conflicts with an existing directory entry."""
         base = Path(self.base_dir)
         if not base.is_dir():
             return
@@ -114,7 +114,7 @@ class Registry:
             if current_dir and existing.resolve() == current_dir.resolve():
                 continue
             if existing.name.lower() == new_lower:
-                raise ValueError(
+                raise ConflictError(
                     f"A {self.entity_name} named '{existing.name}' already exists."
                 )
 

@@ -4,7 +4,7 @@ from datetime import date
 import pytest
 
 from cvbench.core.config import build_config, save_config
-from cvbench.core.errors import NotFoundError
+from cvbench.core.errors import ConfigError, ConflictError, NotFoundError
 from cvbench.core.exp_store import (
     assert_name_available,
     make_run_name,
@@ -19,7 +19,7 @@ from cvbench.core.exp_store import (
 # ---------------------------------------------------------------------------
 
 def test_validate_run_name_rejects_unsafe_names():
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigError):
         validate_run_name("../etc/passwd")
     assert validate_run_name("my-run_1") == "my-run_1"
 
@@ -55,7 +55,7 @@ def test_assert_name_available_raises_on_conflict(tmp_path, monkeypatch):
     import cvbench.core.exp_store as store
     monkeypatch.setattr(store, "EXPERIMENTS_DIR", str(tmp_path))
     (tmp_path / "taken").mkdir()
-    with pytest.raises(ValueError, match="taken"):
+    with pytest.raises(ConflictError, match="taken"):
         assert_name_available("taken")
 
 
@@ -275,15 +275,15 @@ def test_check_output_dir(tmp_path):
     from cvbench.core.exp_store import check_output_dir
 
     check_output_dir(str(tmp_path / "fresh"))
-    with pytest.raises(ValueError, match="letters, digits"):
+    with pytest.raises(ConfigError, match="letters, digits"):
         check_output_dir(str(tmp_path / "x --lr 1e-3"))
 
     run = tmp_path / "run"
     run.mkdir()
-    with pytest.raises(ValueError, match="already exists"):
+    with pytest.raises(ConflictError, match="already exists"):
         check_output_dir(str(run))
     check_output_dir(str(run), resume=True)
-    with pytest.raises(ValueError, match="not a run directory"):
+    with pytest.raises(ConflictError, match="not a run directory"):
         check_output_dir(str(run), overwrite=True)
     (run / "config.yaml").write_text("x: 1\n")
     check_output_dir(str(run), overwrite=True)

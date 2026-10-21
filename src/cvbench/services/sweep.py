@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from cvbench.core.config import load_config, update_run_status
+from cvbench.core.errors import NotFoundError
 from cvbench.core.events import (
     Listener,
     Notice,
@@ -49,7 +50,7 @@ def evaluate_on_val(trial_dir: str, listener: Listener | None = None) -> None:
         return
     best_path = Path(trial_dir) / "best.keras"
     if not best_path.is_file():
-        raise ValueError(
+        raise NotFoundError(
             f"no checkpoint was saved ({best_path} is missing) — the monitored metric "
             "likely never improved (check training_log.csv for a NaN/diverging loss)"
         )

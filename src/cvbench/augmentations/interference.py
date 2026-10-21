@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
+from cvbench.core.errors import ConfigError
+
 
 def _normalize(arr: np.ndarray, mean: float, std: float) -> np.ndarray:
     a = arr - arr.mean()
@@ -86,7 +88,7 @@ def aug_interference(
     elif pat == "flow":
         noise = _flow(H, W, rng)
     else:
-        raise ValueError(f"Unknown pattern: {pat!r}")
+        raise ConfigError(f"Unknown pattern: {pat!r}")
 
     layer = noise.astype(float)
     layer -= layer.mean()

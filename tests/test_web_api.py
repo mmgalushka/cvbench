@@ -27,6 +27,12 @@ def client():
     return TestClient(create_app())
 
 
+@pytest.fixture
+def client_500():
+    """Client that returns unexpected server errors as 500 responses instead of re-raising them."""
+    return TestClient(create_app(), raise_server_exceptions=False)
+
+
 def _png_bytes(size: int = 32) -> bytes:
     buf = io.BytesIO()
     Image.new("RGB", (size, size), (120, 60, 200)).save(buf, format="PNG")
@@ -71,6 +77,31 @@ def test_domain_errors_map_to_http_status(client, exps, monkeypatch):
     assert issubclass(WrongKindError, CVBenchError)
 
 
+def test_conflict_error_maps_to_409(client, monkeypatch):
+    from cvbench.core.errors import ConflictError
+
+    def boom(_name, *_a, **_k):
+        raise ConflictError("A run named 'x' already exists.")
+
+    monkeypatch.setattr("cvbench.web.api.runs.resolve_run_dir", boom)
+    resp = client.get("/api/runs/x")
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": "A run named 'x' already exists."}
+
+
+def test_unexpected_exception_maps_to_500_json_and_is_logged(client_500, monkeypatch, caplog):
+
+    def boom(_name, *_a, **_k):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr("cvbench.web.api.runs.resolve_run_dir", boom)
+    with caplog.at_level("ERROR", logger="cvbench.web"):
+        resp = client_500.get("/api/runs/x")
+    assert resp.status_code == 500
+    assert resp.json() == {"detail": "kaboom"}
+    assert any(r.name == "cvbench.web" and r.exc_info for r in caplog.records)
+
+
 # ---------------------------------------------------------------------------
 # Runs
 # ---------------------------------------------------------------------------
@@ -111,10 +142,12 @@ def test_get_sweep_errors(client, exps, write_exp):
     assert client.get("/api/sweeps/manual").status_code == 404
 
 
-def test_get_sweep_with_a_broken_manifest_is_422(client, exps, make_sweep):
+def test_get_sweep_with_a_broken_manifest_is_400(client, exps, make_sweep):
     sweep = make_sweep(exps)
     (sweep / "sweep.yaml").write_text("not: [a, valid manifest")
-    assert client.get("/api/sweeps/sw").status_code == 422
+    resp = client.get("/api/sweeps/sw")
+    assert resp.status_code == 400
+    assert "Invalid" in resp.json()["detail"]
 
 
 def test_get_run_detail_shape(client, cls_run):
@@ -184,10 +217,10 @@ def test_rename_run_rejections(client, exps, write_exp, make_sweep):
     save_config(cfg, str(live))
     make_sweep(exps)
 
-    assert client.patch("/api/runs/mine", json={"new_name": "taken"}).status_code == 422
-    assert client.patch("/api/runs/mine", json={"new_name": "bad/name"}).status_code == 422
+    assert client.patch("/api/runs/mine", json={"new_name": "taken"}).status_code == 409
+    assert client.patch("/api/runs/mine", json={"new_name": "bad/name"}).status_code == 400
     assert client.patch("/api/runs/live", json={"new_name": "other"}).status_code == 409
-    assert client.patch("/api/runs/sw", json={"new_name": "other"}).status_code == 422
+    assert client.patch("/api/runs/sw", json={"new_name": "other"}).status_code == 400
     assert client.patch("/api/runs/ghost", json={"new_name": "other"}).status_code == 404
     assert client.patch("/api/runs/mine", json={}).status_code == 422  # body validation
 
@@ -397,14 +430,14 @@ def test_create_export_runs_the_service_and_lists_the_result(client, cls_run, mo
     assert calls == [("cls_run", "tflite", "float16", {"calib_total": 1024, "calib_strategy": "stratified"})]
 
 
-def test_create_export_service_failure_is_500(client, cls_run, monkeypatch):
+def test_create_export_service_failure_is_500(client_500, cls_run, monkeypatch):
     (cls_run / "best.keras").write_bytes(b"checkpoint")
 
     def failing(*_a, **_k):
         raise RuntimeError("converter exploded")
 
     monkeypatch.setattr("cvbench.services.export.run_export", failing)
-    resp = client.post("/api/runs/cls_run/exports", json={"format": "onnx"})
+    resp = client_500.post("/api/runs/cls_run/exports", json={"format": "onnx"})
     assert resp.status_code == 500 and resp.json()["detail"] == "converter exploded"
 
 
@@ -465,9 +498,9 @@ def test_predict_single_unknown_run_is_404(client, exps):
     assert resp.status_code == 404
 
 
-def test_predict_single_without_checkpoint_is_400(client, cls_run):
+def test_predict_single_without_checkpoint_is_404(client, cls_run):
     resp = client.post("/api/predict/single", data={"run": "cls_run"}, files={"file": ("a.png", _png_bytes())})
-    assert resp.status_code == 400 and "No keras checkpoint" in resp.json()["detail"]
+    assert resp.status_code == 404 and "No keras checkpoint" in resp.json()["detail"]
 
 
 def test_predict_single_requires_the_form_fields(client, cls_run):
@@ -547,8 +580,8 @@ def test_predict_xai_returns_a_heatmap(client, cls_run_with_model):
 
 
 @pytest.mark.tf
-def test_predict_xai_corrupt_image_is_500(client, cls_run_with_model):
-    resp = client.post(
+def test_predict_xai_corrupt_image_is_500(client_500, cls_run_with_model):
+    resp = client_500.post(
         "/api/predict/xai", data={"run": "cls_run", "class_index": 0},
         files={"file": ("a.png", b"not an image")},
     )
@@ -582,6 +615,6 @@ def test_gradcam_returns_a_heatmap(client, cls_run_with_model):
 
 
 @pytest.mark.tf
-def test_gradcam_bad_class_index_is_500(client, cls_run_with_model):
-    resp = _gradcam(client, image_path=_first_test_image(cls_run_with_model), class_index=999)
+def test_gradcam_bad_class_index_is_500(client_500, cls_run_with_model):
+    resp = _gradcam(client_500, image_path=_first_test_image(cls_run_with_model), class_index=999)
     assert resp.status_code == 500

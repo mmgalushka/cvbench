@@ -9,6 +9,7 @@ import pytest
 pytestmark = pytest.mark.tf
 
 from cvbench.core.config import load_config  # noqa: E402
+from cvbench.core.errors import ConflictError
 from cvbench.core.events import (  # noqa: E402
     DeviceDetected,
     EpochEnded,
@@ -66,7 +67,7 @@ def test_overwrite_replaces_an_existing_run(tmp_path, tiny_cls_root, write_exp):
 def test_an_existing_run_is_not_replaced_without_overwrite(tmp_path, tiny_cls_root, write_exp):
     out = write_exp(tmp_path, "out_run")
 
-    with pytest.raises(ValueError, match="already exists"):
+    with pytest.raises(ConflictError, match="already exists"):
         _train(tiny_cls_root, output_dir=str(out))
 
 

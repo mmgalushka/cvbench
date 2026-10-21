@@ -1,6 +1,7 @@
 from click.testing import CliRunner
 
 from cvbench.cli.runs import runs
+from cvbench.core.errors import ConfigError, NotFoundError
 from cvbench.services.export import (
     _build_calibration_set,
     _print_hailo_instructions,
@@ -75,7 +76,7 @@ def test_run_export_rejects_unknown_hw_arch():
 
     from cvbench.services.export import run_export
 
-    with pytest.raises(RuntimeError, match="Unknown --hw-arch 'hailo99'"):
+    with pytest.raises(ConfigError, match="Unknown --hw-arch 'hailo99'"):
         run_export("r", format="hailo", hw_arch="hailo99")
 
 
@@ -149,7 +150,7 @@ def test_run_export_requires_checkpoint(monkeypatch, tmp_path):
     (run_dir / "best.keras").unlink()
 
     for fmt in ("tflite", "plan", "hailo"):
-        with pytest.raises(FileNotFoundError, match="best.keras"):
+        with pytest.raises(NotFoundError, match="best.keras"):
             export.run_export("r", format=fmt)
 
 

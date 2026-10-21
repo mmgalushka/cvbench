@@ -352,3 +352,10 @@ def test_summarize_two_axes_params(tmp_path, write_exp):
     _, rows = summarize(d)
     assert rows[1].params == {"training.learning_rate": "1", "model.backbone": "b"}
     assert best_trial(rows).index == 1
+
+
+def test_sweep_error_is_a_config_error_not_a_value_error():
+    from cvbench.core.errors import ConfigError
+
+    assert issubclass(SweepError, ConfigError)
+    assert not issubclass(SweepError, ValueError)

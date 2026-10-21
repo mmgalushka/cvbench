@@ -21,7 +21,7 @@ DATA_REG = Registry(
 
 
 def validate_data_name(name: str) -> str:
-    """Raise ValueError if name is not safe to use as a dataset directory name."""
+    """Raise ConfigError if name is not safe to use as a dataset directory name."""
     return DATA_REG.validate_name(name, what="Name")
 
 

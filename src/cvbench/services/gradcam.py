@@ -15,6 +15,8 @@ import io
 
 import numpy as np
 
+from cvbench.core.errors import ConfigError
+
 
 def compute_gradcam_from_bytes(checkpoint: str, image_bytes: bytes, class_index: int) -> str:
     """Like compute_gradcam but accepts raw image bytes instead of a file path."""
@@ -56,7 +58,7 @@ def compute_gradcam(checkpoint: str, image_path: str, class_index: int) -> str:
     with tf.GradientTape() as tape:
         conv_outputs, predictions = _run_with_conv_output(model, arr, tape=tape)
         if conv_outputs is None:
-            raise ValueError("No Conv2D layer found in model — Grad-CAM requires a CNN backbone.")
+            raise ConfigError("No Conv2D layer found in model — Grad-CAM requires a CNN backbone.")
         loss = predictions[:, class_index]
 
     grads = tape.gradient(loss, conv_outputs)          # (1, h, w, filters)

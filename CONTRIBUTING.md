@@ -71,6 +71,22 @@ a fixed coverage floor (see `codecov.yml`).
 A green CI check is required before a PR can be merged. CI does **not** run on every
 push to a feature branch — only when the PR is opened or updated against `main`.
 
+## Errors
+
+Code in `core/`, `services/`, `tasks.py`, `classification/`, `detection/`, `datasets/` and `augmentations/` raises only `CVBenchError` subclasses (from `cvbench.core.errors`) for user-facing problems. Built-in exceptions (`ValueError`, `RuntimeError`, `TypeError`, ...) are reserved for programmer errors.
+
+| Class | Use when |
+|---|---|
+| `NotFoundError` | A named entry, file, checkpoint or config does not exist |
+| `AmbiguousNameError` | A name prefix matches more than one entry |
+| `WrongKindError` | The entry exists but is the wrong kind (a sweep where a run is expected) |
+| `ConfigError` | A config or flag value is invalid: unknown backbone, strategy, transform or format |
+| `DatasetError` | The dataset layout is bad or missing, no images were found, or an image is unreadable |
+| `ConflictError` | A name already exists, or the operation would overwrite existing data |
+| `ExportError` | A conversion failed, or an optional runtime (`tf2onnx`, `onnxruntime`) is missing |
+
+Do not catch these to turn them into click or HTTP errors. Each front end translates them in exactly one place: the CLI in `cli/_help.py` and the WebUI in `web/app.py` (`NotFoundError` is 404, `AmbiguousNameError` and `ConflictError` are 409, any other `CVBenchError` is 400, and an unexpected exception is a logged 500).
+
 ## Versioning
 
 CVBench uses automated versioning — you never edit version numbers or changelogs by hand.

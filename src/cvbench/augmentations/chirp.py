@@ -6,6 +6,8 @@ from typing import Literal
 import numpy as np
 from PIL import Image, ImageDraw
 
+from cvbench.core.errors import ConfigError
+
 JustificationMode = Literal["left", "right", "center", "random"]
 _JUSTIFY_MODES = ("left", "right", "center")
 
@@ -28,7 +30,7 @@ def aug_chirp_artifacts(
 ) -> np.ndarray:
     """Overlay horizontal chirp artifacts onto a spectrogram image using screen blending."""
     if justification not in (*_JUSTIFY_MODES, "random"):
-        raise ValueError(
+        raise ConfigError(
             f"justification must be one of {(*_JUSTIFY_MODES, 'random')}, got {justification!r}"
         )
 

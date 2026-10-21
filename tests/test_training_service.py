@@ -1,6 +1,7 @@
 import pytest
 
 from cvbench.core.config import load_config
+from cvbench.core.errors import ConfigError, ConflictError, NotFoundError
 from cvbench.core.task import DatasetSpec, MetricSpec
 from cvbench.services import training as training_service
 
@@ -114,12 +115,12 @@ def test_run_training_marks_status_failed_when_training_loop_crashes(tmp_path, m
 def test_run_training_rejects_existing_run_without_overwrite(tmp_path):
     exp_dir = tmp_path / "existing"
     exp_dir.mkdir()
-    with pytest.raises(ValueError, match="already exists"):
+    with pytest.raises(ConflictError, match="already exists"):
         training_service.run_training(data_dir=str(tmp_path / "data"), output_dir=str(exp_dir))
 
 
 def test_run_training_rejects_unsafe_run_name(tmp_path):
-    with pytest.raises(ValueError, match="letters, digits"):
+    with pytest.raises(ConfigError, match="letters, digits"):
         training_service.run_training(
             data_dir=str(tmp_path / "data"), output_dir=str(tmp_path / "x --lr 1e-3"),
         )
@@ -151,7 +152,7 @@ def test_run_training_resume_keeps_existing_run(tmp_path, monkeypatch):
 def test_run_training_missing_resume_checkpoint_creates_nothing(tmp_path, monkeypatch):
     _patch_ok_task(monkeypatch)
     exp_dir = tmp_path / "new_run"
-    with pytest.raises(FileNotFoundError, match="Resume checkpoint"):
+    with pytest.raises(NotFoundError, match="Resume checkpoint"):
         training_service.run_training(
             data_dir=str(tmp_path / "data"), output_dir=str(exp_dir),
             resume=str(tmp_path / "missing.keras"),

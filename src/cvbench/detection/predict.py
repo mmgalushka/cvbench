@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from cvbench.core._names import class_label
+from cvbench.core.errors import ConfigError
 
 
 def build_detection_result(outputs: list[np.ndarray], cfg, conf: float | None) -> dict:
@@ -20,7 +21,7 @@ def build_detection_result(outputs: list[np.ndarray], cfg, conf: float | None) -
 
     det = cfg.detection
     if not det.anchors or not det.strides:
-        raise ValueError(
+        raise ConfigError(
             "This detection run predates anchor-based decoding and cannot be "
             "used for inference — retrain with the current detection head."
         )

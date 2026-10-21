@@ -39,15 +39,12 @@ def gradcam(name: str, body: GradCamRequest):
     if checkpoint is None:
         raise HTTPException(status_code=404, detail="No model checkpoint found for this run")
 
-    try:
-        from cvbench.services.gradcam import compute_gradcam
-        heatmap_b64 = compute_gradcam(
-            checkpoint=str(checkpoint),
-            image_path=str(img_path),
-            class_index=body.class_index,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    from cvbench.services.gradcam import compute_gradcam
+    heatmap_b64 = compute_gradcam(
+        checkpoint=str(checkpoint),
+        image_path=str(img_path),
+        class_index=body.class_index,
+    )
 
     return JSONResponse({"heatmap_b64": heatmap_b64})
 

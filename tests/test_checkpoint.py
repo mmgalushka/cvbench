@@ -4,6 +4,7 @@ import pytest
 
 from cvbench.core.checkpoint import prune_checkpoints
 from cvbench.core.config import CVBenchConfig
+from cvbench.core.errors import ConfigError
 
 
 def _make_cfg(strategy="best_only", keep_last_n=3, every_n=5):
@@ -79,5 +80,5 @@ def test_build_checkpoint_callback_every_epoch(tmp_path):
 def test_build_checkpoint_callback_unknown_strategy(tmp_path):
     from cvbench.core.checkpoint import build_checkpoint_callback
     cfg = _make_cfg(strategy="unknown_strategy")
-    with pytest.raises(ValueError, match="Unknown checkpoint strategy"):
+    with pytest.raises(ConfigError, match="Unknown checkpoint strategy"):
         build_checkpoint_callback(cfg, str(tmp_path))

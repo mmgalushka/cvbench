@@ -12,6 +12,7 @@ import keras
 import keras_hub
 
 from cvbench.core.config import CVBenchConfig
+from cvbench.core.errors import ConfigError
 
 # Map config backbone names to (keras-hub backbone class, preset identifier).
 # EfficientNet uses Swish/SiLU activations, which are known to quantize
@@ -65,7 +66,7 @@ def _apply_freeze(backbone: keras.Model, fine_tune_from_layer: int) -> None:
 def _load_backbone(cfg: CVBenchConfig, name: str | None = None) -> keras.Model:
     entry = _BACKBONE_PRESETS.get(cfg.model.backbone)
     if entry is None:
-        raise ValueError(
+        raise ConfigError(
             f"Unknown backbone '{cfg.model.backbone}'. "
             f"Valid options: {', '.join(_BACKBONE_PRESETS)}"
         )
@@ -129,7 +130,7 @@ def build_pyramid_stem(cfg: CVBenchConfig, stride: int | list[int] = 4):
     for s in strides:
         level = _PYRAMID_LEVEL_BY_STRIDE.get(s)
         if level is None:
-            raise ValueError(
+            raise ConfigError(
                 f"Unsupported stride {s}. Valid options: {sorted(_PYRAMID_LEVEL_BY_STRIDE)}"
             )
         levels.append(level)
@@ -145,7 +146,7 @@ def build_pyramid_stem(cfg: CVBenchConfig, stride: int | list[int] = 4):
     raw_backbone = _load_backbone(cfg)
     missing = [lvl for lvl in levels if lvl not in raw_backbone.pyramid_outputs]
     if missing:
-        raise ValueError(
+        raise ConfigError(
             f"Backbone '{cfg.model.backbone}' has no pyramid level(s) {missing}. "
             f"Available: {sorted(raw_backbone.pyramid_outputs)}"
         )

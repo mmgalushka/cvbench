@@ -13,6 +13,7 @@ being skipped.
 """
 import pytest
 
+from cvbench.core.errors import ConfigError
 from cvbench.tasks import TASK_NAMES, get_task
 
 
@@ -85,9 +86,9 @@ def test_check_predict_options_names_the_supporting_tasks():
     cls, det = get_task("classification"), get_task("detection")
     check_predict_options(cls, None, 3)
     check_predict_options(det, 0.4, 1)
-    with pytest.raises(ValueError, match="--conf only applies to detection runs"):
+    with pytest.raises(ConfigError, match="--conf only applies to detection runs"):
         check_predict_options(cls, 0.4)
-    with pytest.raises(ValueError, match="--top-k and --probs only apply to classification runs"):
+    with pytest.raises(ConfigError, match="--top-k and --probs only apply to classification runs"):
         check_predict_options(det, None, 3)
 
 
@@ -120,9 +121,9 @@ def test_task_implements_every_abstract_method(name):
 
 
 def test_get_task_unknown_name_lists_valid_options():
-    with pytest.raises(ValueError, match="Unknown task 'nonsense'"):
+    with pytest.raises(ConfigError, match="Unknown task 'nonsense'"):
         get_task("nonsense")
-    with pytest.raises(ValueError, match="classification"):
+    with pytest.raises(ConfigError, match="classification"):
         get_task("nonsense")
 
 

@@ -17,6 +17,7 @@ from PIL import Image
 
 from cvbench.classification.predict import build_classification_result, build_results
 from cvbench.cli.predict import predict
+from cvbench.core.errors import ConfigError, ExportError
 from cvbench.services import prediction
 
 CLASSES = ["cat", "dog", "bird"]
@@ -135,8 +136,21 @@ def test_cli_reports_when_nothing_could_run(cls_run, images, monkeypatch):
 
 
 def test_cli_runtime_error_becomes_skipped_format(cls_run, images, monkeypatch):
+    class BrokenSession:
+        def __init__(self, path):
+            raise RuntimeError("onnxruntime is required")
+
+    monkeypatch.setitem(sys.modules, "onnxruntime", SimpleNamespace(InferenceSession=BrokenSession))
+
+    result = CliRunner().invoke(predict, ["run", str(images / "a.jpg"), "--format", "onnx"])
+
+    assert result.exit_code == 0, result.output
+    assert "skipped: onnx" in result.output and "onnxruntime is required" in result.output
+
+
+def test_cli_missing_runtime_becomes_skipped_format(cls_run, images, monkeypatch):
     def boom(p, imgs, s):
-        raise RuntimeError("onnxruntime is required")
+        raise ExportError("onnxruntime is required")
 
     monkeypatch.setattr(prediction, "_infer_onnx", boom)
 
@@ -367,7 +381,7 @@ def test_model_path_per_format(tmp_path):
     assert prediction._model_path(tmp_path, "keras") == tmp_path / "best.keras"
     assert prediction._model_path(tmp_path, "onnx").name == "model.onnx"
     assert prediction._model_path(tmp_path, "tflite").name == "model_int8.tflite"
-    with pytest.raises(ValueError, match="Unknown format"):
+    with pytest.raises(ConfigError, match="Unknown format"):
         prediction._model_path(tmp_path, "plan")
 
 
@@ -458,10 +472,10 @@ def test_bytes_helpers_roundtrip():
 
 # ── inference backends ───────────────────────────────────────────────────────
 
-def test_infer_onnx_without_runtime_raises_runtime_error(monkeypatch, tmp_path):
+def test_infer_onnx_without_runtime_raises_export_error(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "onnxruntime", None)  # makes the import fail
 
-    with pytest.raises(RuntimeError, match="onnxruntime is required"):
+    with pytest.raises(ExportError, match="onnxruntime is required"):
         prediction._infer_onnx(tmp_path / "m.onnx", [], 8)
 
 
@@ -489,10 +503,36 @@ def test_infer_onnx_runs_each_image_through_the_session(monkeypatch, tmp_path):
     assert len(out) == 2 and out[0][0].tolist() == pytest.approx([0.1, 0.9])
 
 
-def test_infer_tflite_without_tensorflow_raises_runtime_error(monkeypatch, tmp_path):
+def test_infer_onnx_wraps_a_runtime_failure_in_export_error(monkeypatch, tmp_path):
+    class BrokenSession:
+        def __init__(self, path):
+            raise RuntimeError("invalid graph")
+
+    monkeypatch.setitem(sys.modules, "onnxruntime", SimpleNamespace(InferenceSession=BrokenSession))
+
+    with pytest.raises(ExportError, match="ONNX inference failed: invalid graph"):
+        prediction._infer_onnx(tmp_path / "m.onnx", [], 8)
+
+
+def test_infer_tflite_wraps_a_runtime_failure_in_export_error(monkeypatch, tmp_path):
+    class BrokenInterpreter:
+        def __init__(self, model_path):
+            pass
+
+        def allocate_tensors(self):
+            raise RuntimeError("tensor arena too small")
+
+    fake_tf = SimpleNamespace(lite=SimpleNamespace(Interpreter=BrokenInterpreter))
+    monkeypatch.setitem(sys.modules, "tensorflow", fake_tf)
+
+    with pytest.raises(ExportError, match="TFLite inference failed: tensor arena too small"):
+        prediction._infer_tflite(tmp_path / "m.tflite", [], 8)
+
+
+def test_infer_tflite_without_tensorflow_raises_export_error(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "tensorflow", None)
 
-    with pytest.raises(RuntimeError, match="tensorflow is required"):
+    with pytest.raises(ExportError, match="tensorflow is required"):
         prediction._infer_tflite(tmp_path / "m.tflite", [], 8)
 
 
@@ -545,7 +585,7 @@ def test_predict_from_input_dispatches_on_task():
     top1 = prediction._predict_from_input(_cfg(), Model(), arr, top_k=1)
     assert len(top1["top_k"]) == 1
 
-    with pytest.raises(ValueError, match="only applies to detection"):
+    with pytest.raises(ConfigError, match="only applies to detection"):
         prediction._predict_from_input(_cfg(), Model(), arr, conf=0.3)
 
 
@@ -577,5 +617,5 @@ def test_detection_result_for_web_picks_top_box():
     assert empty["detections"] == [] and empty["class_name"] is None
 
     det.anchors = None
-    with pytest.raises(ValueError, match="predates anchor-based decoding"):
+    with pytest.raises(ConfigError, match="predates anchor-based decoding"):
         prediction._predict_from_input(cfg, Model(head), arr)

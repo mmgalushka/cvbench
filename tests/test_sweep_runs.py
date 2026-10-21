@@ -5,7 +5,7 @@ import pytest
 from click.testing import CliRunner
 
 from cvbench.cli.runs import runs
-from cvbench.core.errors import AmbiguousNameError, NotFoundError, WrongKindError
+from cvbench.core.errors import AmbiguousNameError, ConfigError, ConflictError, NotFoundError, WrongKindError
 from cvbench.core.exp_store import (
     assert_name_available,
     assert_renamable,
@@ -43,7 +43,7 @@ def test_resolve_unknown_still_errors(exps, make_sweep):
 def test_name_conflicts_with_trial(exps, write_exp, make_sweep):
     sweep = make_sweep(exps)
     write_exp(sweep, "sw_001")
-    with pytest.raises(ValueError, match="trial"):
+    with pytest.raises(ConflictError, match="trial"):
         assert_name_available("SW_001")
     assert_name_available("fresh")
 
@@ -52,9 +52,9 @@ def test_renamable_guards(exps, write_exp, make_sweep):
     sweep = make_sweep(exps)
     trial = write_exp(sweep, "sw_001")
     manual = write_exp(exps, "manual")
-    with pytest.raises(ValueError, match="is a sweep"):
+    with pytest.raises(ConfigError, match="is a sweep"):
         assert_renamable(sweep)
-    with pytest.raises(ValueError, match="trial of sweep"):
+    with pytest.raises(ConfigError, match="trial of sweep"):
         assert_renamable(trial)
     assert_renamable(manual)
 

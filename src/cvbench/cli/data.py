@@ -637,10 +637,7 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
             "Provide an empty or non-existent directory."
         )
 
-    try:
-        plan = split_mod.plan_split(src_dir, ratios, seed)
-    except ValueError as e:
-        raise click.ClickException(str(e)) from e
+    plan = split_mod.plan_split(src_dir, ratios, seed)
     if not dry_run:
         with _console.progress(len(plan.actions), "Copying") as advance:
             split_mod.apply_plan(plan, dst_dir, progress=advance)
@@ -704,10 +701,7 @@ def flatten(src, dst, dry_run):
             "Provide an empty or non-existent directory."
         )
 
-    try:
-        plan = flatten_mod.plan_flatten(src_dir)
-    except ValueError as e:
-        raise click.ClickException(str(e)) from e
+    plan = flatten_mod.plan_flatten(src_dir)
     if not dry_run:
         with _console.progress(len(plan.actions), "Copying") as advance:
             flatten_mod.apply_plan(plan, dst_dir, progress=advance)

@@ -21,7 +21,7 @@ from cvbench.core.exp_store import (
     scan_experiments,
     validate_run_name,
 )
-from cvbench.core.sweep_store import SweepError, scan_sweeps, summarize
+from cvbench.core.sweep_store import scan_sweeps, summarize
 from cvbench.tasks import task_or_default
 
 router = APIRouter()
@@ -57,10 +57,7 @@ def get_sweep(name: str):
     if not is_sweep_dir(sweep_dir):
         raise HTTPException(status_code=404, detail=f"'{name}' is not a sweep")
 
-    try:
-        manifest, rows = summarize(sweep_dir)
-    except SweepError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
+    manifest, rows = summarize(sweep_dir)
 
     return {
         "name": manifest.name or sweep_dir.name,
@@ -171,20 +168,14 @@ def get_run(name: str):
 def rename_run(name: str, body: RenameRequest):
     run_dir = Path(resolve_run_dir(name, allow_sweep=True))
 
-    try:
-        assert_renamable(run_dir)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
+    assert_renamable(run_dir)
 
     cfg = load_config(str(run_dir))
     if cfg.run.status == "running":
         raise HTTPException(status_code=409, detail="Cannot rename a currently running run.")
 
-    try:
-        validate_run_name(body.new_name)
-        assert_name_available(body.new_name, current_dir=run_dir)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
+    validate_run_name(body.new_name)
+    assert_name_available(body.new_name, current_dir=run_dir)
 
     new_dir = run_dir.parent / body.new_name
     os.rename(run_dir, new_dir)

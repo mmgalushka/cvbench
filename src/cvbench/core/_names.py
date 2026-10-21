@@ -6,15 +6,17 @@ and workspace names) shares the exact same safety rules.
 """
 import re
 
+from cvbench.core.errors import ConfigError
+
 _NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_\-]*$")
 
 
 def validate_slug(name: str, what: str = "Name") -> str:
-    """Raise ValueError if name is not safe to use as a directory/file name."""
+    """Raise ConfigError if name is not safe to use as a directory/file name."""
     if not name or len(name) > 100:
-        raise ValueError(f"{what} must be 1–100 characters.")
+        raise ConfigError(f"{what} must be 1–100 characters.")
     if not _NAME_RE.match(name):
-        raise ValueError(
+        raise ConfigError(
             f"{what} may only contain letters, digits, underscores, and hyphens, "
             "and must start with a letter or digit."
         )

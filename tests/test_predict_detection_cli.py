@@ -12,6 +12,7 @@ from click.testing import CliRunner
 from PIL import Image
 
 from cvbench.cli.predict import predict
+from cvbench.core.errors import ConfigError
 from cvbench.services import prediction
 
 ANCHORS = [[[0.2, 0.2]], [[0.5, 0.5]]]  # one anchor per scale
@@ -79,14 +80,14 @@ def test_decode_reorders_scales_and_applies_conf(det_run, monkeypatch):
 
 def test_conf_rejected_for_classification(det_run, monkeypatch):
     monkeypatch.setattr(prediction, "load_config", lambda path: _cfg("classification"))
-    with pytest.raises(ValueError, match="--conf only applies to detection runs"):
+    with pytest.raises(ConfigError, match="--conf only applies to detection runs"):
         prediction.run_experiment_prediction("run", str(det_run), "keras", conf=0.3)
 
 
 def test_legacy_run_without_anchors_is_rejected(det_run, monkeypatch):
     monkeypatch.setattr(prediction, "load_config", lambda path: _cfg(anchors=None))
     _stub_outputs(monkeypatch, [_head(4), _head(2)], fmts=("keras",))
-    with pytest.raises(ValueError, match="predates anchor-based decoding"):
+    with pytest.raises(ConfigError, match="predates anchor-based decoding"):
         prediction.run_experiment_prediction("run", str(det_run), "keras")
 
 

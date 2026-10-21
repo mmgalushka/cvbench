@@ -6,6 +6,7 @@ import keras
 import numpy as np
 
 from cvbench.core import _console, present
+from cvbench.core.errors import DatasetError
 from cvbench.core.events import Listener, track_batches
 from cvbench.core.report import report_envelope, write_report
 from cvbench.datasets.layout import list_images, read_yolo_boxes, yolo_label_dir
@@ -65,7 +66,7 @@ def evaluate(
 
     n = len(image_paths)
     if len(all_preds_np[0]) != n:
-        raise RuntimeError(
+        raise DatasetError(
             f"Decoded {len(all_preds_np[0])} predictions but found {n} images in {test_dir} — "
             "the eval dataset and the ground-truth file listing have gone out of sync."
         )

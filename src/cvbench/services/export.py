@@ -12,6 +12,7 @@ import keras
 
 from cvbench.core import _console
 from cvbench.core.config import load_config
+from cvbench.core.errors import ConfigError, DatasetError, ExportError, NotFoundError
 from cvbench.core.exp_store import resolve_run_dir
 
 _TFLITE_QUANTIZE_SUFFIX = {"none": "", "float16": "_float16", "int8": "_int8"}
@@ -77,7 +78,7 @@ def _export_onnx(model, output_path: Path, input_size: int) -> None:
         import tensorflow as tf
         import tf2onnx
     except ImportError:
-        raise RuntimeError(
+        raise ExportError(
             "tf2onnx is required for ONNX export. "
             "Install it with: pip install 'cvbench[export]'"
         ) from None
@@ -211,7 +212,7 @@ def _build_calibration_set(
         per_class = {"_all": all_files}
 
     if not per_class:
-        raise RuntimeError(f"No images found in: {source_dir}")
+        raise DatasetError(f"No images found in: {source_dir}")
 
     n_classes = len(per_class)
     selected: list[Path] = []
@@ -435,7 +436,7 @@ def run_export(
     Returns the path to the export subfolder.
     """
     if hw_arch not in HAILO_HW_ARCHS:
-        raise RuntimeError(
+        raise ConfigError(
             f"Unknown --hw-arch '{hw_arch}'. Choose from: {', '.join(HAILO_HW_ARCHS)}"
         )
     run_dir = Path(resolve_run_dir(experiment))
@@ -451,7 +452,7 @@ def run_export(
         cfg = load_config(str(run_dir))
         checkpoint = run_dir / "best.keras"
         if not checkpoint.exists():
-            raise FileNotFoundError(f"No best.keras found in: {run_dir}")
+            raise NotFoundError(f"No best.keras found in: {run_dir}")
 
         print(_console.rule())
         print(f" TensorRT Plan package — '{run_dir.name}'")
@@ -494,7 +495,7 @@ def run_export(
         cfg = load_config(str(run_dir))
         checkpoint = run_dir / "best.keras"
         if not checkpoint.exists():
-            raise FileNotFoundError(f"No best.keras found in: {run_dir}")
+            raise NotFoundError(f"No best.keras found in: {run_dir}")
 
         print(_console.rule())
         print(f" Hailo package — '{run_dir.name}'")
@@ -540,7 +541,7 @@ def run_export(
 
     checkpoint = run_dir / "best.keras"
     if not checkpoint.exists():
-        raise FileNotFoundError(f"No best.keras found in: {run_dir}")
+        raise NotFoundError(f"No best.keras found in: {run_dir}")
 
     subfolder = _subfolder_name(format, quantize)
     export_base = Path(output_dir) if output_dir else run_dir / "export"
