@@ -44,7 +44,7 @@ def build_plan_classification(src: Path) -> FlattenPlan:
             continue
         for cls_dir in sorted(p for p in split_dir.iterdir() if p.is_dir()):
             cls = cls_dir.name
-            for img in layout.list_images(cls_dir):
+            for img in layout.list_images(cls_dir, recursive=True, exts=layout.READABLE_IMAGE_EXTS):
                 dst_name = layout.dedupe_filename(img.name, used_by_class[cls])
                 dst_rel = Path(cls) / dst_name
                 plan.actions.append(FlattenAction(img, dst_rel))
@@ -59,7 +59,7 @@ def build_plan_yolo(src: Path) -> FlattenPlan:
     plan = FlattenPlan(is_yolo=True, class_names=class_names)
     used_by_dir: dict[Path, set[str]] = defaultdict(set)
 
-    for img in layout.list_images(images_root):
+    for img in layout.list_images(images_root, recursive=True, exts=layout.READABLE_IMAGE_EXTS):
         rel = img.relative_to(images_root)
         rel_no_split = Path(*rel.parts[1:]) if rel.parts[0] in layout.SPLIT_NAMES else rel
 

@@ -6,7 +6,7 @@ from cvbench.core.config import load_config, save_config
 from cvbench.core.events import EvalStarted, Listener, Notice, SweepEvalTrialStarted, emit
 from cvbench.core.exp_store import resolve_run_dir
 from cvbench.core.sweep_store import selection_metric_of_trial, summarize
-from cvbench.services._runtime import report_devices
+from cvbench.services import report_devices
 from cvbench.tasks import option_scope_message, resolve_task
 
 

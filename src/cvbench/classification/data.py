@@ -10,9 +10,9 @@ from sklearn.model_selection import train_test_split
 from cvbench.core import _console
 from cvbench.core.config import CVBenchConfig
 from cvbench.core.input_pipeline import build_image_dataset
+from cvbench.datasets.layout import list_images
 
 # The formats tf.image.decode_image reads (and image_dataset_from_directory lists).
-_IMAGE_EXTS = (".bmp", ".gif", ".jpeg", ".jpg", ".png")
 
 
 def get_class_names(train_dir: str) -> list[str]:
@@ -30,10 +30,9 @@ def list_labeled_images(directory: str, class_names: list[str]) -> tuple[list[st
         class_dir = Path(directory) / class_name
         if not class_dir.is_dir():
             continue
-        for f in sorted(class_dir.rglob("*")):
-            if f.is_file() and f.suffix.lower() in _IMAGE_EXTS:
-                paths.append(str(f))
-                labels.append(class_idx)
+        for f in list_images(class_dir, recursive=True):
+            paths.append(str(f))
+            labels.append(class_idx)
     return paths, labels
 
 

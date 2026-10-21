@@ -41,7 +41,7 @@ def _png_bytes(size: int = 32) -> bytes:
 
 def _first_test_image(run_dir) -> str:
     test_dir = load_config(str(run_dir)).data.test_dir
-    return str(list_images(Path(test_dir))[0].relative_to(test_dir))
+    return str(list_images(Path(test_dir), recursive=True)[0].relative_to(test_dir))
 
 
 # ---------------------------------------------------------------------------

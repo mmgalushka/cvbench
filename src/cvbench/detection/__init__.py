@@ -78,7 +78,7 @@ class DetectionTask(Task):
 
     def count_images(self, directory: str) -> int:
         d = Path(directory)
-        return len(list_images(d)) if d.is_dir() else 0
+        return len(list_images(d, recursive=True)) if d.is_dir() else 0
 
     def build_datasets(self, cfg, spec: DatasetSpec):
         from cvbench.detection.data import build_detection_dataset
@@ -119,19 +119,10 @@ class DetectionTask(Task):
         from cvbench.detection.model import build_model
         return build_model(cfg)
 
-    def load_model(self, path: str):
-        # Importing cvbench.detection.losses here registers YoloLoss, so
-        # register_keras_serializable can resolve "YoloLoss" by name —
-        # belt-and-braces, also pass it explicitly as custom_objects.
-        import warnings
-
-        import keras
-
+    def custom_objects(self) -> dict:
         from cvbench.detection.losses import YoloLoss
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="Skipping variable loading for optimizer")
-            return keras.saving.load_model(path, custom_objects={"YoloLoss": YoloLoss})
+        return {"YoloLoss": YoloLoss}
 
     def headline_metrics(self, final_metrics: dict) -> dict:
         # Detection has no classification accuracy; the training headline
@@ -157,9 +148,6 @@ class DetectionTask(Task):
             output_dir=output_dir,
             listener=listener,
         )
-
-    def test_score(self, report: dict) -> tuple[str, float | None]:
-        return self.primary_metric.name, report["overall"]["value"]
 
     def predict(self, images, outputs_list, cfg, class_names, conf=None, top_k=1) -> list[dict]:
         return _predict.build_detection_results(images, outputs_list, cfg, conf)

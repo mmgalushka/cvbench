@@ -11,7 +11,7 @@ from cvbench.core.config import build_config, save_config, update_run_status
 from cvbench.core.errors import ConfigError, NotFoundError
 from cvbench.core.events import Listener, SeedSet, emit
 from cvbench.core.exp_store import EXPERIMENTS_DIR, check_output_dir, make_run_name, make_unique_dir
-from cvbench.services._runtime import report_devices
+from cvbench.services import report_devices
 from cvbench.tasks import get_task
 
 

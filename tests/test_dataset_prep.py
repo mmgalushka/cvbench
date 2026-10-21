@@ -345,7 +345,7 @@ def test_prep_progress_callbacks_count_every_image(cls_root, tmp_path):
 
     scanned, copied = [], []
     plan = prep_mod.build_plan(cls_root, progress=scanned.append)
-    assert len(scanned) == len(layout.list_images(cls_root))
+    assert len(scanned) == len(layout.list_images(cls_root, recursive=True))
     assert set(scanned) == {1}
 
     prep_mod.apply_plan(plan, cls_root, tmp_path / "out", progress=copied.append)

@@ -67,7 +67,7 @@ def _stub(monkeypatch, fmt, tops):
     """Make ``_infer_<fmt>`` return one probability vector per image."""
     monkeypatch.setattr(
         prediction, f"_infer_{fmt}",
-        lambda p, imgs, s: [[_probs(tops[i % len(tops)])] for i in range(len(imgs))],
+        lambda p, imgs, s, *_: [[_probs(tops[i % len(tops)])] for i in range(len(imgs))],
     )
 
 
@@ -204,7 +204,7 @@ def test_cli_no_images_lists_supported_extensions(cls_run, images):
 def test_cli_top_k_prints_ranked_pairs(cls_run, images, monkeypatch):
     monkeypatch.setattr(
         prediction, "_infer_keras",
-        lambda p, imgs, s: [[np.array([0.2, 0.5, 0.3], dtype=np.float32)] for _ in imgs],
+        lambda p, imgs, s, t: [[np.array([0.2, 0.5, 0.3], dtype=np.float32)] for _ in imgs],
     )
 
     result = CliRunner().invoke(predict, ["run", str(images / "a.jpg"), "--top-k", "3"])
@@ -236,7 +236,7 @@ def test_cli_top_k_rejected_for_detection(cls_run, images, monkeypatch):
 def test_cli_all_formats_shows_max_diff_and_near_chance_warning(cls_run, images, monkeypatch):
     near_chance = np.array([0.34, 0.33, 0.33], dtype=np.float32)
     drifted = np.array([0.33, 0.34, 0.33], dtype=np.float32)
-    monkeypatch.setattr(prediction, "_infer_keras", lambda p, i, s: [[near_chance] for _ in i])
+    monkeypatch.setattr(prediction, "_infer_keras", lambda p, i, s, t: [[near_chance] for _ in i])
     monkeypatch.setattr(prediction, "_infer_onnx", lambda p, i, s: [[drifted] for _ in i])
     monkeypatch.setattr(prediction, "_infer_tflite", lambda p, i, s: [[near_chance] for _ in i])
 

@@ -171,7 +171,7 @@ def build_detection_dataset(
     split_path = Path(split_dir)
     label_dir = yolo_label_dir(split_path, Path(ds_root))
 
-    image_paths = [str(p) for p in list_images(split_path)]
+    image_paths = [str(p) for p in list_images(split_path, recursive=True)]
     label_paths = [str(label_dir / f"{Path(p).stem}.txt") for p in image_paths]
 
     size = cfg.model.input_size

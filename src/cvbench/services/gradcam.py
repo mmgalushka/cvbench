@@ -12,13 +12,17 @@ from __future__ import annotations
 
 import base64
 import io
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from cvbench.core.errors import ConfigError
 
+if TYPE_CHECKING:
+    from cvbench.core.task import Task
 
-def compute_gradcam_from_bytes(checkpoint: str, image_bytes: bytes, class_index: int) -> str:
+
+def compute_gradcam_from_bytes(checkpoint: str, image_bytes: bytes, class_index: int, task: Task) -> str:
     """Like compute_gradcam but accepts raw image bytes instead of a file path."""
     import os
     import tempfile
@@ -27,27 +31,27 @@ def compute_gradcam_from_bytes(checkpoint: str, image_bytes: bytes, class_index:
         f.write(image_bytes)
         tmp_path = f.name
     try:
-        return compute_gradcam(checkpoint, tmp_path, class_index)
+        return compute_gradcam(checkpoint, tmp_path, class_index, task)
     finally:
         os.unlink(tmp_path)
 
 
-def compute_gradcam(checkpoint: str, image_path: str, class_index: int) -> str:
+def compute_gradcam(checkpoint: str, image_path: str, class_index: int, task: Task) -> str:
     """Return a base64 PNG of the Grad-CAM heatmap blended onto the original image.
 
     Args:
         checkpoint:  Path to the .keras model file.
         image_path:  Path to the image file.
         class_index: Target class index (the predicted or true class to explain).
+        task:        The run's task, which loads the checkpoint.
 
     Returns:
         Base64-encoded PNG string (no data-URI prefix).
     """
-    import keras
     import tensorflow as tf
     from PIL import Image as PILImage
 
-    model = keras.saving.load_model(checkpoint)
+    model = task.load_model(checkpoint)
     input_size = model.input_shape[1]
 
     img = PILImage.open(image_path).convert("RGB")

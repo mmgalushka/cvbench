@@ -13,7 +13,7 @@ from pathlib import Path
 from cvbench.classification import predict as _predict
 from cvbench.classification import view as _view
 from cvbench.core.task import VAL_LOSS, DatasetSpec, MetricSpec, Task
-from cvbench.datasets.layout import classification_layout_errors, is_yolo_dataset
+from cvbench.datasets.layout import classification_layout_errors, is_yolo_dataset, list_images
 from cvbench.datasets.stats import get_class_distribution, print_imbalance_warning, resolve_class_weights
 
 # A frozen run is flagged when its val accuracy is within this margin of chance.
@@ -53,7 +53,7 @@ class ClassificationTask(Task):
         )
 
     def count_images(self, directory: str) -> int:
-        return sum(1 for _ in Path(directory).glob("*/*"))
+        return len(list_images(Path(directory), recursive=True))
 
     def build_datasets(self, cfg, spec: DatasetSpec):
         from cvbench.classification.data import build_datasets as _build_datasets
@@ -114,9 +114,6 @@ class ClassificationTask(Task):
             val_accuracy=cfg.run.val_accuracy,
             listener=listener,
         )
-
-    def test_score(self, report: dict) -> tuple[str, float | None]:
-        return self.primary_metric.name, report["overall"]["value"]
 
     def predict(self, images, outputs_list, cfg, class_names, conf=None, top_k=1) -> list[dict]:
         return _predict.build_results(images, [o[0] for o in outputs_list], class_names, top_k)

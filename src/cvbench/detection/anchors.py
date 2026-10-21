@@ -73,7 +73,7 @@ def _collect_box_shapes(train_dir: str, ds_root: str) -> np.ndarray:
     split_path = Path(train_dir)
     label_dir = yolo_label_dir(split_path, Path(ds_root))
     shapes = []
-    for img_path in list_images(split_path):
+    for img_path in list_images(split_path, recursive=True):
         label_path = label_dir / f"{img_path.stem}.txt"
         for _cls_id, (_x, _y, w, h) in read_yolo_boxes(label_path):
             if w > 0 and h > 0:

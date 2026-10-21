@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import keras
 
 from cvbench.core import _console
+from cvbench.core.backbone import apply_freeze
 from cvbench.core.checkpoint import build_checkpoint_callback, load_best_history, prune_checkpoints
 from cvbench.core.config import CVBenchConfig, update_run_status
 from cvbench.core.events import (
@@ -44,14 +45,7 @@ def _apply_fine_tune_flags(model: keras.Model, fine_tune_from_layer: int, listen
             " leaving the reloaded checkpoint's trainable flags unchanged."
         ))
         return
-    if fine_tune_from_layer == 0:
-        backbone.trainable = False
-    elif fine_tune_from_layer == -1:
-        backbone.trainable = True
-    else:
-        backbone.trainable = True
-        for layer in backbone.layers[:fine_tune_from_layer]:
-            layer.trainable = False
+    apply_freeze(backbone, fine_tune_from_layer)
 
 
 def train(

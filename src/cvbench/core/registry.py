@@ -1,6 +1,5 @@
-"""Generic name-to-path resolution shared by the experiment, data, and
-workspace stores (`core/exp_store.py`, `core/data_store.py`,
-`core/work_store.py`).
+"""Generic name-to-path resolution shared by the experiment and data
+stores (`core/exp_store.py`, `core/data_store.py`).
 
 Each of those stores has the same shape: a base directory holding named
 entries, where a bare name (`my_run`) resolves to `base_dir/my_run` the same
