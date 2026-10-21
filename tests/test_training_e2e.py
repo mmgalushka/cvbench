@@ -41,7 +41,7 @@ def test_train_then_evaluate_a_classification_run(exps, tiny_cls_root):
     assert (exp_dir / "best.keras").is_file() and (exp_dir / "training_log.csv").is_file()
     cfg = load_config(str(exp_dir))
     assert cfg.task == "classification" and cfg.run.status == "done"
-    assert cfg.run.epochs_run == 1 and cfg.run.val_loss is not None
+    assert cfg.run.epochs_run == 1 and cfg.run.metrics.get("val_loss") is not None
     assert cfg.run.primary_metric == "accuracy"
 
     report = run_evaluation(str(exp_dir))
@@ -61,7 +61,7 @@ def test_overwrite_replaces_an_existing_run(tmp_path, tiny_cls_root, write_exp):
 
     assert not stale.exists()
     cfg = load_config(str(out))
-    assert cfg.run.status == "done" and cfg.run.val_loss != 9.9
+    assert cfg.run.status == "done" and cfg.run.metrics.get("val_loss") != 9.9
 
 
 def test_an_existing_run_is_not_replaced_without_overwrite(tmp_path, tiny_cls_root, write_exp):
@@ -81,7 +81,7 @@ def test_training_and_evaluation_report_progress_to_the_listener(exps, tiny_cls_
     assert started.exp_dir == exp_dir and started.resume_checkpoint is None
     assert epoch.epoch == 0 and "val_loss" in epoch.logs
     assert finished.status == "done" and finished.run_name == load_config(exp_dir).run.name
-    assert finished.final_metrics["val_loss"] == load_config(exp_dir).run.val_loss
+    assert finished.final_metrics["val_loss"] == load_config(exp_dir).run.metrics.get("val_loss")
     assert finished.best_events and finished.interrupt_checkpoint is None
 
     events.clear()

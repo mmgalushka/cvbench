@@ -58,7 +58,7 @@ def _install_fake(monkeypatch, fail_lr=None, interrupt_lr=None):
             save_config(cfg, str(out))
             raise KeyboardInterrupt()
         cfg.run.status = "done"
-        cfg.run.val_loss = lr * 1000
+        cfg.run.metrics["val_loss"] = lr * 1000
         save_config(cfg, str(out))
         return str(out)
 
@@ -176,7 +176,7 @@ def test_interrupted_trial_skips_map50_eval_and_stops(data_dir, workdir, monkeyp
     monkeypatch.setattr("cvbench.cli.sweep.validate_dataset", lambda *a: None)  # data_dir is not YOLO
     eval_calls = []
     monkeypatch.setattr(
-        "cvbench.services.sweep.evaluate_on_val", lambda trial_dir, listener=None: eval_calls.append(trial_dir),
+        "cvbench.services.sweep.run_val_evaluation", lambda trial_dir, listener=None: eval_calls.append(trial_dir),
     )
 
     result = _run(data_dir, "--lr", "1e-3,1e-4,1e-5", "--metric", "map50", "--name", "s1")
@@ -200,7 +200,7 @@ def test_map50_eval_failure_does_not_mark_training_failed(data_dir, workdir, mon
     def _boom(trial_dir, listener=None):
         raise ValueError(f"File not found: filepath={trial_dir}/best.keras")
 
-    monkeypatch.setattr("cvbench.services.sweep.evaluate_on_val", _boom)
+    monkeypatch.setattr("cvbench.services.sweep.run_val_evaluation", _boom)
 
     result = _run(data_dir, "--lr", "1e-3,1e-4", "--metric", "map50", "--name", "s1")
 

@@ -63,7 +63,7 @@ def test_train_then_evaluate_produces_a_valid_envelope(yolo_project):
     assert cfg.task == "detection"
     assert cfg.run.primary_metric == "map50"
     assert cfg.run.primary_value == report["overall"]["value"]
-    assert cfg.run.val_accuracy is None  # detection never sets this
+    assert cfg.run.metrics.get("val_accuracy") is None  # detection never sets this
 
 
 @pytest.mark.slow

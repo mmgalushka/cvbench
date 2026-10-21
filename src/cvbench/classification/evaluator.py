@@ -5,8 +5,8 @@ from pathlib import Path
 import keras
 import numpy as np
 
-from cvbench.classification.view import render_report as print_body
-from cvbench.core import _console, present
+from cvbench.classification.view import ClassificationView
+from cvbench.core import console, present
 from cvbench.core.events import Listener, track_batches
 from cvbench.core.report import report_envelope, write_report
 
@@ -157,10 +157,10 @@ def evaluate(
 
 def _print_report(report: dict, run_dir: str, out_dir: Path, val_accuracy: float | None = None) -> None:
     run_name = Path(run_dir).name
-    print(_console.rule())
-    print(f" {_console.bold('CVBench — evaluate')}  {_console.dim('|')}  {_console.dim('run: ' + run_name)}")
-    print(_console.rule())
-    print_body(report, val_accuracy, present.run_advisories(run_dir, report))
-    print(f" {_console.bold('Saved:')}")
-    print(f"   {_console.dim(str(out_dir / 'eval_report.json'))}")
-    print(_console.rule())
+    print(console.rule())
+    print(f" {console.bold('CVBench — evaluate')}  {console.dim('|')}  {console.dim('run: ' + run_name)}")
+    print(console.rule())
+    ClassificationView().render_report(report, val_accuracy, present.run_advisories(run_dir, report))
+    print(f" {console.bold('Saved:')}")
+    print(f"   {console.dim(str(out_dir / 'eval_report.json'))}")
+    print(console.rule())

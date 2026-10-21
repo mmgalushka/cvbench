@@ -7,7 +7,7 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
-from cvbench.core import _console
+from cvbench.core import console
 from cvbench.core.config import CVBenchConfig
 from cvbench.core.input_pipeline import build_image_dataset
 from cvbench.datasets.layout import list_images
@@ -99,14 +99,14 @@ def build_datasets(
 
     if os.path.isdir(cfg.data.val_dir):
         if cfg.data.val_split_explicit:
-            _console.warning(
+            console.warning(
                 f"--val-split ignored: a val/ directory was found at {cfg.data.val_dir!r}."
                 " Remove val/ or omit --val-split to silence this warning."
             )
         val_paths, val_labels = list_labeled_images(cfg.data.val_dir, class_names)
         train_paths, train_labels = all_paths, all_labels
-        print(_console.dim(f" Found {total_train} files for training ({len(class_names)} classes)."))
-        print(_console.dim(f" Found {len(val_paths)} files for validation ({len(class_names)} classes)."))
+        print(console.dim(f" Found {total_train} files for training ({len(class_names)} classes)."))
+        print(console.dim(f" Found {len(val_paths)} files for validation ({len(class_names)} classes)."))
     else:
         split = cfg.data.val_split
         pct_train = int((1 - split) * 100)
@@ -117,12 +117,12 @@ def build_datasets(
             stratify=all_labels,
             random_state=cfg.training.seed,
         )
-        print(_console.dim(
+        print(console.dim(
             f" Found {total_train} files belonging to {len(class_names)} classes"
             f" — auto-splitting ({pct_train}/{pct_val})"
         ))
-        print(_console.dim(f"   ├─ {len(train_paths)} for training"))
-        print(_console.dim(f"   └─ {len(val_paths)} for validation"))
+        print(console.dim(f"   ├─ {len(train_paths)} for training"))
+        print(console.dim(f"   └─ {len(val_paths)} for validation"))
 
     train_ds = _dataset(train_paths, train_labels, class_names, cfg, True, transforms)
     val_ds = _dataset(val_paths, val_labels, class_names, cfg, False)

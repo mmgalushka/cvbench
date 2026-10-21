@@ -3,7 +3,7 @@ from pathlib import Path
 import click
 
 from cvbench.cli import _help
-from cvbench.core import _console
+from cvbench.core import console
 from cvbench.tasks import get_task
 
 _MODEL_SUFFIXES = {".keras": "keras", ".onnx": "onnx", ".tflite": "tflite"}
@@ -87,12 +87,12 @@ def predict(experiment, input_path, fmt, conf, top_k, probs, model_path):
     conversion differences (useful for debugging false positives after export).
     Use --format plan to print the Jetson inference script and run instructions.
     """
-    from cvbench.services.prediction import run_experiment_prediction
+    from cvbench.services.prediction import run_prediction
 
     if fmt == "plan":
-        print(_console.rule(thick=True))
+        print(console.rule(thick=True))
         print(" CVBench — predict  [plan]")
-        print(_console.rule(thick=True))
+        print(console.rule(thick=True))
         _print_plan_predict(experiment or "")
         return
 
@@ -117,7 +117,7 @@ def predict(experiment, input_path, fmt, conf, top_k, probs, model_path):
             )
         fmt = suffix_fmt
 
-    result = run_experiment_prediction(
+    result = run_prediction(
         experiment,
         input_path,
         fmt,
@@ -129,39 +129,39 @@ def predict(experiment, input_path, fmt, conf, top_k, probs, model_path):
     exp_name = result["experiment"]
 
     fmt_label = f"[{fmt}]"
-    print(_console.rule(thick=True))
+    print(console.rule(thick=True))
     print(f" CVBench — predict  {exp_name}  {fmt_label}")
-    print(_console.rule(thick=True))
+    print(console.rule(thick=True))
 
     formats_run = result["formats_run"]
     formats_skipped = result["formats_skipped"]
 
     print()
     if not formats_run:
-        print(_console.yellow(" No models available to run inference."))
+        print(console.yellow(" No models available to run inference."))
     else:
-        get_task(result["task"]).render_predictions(formats_run, fmt == "all")
+        get_task(result["task"]).view().render_predictions(formats_run, fmt == "all")
     print()
 
-    print(_console.rule())
+    print(console.rule())
     if formats_run:
         n = len(formats_run[0]["results"])
         print(f" {n} image{'s' if n != 1 else ''}")
         for f in formats_run:
-            print(f" {_console.dim('model:')}   {f['format']:<8}  {f['model_path']}")
+            print(f" {console.dim('model:')}   {f['format']:<8}  {f['model_path']}")
     for s in result["inputs_skipped"]:
         print(
-            f" {_console.dim('unreadable:')} {s['filename']}  "
+            f" {console.dim('unreadable:')} {s['filename']}  "
             f"Cannot read image ({s['reason']})"
         )
     if formats_skipped:
         print()
         for s in formats_skipped:
-            print(f" {_console.dim('skipped:')} {s['format']:<8}  {s['reason']}")
+            print(f" {console.dim('skipped:')} {s['format']:<8}  {s['reason']}")
     if fmt == "all":
         print()
         print(
-            _console.dim(
+            console.dim(
                 " plan: Jetson only — for more information use: predict --format plan"
             )
         )
@@ -170,7 +170,7 @@ def predict(experiment, input_path, fmt, conf, top_k, probs, model_path):
 def _print_plan_predict(run_name: str) -> None:
     print()
     print(
-        _console.blue(
+        console.blue(
             " .plan inference runs on Jetson only — the engine is compiled for a specific GPU."
         )
     )
@@ -179,7 +179,7 @@ def _print_plan_predict(run_name: str) -> None:
     print()
     print(f"   runs export {run_name} --format plan")
     print()
-    print(_console.rule())
+    print(console.rule())
     print(
         " Once you have model.plan on the Jetson, save the script below as infer.py,"
     )
@@ -189,7 +189,7 @@ def _print_plan_predict(run_name: str) -> None:
     print("   ./infer.py model.plan image.jpg")
     print("   ./infer.py model.plan images/")
     print()
-    print(_console.rule())
+    print(console.rule())
     print()
     print("   #!/usr/bin/env python3")
     print('   """TensorRT inference — single image or folder."""')

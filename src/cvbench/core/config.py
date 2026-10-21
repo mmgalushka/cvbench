@@ -138,22 +138,6 @@ class RunConfig:
     cli_command: str = ""
 
     @property
-    def val_accuracy(self) -> Any:
-        return self.metrics.get("val_accuracy")
-
-    @val_accuracy.setter
-    def val_accuracy(self, value: Any) -> None:
-        self._set_metric("val_accuracy", value)
-
-    @property
-    def val_loss(self) -> Any:
-        return self.metrics.get("val_loss")
-
-    @val_loss.setter
-    def val_loss(self, value: Any) -> None:
-        self._set_metric("val_loss", value)
-
-    @property
     def primary_value(self) -> Any:
         return self.metrics.get(self.primary_metric)
 

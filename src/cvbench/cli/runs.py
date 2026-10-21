@@ -6,9 +6,9 @@ import click
 import numpy as np
 
 from cvbench.cli import _help
-from cvbench.core import _console, present
-from cvbench.core._confusion import print_confusion_matrix
+from cvbench.core import console, present
 from cvbench.core.config import load_config, update_run_status
+from cvbench.core.confusion import print_confusion_matrix
 from cvbench.core.exp_store import (
     EXPERIMENTS_DIR,
     assert_name_available,
@@ -122,8 +122,8 @@ def list_runs(experiments_dir, sort):
         return
 
     displays = [present.present_run(r) for r in entries]
-    columns = present.run_columns(_console.width())
-    _console.table(
+    columns = present.run_columns(console.width())
+    console.table(
         [(label, align) if align == "right" else label for _, label, align in columns],
         [
             [d["name"] if key == "name" else present.run_cell(d, key) for key, _, _ in columns]
@@ -131,7 +131,7 @@ def list_runs(experiments_dir, sort):
         ],
     )
     if sweeps:
-        print(_console.dim(" Sweeps: `runs list <sweep>` shows their trials."))
+        print(console.dim(" Sweeps: `runs list <sweep>` shows their trials."))
 
 
 def _show_sweep(sweep_dir):
@@ -141,9 +141,9 @@ def _show_sweep(sweep_dir):
 
     manifest, rows = summarize(sweep_dir)
 
-    print(_console.rule())
-    print(f" {_console.bold(f'CVBench — sweep {manifest.name}')}")
-    print(_console.rule())
+    print(console.rule())
+    print(f" {console.bold(f'CVBench — sweep {manifest.name}')}")
+    print(console.rule())
     for label, value in [
         ("Date", manifest.date),
         ("Data", manifest.data_dir),
@@ -151,14 +151,14 @@ def _show_sweep(sweep_dir):
         ("Metric", f"{manifest.metric} ({manifest.direction})"),
         ("Axes", ", ".join(f"{display_key(k)}={','.join(v)}" for k, v in manifest.axes.items())),
     ]:
-        print(f" {_console.dim(f'{label:<10}')} {value}")
+        print(f" {console.dim(f'{label:<10}')} {value}")
     print()
     print_trial_table(rows, list(manifest.axes), manifest.metric, show_test=True)
     best = best_trial(rows)
     if best is not None:
         score = present.fmt_metric(manifest.metric, best.value)
-        print(f" Best: {_console.green(best.dir)} ({manifest.metric} = {score})")
-        print(_console.dim(f" Inspect a trial with: runs show {best.dir}"))
+        print(f" Best: {console.green(best.dir)} ({manifest.metric} = {score})")
+        print(console.dim(f" Inspect a trial with: runs show {best.dir}"))
 
 
 @runs.command(
@@ -190,39 +190,39 @@ def show(experiment):
     entry = _read_entry(run_dir)
     run_name = entry.get("name", run_dir.name)
 
-    print(_console.rule())
-    print(f" {_console.bold(f'CVBench — run {run_name}')}")
-    print(_console.rule())
+    print(console.rule())
+    print(f" {console.bold(f'CVBench — run {run_name}')}")
+    print(console.rule())
     for label, value in present.run_fields(entry):
         print(f" {label:<22}: {value}")
-    print(_console.rule())
+    print(console.rule())
 
-    print(f" {_console.bold(present.SECTIONS['config'])} {_console.dim('(non-default values)')}")
+    print(f" {console.bold(present.SECTIONS['config'])} {console.dim('(non-default values)')}")
     for key, value in _config_lines(cfg):
         print(f"   {key:<30}: {value}")
     if cfg.run.cli_command:
         print(f"   {'command':<30}: {cfg.run.cli_command}")
-    print(_console.rule())
+    print(console.rule())
 
     export_dir = run_dir / "export"
     exports = sorted(d.name for d in export_dir.iterdir() if d.is_dir()) if export_dir.is_dir() else []
-    print(f" {_console.bold(present.SECTIONS['exports'])}")
+    print(f" {console.bold(present.SECTIONS['exports'])}")
     if exports:
         for name in exports:
             print(f"   {name}")
     else:
-        print(_console.dim("   None"))
-    print(_console.rule())
+        print(console.dim("   None"))
+    print(console.rule())
 
     eval_path = run_dir / "eval_report.json"
-    print(f" {_console.bold(present.SECTIONS['evaluation'])}")
+    print(f" {console.bold(present.SECTIONS['evaluation'])}")
     if eval_path.exists():
         with open(eval_path) as f:
             report = json.load(f)
         task_name = report.get("task")
         advisories = present.run_advisories(run_dir, report)
         if task_name in TASK_NAMES:
-            get_task(task_name).render_report(report, entry.get("val_accuracy"), advisories)
+            get_task(task_name).view().render_report(report, entry.get("val_accuracy"), advisories)
         else:
             # Unknown/legacy report shape — fall back to the generic
             # overall/per-class/confusion-matrix rendering.
@@ -234,7 +234,7 @@ def show(experiment):
                     (cls, m.get("precision", "—"), m.get("recall", "—"), m.get("f1", "—"), m.get("support", "—"))
                     for cls, m in per_class.items()
                 ]
-                _console.table(
+                console.table(
                     ["Class", ("Precision", "right"), ("Recall", "right"), ("F1", "right"), ("Support", "right")],
                     rows,
                 )
@@ -245,8 +245,8 @@ def show(experiment):
                     np.array(confusion_matrix["matrix"]), confusion_matrix["classes"]
                 )
     else:
-        print(_console.dim("   No eval_report.json found. Run: evaluate " + run_dir.name))
-    print(_console.rule())
+        print(console.dim("   No eval_report.json found. Run: evaluate " + run_dir.name))
+    print(console.rule())
 
 
 @runs.command(
@@ -280,7 +280,7 @@ def rename(experiment, new_name):
     new_dir = run_dir.parent / new_name
     os.rename(run_dir, new_dir)
     update_run_status(str(new_dir), name=new_name)
-    print(_console.green(f" Renamed '{run_dir.name}' → '{new_name}'."))
+    print(console.green(f" Renamed '{run_dir.name}' → '{new_name}'."))
 
 
 @runs.command(
@@ -417,12 +417,12 @@ def delete(experiment, export_subfolder, yes):
 
     if not yes:
         click.confirm(
-            f"{_console.yellow('Warning:')} This will permanently delete {label}. Continue?",
+            f"{console.yellow('Warning:')} This will permanently delete {label}. Continue?",
             abort=True,
         )
 
     shutil.rmtree(target)
-    print(_console.green(f" Deleted {label}."))
+    print(console.green(f" Deleted {label}."))
 
 
 

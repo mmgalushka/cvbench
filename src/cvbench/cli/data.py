@@ -58,7 +58,7 @@ data.add_command(generate, name="generate")
 @click.argument("data_dir", default=DATA_DIR)
 def list_data(data_dir):
     """List datasets in DATA_DIR (default: data/)."""
-    from cvbench.core import _console
+    from cvbench.core import console
 
     DATA_REG.base_dir = data_dir
     names = DATA_REG.list_entries()
@@ -67,7 +67,7 @@ def list_data(data_dir):
         return
 
     infos = scan_datasets(data_dir, names)
-    _console.table(
+    console.table(
         [(label, align) if align == "right" else label for _, label, align in present.DATASET_COLUMNS],
         [
             [present.present_dataset(info)[key] for key, _, _ in present.DATASET_COLUMNS]
@@ -83,64 +83,64 @@ def _mean_brightness(path: Path) -> float:
 
 def _print_group(h, kept, dropped):
     """One line per duplicate group: green = kept, red = dropped."""
-    from cvbench.core import _console
+    from cvbench.core import console
 
-    parts = [f"{_console.green('✓')} {_console.green(str(p))}" for p in kept]
-    parts += [f"{_console.red('✗')} {_console.red(str(p))}" for p in dropped]
-    print(f"   {_console.dim(h[:8])}  {'  '.join(parts)}")
+    parts = [f"{console.green('✓')} {console.green(str(p))}" for p in kept]
+    parts += [f"{console.red('✗')} {console.red(str(p))}" for p in dropped]
+    print(f"   {console.dim(h[:8])}  {'  '.join(parts)}")
 
 
 def _print_integrity(root, issues):
     """Print the integrity sections of ``data explore`` (unreadable, incompatible, leaks, duplicates, conflicts)."""
-    from cvbench.core import _console
+    from cvbench.core import console
 
     def group_line(h, paths):
-        print(f"   {_console.dim(h[:8])}  {', '.join(_console.yellow(str(p)) for p in paths)}")
+        print(f"   {console.dim(h[:8])}  {', '.join(console.yellow(str(p)) for p in paths)}")
 
     corrupt, leaks, conflicts = issues.corrupt, issues.leaks, issues.label_conflicts
     duplicates = issues.duplicates
-    print(f" {_console.bold('Data integrity')}  {_console.dim('|')}  {_console.dim(str(root))}")
+    print(f" {console.bold('Data integrity')}  {console.dim('|')}  {console.dim(str(root))}")
     if corrupt:
-        print(f" {_console.bold(f'{len(corrupt)} unreadable image(s):')}")
+        print(f" {console.bold(f'{len(corrupt)} unreadable image(s):')}")
         for rel, reason in corrupt:
-            print(f"   {_console.yellow(str(rel))}  {_console.dim(reason)}")
+            print(f"   {console.yellow(str(rel))}  {console.dim(reason)}")
     else:
-        _console.success("No unreadable images found.")
+        console.success("No unreadable images found.")
     if issues.incompatible:
         n = len(issues.incompatible)
-        print(f" {_console.bold(f'{n} image(s) PIL reads but TensorFlow rejects (training would fail):')}")
+        print(f" {console.bold(f'{n} image(s) PIL reads but TensorFlow rejects (training would fail):')}")
         for rel, reason in issues.incompatible:
-            print(f"   {_console.yellow(str(rel))}  {_console.dim(reason)}")
-        _console.warning("Drop them or re-encode them as PNG with 'data prep --on-incompatible drop|repair'.")
+            print(f"   {console.yellow(str(rel))}  {console.dim(reason)}")
+        console.warning("Drop them or re-encode them as PNG with 'data prep --on-incompatible drop|repair'.")
     else:
-        _console.success("No TensorFlow-incompatible images found.")
+        console.success("No TensorFlow-incompatible images found.")
     if leaks:
-        print(f" {_console.bold(f'{len(leaks)} image(s) appear in more than one split:')}")
+        print(f" {console.bold(f'{len(leaks)} image(s) appear in more than one split:')}")
         for h, paths in leaks.items():
             group_line(h, paths)
     else:
-        _console.success("No cross-split duplicates found.")
+        console.success("No cross-split duplicates found.")
     if duplicates:
-        print(f" {_console.bold(f'{len(duplicates)} within-split duplicate group(s):')}")
+        print(f" {console.bold(f'{len(duplicates)} within-split duplicate group(s):')}")
         for h, paths in duplicates.items():
             group_line(h, paths)
-        _console.warning("Next: run 'data prep <src> <dst>' to remove the duplicates.")
+        console.warning("Next: run 'data prep <src> <dst>' to remove the duplicates.")
     else:
-        _console.success("No within-split duplicates found.")
+        console.success("No within-split duplicates found.")
     if conflicts:
-        print(f" {_console.bold(f'{len(conflicts)} image(s) with conflicting labels:')}")
+        print(f" {console.bold(f'{len(conflicts)} image(s) with conflicting labels:')}")
         for h, paths in conflicts.items():
             group_line(h, paths)
     else:
-        _console.success("No conflicting labels found.")
+        console.success("No conflicting labels found.")
     if issues:
-        _console.warning("Data problems found; run 'data prep <src> <dst>' to remove them.")
-    print(_console.rule())
+        console.warning("Data problems found; run 'data prep <src> <dst>' to remove them.")
+    print(console.rule())
 
 
 def _explore_split(split_dir: Path, bad: set[Path]) -> bool:
     """Print the brightness and class-balance report for SPLIT_DIR; False if it holds no images."""
-    from cvbench.core import _console
+    from cvbench.core import console
 
     class_dirs = sorted(p for p in split_dir.iterdir() if p.is_dir())
     if not class_dirs:
@@ -152,7 +152,7 @@ def _explore_split(split_dir: Path, bad: set[Path]) -> bool:
     }
     readable = {cls_dir: [f for f in images if f not in bad] for cls_dir, images in all_images.items()}
     stats: list[dict[str, Any]] = []
-    with _console.progress(sum(map(len, readable.values())), "Measuring brightness") as advance:
+    with console.progress(sum(map(len, readable.values())), "Measuring brightness") as advance:
         brightness: dict[Path, list[float]] = {}
         for cls_dir, images in readable.items():
             brightness[cls_dir] = []
@@ -181,20 +181,20 @@ def _explore_split(split_dir: Path, bad: set[Path]) -> bool:
     std_of_means = float(np.std(means))
     max_cls = max(len(s["class"]) for s in stats)
 
-    print(_console.rule())
-    print(f" {_console.bold('CVBench — data explore')}  {_console.dim('|')}  {_console.dim(str(split_dir))}")
-    print(_console.rule())
-    print(f" {_console.bold('Brightness distribution per class')}  {_console.dim('[0–255 scale]')}")
+    print(console.rule())
+    print(f" {console.bold('CVBench — data explore')}  {console.dim('|')}  {console.dim(str(split_dir))}")
+    print(console.rule())
+    print(f" {console.bold('Brightness distribution per class')}  {console.dim('[0–255 scale]')}")
     print()
-    print(_console.dim(f"   {'Class':<{max_cls}}  {'Images':>7}  {'Mean':>6}  {'Std':>6}  {'Min':>5}  {'Max':>5}"))
+    print(console.dim(f"   {'Class':<{max_cls}}  {'Images':>7}  {'Mean':>6}  {'Std':>6}  {'Min':>5}  {'Max':>5}"))
 
     biased = [s for s in stats if std_of_means > 0 and abs(s["mean"] - dataset_mean) > std_of_means]
 
     for s in stats:
-        flag = f"  {_console.yellow('⚠️')}" if s in biased else ""
+        flag = f"  {console.yellow('⚠️')}" if s in biased else ""
         n_bad = s["unreadable"]
-        note = f"  {_console.dim(f'({n_bad} unreadable, excluded from brightness)')}" if n_bad else ""
-        mean_str = _console.bold(f"{s['mean']:>6.1f}")
+        note = f"  {console.dim(f'({n_bad} unreadable, excluded from brightness)')}" if n_bad else ""
+        mean_str = console.bold(f"{s['mean']:>6.1f}")
         print(
             f"   {s['class']:<{max_cls}}  {s['count']:>7}  "
             f"{mean_str}  {s['std']:>6.1f}  "
@@ -202,23 +202,23 @@ def _explore_split(split_dir: Path, bad: set[Path]) -> bool:
         )
 
     print()
-    print(f" Dataset mean brightness : {_console.bold(f'{dataset_mean:.1f}')}")
+    print(f" Dataset mean brightness : {console.bold(f'{dataset_mean:.1f}')}")
 
     if biased:
         print()
         for s in biased:
             dev = s["mean"] - dataset_mean
             direction = "brighter" if dev > 0 else "darker"
-            _console.warning(f"'{s['class']}' is {abs(dev):.1f} units {direction} than the dataset mean")
+            console.warning(f"'{s['class']}' is {abs(dev):.1f} units {direction} than the dataset mean")
         print()
-        print(f"   {_console.dim('Suggestion: consider brightness augmentation or per-image normalization.')}")
+        print(f"   {console.dim('Suggestion: consider brightness augmentation or per-image normalization.')}")
     else:
-        _console.success("No significant brightness bias detected.")
+        console.success("No significant brightness bias detected.")
 
     print()
     dist = dict(sorted(((c.name, len(i)) for c, i in all_images.items()), key=lambda x: -x[1]))
     if not print_class_distribution(dist):
-        _console.success("No significant class imbalance detected.")
+        console.success("No significant class imbalance detected.")
     return True
 
 
@@ -249,13 +249,13 @@ def explore(data_dir, split):
     for the whole dataset, and the command exits with status 1 if any are
     found; run ``data prep`` to drop or repair them.
     """
-    from cvbench.core import _console
+    from cvbench.core import console
 
     root = Path(data_dir)
     if not root.is_dir():
         raise click.ClickException(f"Dataset directory not found: '{root}'")
     n_images = len(layout_mod.list_images(root, recursive=True, exts=layout_mod.READABLE_IMAGE_EXTS))
-    with _console.progress(n_images, "Checking integrity") as advance:
+    with console.progress(n_images, "Checking integrity") as advance:
         issues = prep_mod.find_integrity_issues(root, progress=advance)
     bad = {root / rel for rel, _ in issues.corrupt}
 
@@ -270,7 +270,7 @@ def explore(data_dir, split):
     reported = [_explore_split(d, bad) for d in split_dirs]
     if not any(reported):
         raise click.ClickException("No images found.")
-    print(_console.rule())
+    print(console.rule())
     _print_integrity(root, issues)
     if issues:
         raise SystemExit(1)
@@ -306,7 +306,7 @@ def aug(preset, output, force):
     with all parameters and range/one_of syntax explained.
     """
     from cvbench.cli._aug_template import _preset_transforms, _reference_yaml, _render_config_yaml
-    from cvbench.core import _console
+    from cvbench.core import console
 
     path = Path(output)
     if path.exists() and not force:
@@ -316,7 +316,7 @@ def aug(preset, output, force):
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content)
-    _console.success(f"Saved → {path}")
+    console.success(f"Saved → {path}")
     print("  Open it in an editor to fine-tune any value.")
     print(f"  Usage:  train data/<dataset> --augmentation {path}")
 
@@ -350,7 +350,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
     from PIL import Image
 
     from cvbench.augmentations.pipeline import build_aug_pipeline
-    from cvbench.core import _console
+    from cvbench.core import console
     from cvbench.core.config import load_aug_file
 
     src = Path(src_dir)
@@ -387,15 +387,15 @@ def upsample(src_dir, dst_dir, aug_file, target):
     used_tokens: set[str] = set()
     used_hashes: set[str] = set()
 
-    print(_console.rule())
-    print(f" {_console.bold('CVBench — data upsample')}")
-    print(_console.rule())
-    print(f"  Source  : {_console.dim(str(src))}  ({n_src} images)")
+    print(console.rule())
+    print(f" {console.bold('CVBench — data upsample')}")
+    print(console.rule())
+    print(f"  Source  : {console.dim(str(src))}  ({n_src} images)")
     print(f"  Target  : {target} images  (+{target - n_src} to generate)")
     print()
 
     # --- copy originals ---
-    with _console.progress(n_src, "Copying originals") as advance:
+    with console.progress(n_src, "Copying originals") as advance:
         for img_path in images:
             token = _fresh_token(used_tokens)
             used_tokens.add(token)
@@ -404,7 +404,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
             arr = np.array(Image.open(img_path).convert("RGB"))
             used_hashes.add(hashify_mod.hash_array(arr))
             advance(1)
-    _console.success(f"Copied {n_src} original(s)")
+    console.success(f"Copied {n_src} original(s)")
     print()
 
     # --- generate augmented samples ---
@@ -413,7 +413,7 @@ def upsample(src_dir, dst_dir, aug_file, target):
     generated = 0
     total_skipped = 0
 
-    with _console.progress(n_to_generate, f"Generating {n_to_generate} augmented sample(s)") as advance:
+    with console.progress(n_to_generate, f"Generating {n_to_generate} augmented sample(s)") as advance:
         while generated < n_to_generate:
             src_path = random.choice(images)
             arr = np.array(Image.open(src_path).convert("RGB")).astype(np.float32)
@@ -438,12 +438,12 @@ def upsample(src_dir, dst_dir, aug_file, target):
             generated += 1
             advance(1)
 
-    _console.success(f"Generated {generated} augmented image(s)")
+    console.success(f"Generated {generated} augmented image(s)")
     if total_skipped:
-        print(f"  {_console.yellow('⚠')}  Skipped {total_skipped} duplicate(s) after {_MAX_RETRIES} retries each")
+        print(f"  {console.yellow('⚠')}  Skipped {total_skipped} duplicate(s) after {_MAX_RETRIES} retries each")
     print()
-    print(f"  Output  : {_console.bold(str(dst))}  ({_console.green(str(len(list(dst.iterdir()))))} images total)")
-    print(_console.rule())
+    print(f"  Output  : {console.bold(str(dst))}  ({console.green(str(len(list(dst.iterdir()))))} images total)")
+    print(console.rule())
 
 
 @data.command(
@@ -493,7 +493,7 @@ def prep(src, dst, no_hash, no_duplicates, on_incompatible, dry_run):
     filenames are kept and duplicates are only warned about, unless
     --no-duplicates is also given. SRC is never modified.
     """
-    from cvbench.core import _console
+    from cvbench.core import console
 
     src_dir = Path(src)
     dst_dir = Path(dst)
@@ -508,77 +508,77 @@ def prep(src, dst, no_hash, no_duplicates, on_incompatible, dry_run):
         )
 
     n_images = len(layout_mod.list_images(src_dir, recursive=True, exts=layout_mod.READABLE_IMAGE_EXTS))
-    with _console.progress(n_images, "Scanning") as advance:
+    with console.progress(n_images, "Scanning") as advance:
         plan = prep_mod.build_plan(
             src_dir, hash_names=not no_hash, remove_duplicates=no_duplicates, progress=advance,
             on_incompatible=on_incompatible,
         )
     if not dry_run:
-        with _console.progress(len(plan.actions), "Copying") as advance:
+        with console.progress(len(plan.actions), "Copying") as advance:
             prep_mod.apply_plan(plan, src_dir, dst_dir, progress=advance)
 
-    print(_console.rule())
-    print(f" {_console.bold('CVBench — data prep')}")
-    print(_console.rule())
-    print(f"  Source  : {_console.dim(str(src_dir))}")
-    print(f"  Dest    : {_console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print(console.rule())
+    print(f" {console.bold('CVBench — data prep')}")
+    print(console.rule())
+    print(f"  Source  : {console.dim(str(src_dir))}")
+    print(f"  Dest    : {console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
     print()
 
     if plan.corrupt:
-        print(f" {_console.bold(f'{len(plan.corrupt)} corrupt image(s) dropped:')}")
+        print(f" {console.bold(f'{len(plan.corrupt)} corrupt image(s) dropped:')}")
         for rel, reason in plan.corrupt:
-            print(f"   {_console.red('✗')} {_console.red(str(rel))}  {_console.dim(reason)}")
+            print(f"   {console.red('✗')} {console.red(str(rel))}  {console.dim(reason)}")
     else:
-        _console.success("No corrupt images found.")
+        console.success("No corrupt images found.")
 
     if plan.incompatible:
         repaired = plan.on_incompatible == "repair"
         verb = "re-encoded as PNG" if repaired else "dropped"
-        print(f" {_console.bold(f'{len(plan.incompatible)} TensorFlow-incompatible image(s) {verb}:')}")
+        print(f" {console.bold(f'{len(plan.incompatible)} TensorFlow-incompatible image(s) {verb}:')}")
         for rel, reason in plan.incompatible:
-            mark, color = (_console.yellow("↻"), _console.yellow) if repaired else (_console.red("✗"), _console.red)
-            print(f"   {mark} {color(str(rel))}  {_console.dim(reason)}")
+            mark, color = (console.yellow("↻"), console.yellow) if repaired else (console.red("✗"), console.red)
+            print(f"   {mark} {color(str(rel))}  {console.dim(reason)}")
         if not repaired:
-            _console.warning("Pass --on-incompatible repair to keep them (re-encoded as PNG).")
+            console.warning("Pass --on-incompatible repair to keep them (re-encoded as PNG).")
     else:
-        _console.success("No TensorFlow-incompatible images found.")
+        console.success("No TensorFlow-incompatible images found.")
 
     if plan.cross_split_leaks:
         n_leak_files = sum(len(v) - 1 for v in plan.cross_split_leaks.values())
-        print(f" {_console.bold(f'{n_leak_files} cross-split duplicate(s) removed:')}")
+        print(f" {console.bold(f'{n_leak_files} cross-split duplicate(s) removed:')}")
         for h, paths in plan.cross_split_leaks.items():
             _print_group(h, paths[:1], paths[1:])
     else:
-        _console.success("No cross-split duplicates found.")
+        console.success("No cross-split duplicates found.")
 
     if plan.label_conflicts:
         n_conflict_files = sum(len(v) for v in plan.label_conflicts.values())
-        print(f" {_console.bold(f'{n_conflict_files} file(s) with conflicting labels dropped:')}")
+        print(f" {console.bold(f'{n_conflict_files} file(s) with conflicting labels dropped:')}")
         for h, paths in plan.label_conflicts.items():
             _print_group(h, [], paths)
     else:
-        _console.success("No conflicting labels found.")
+        console.success("No conflicting labels found.")
 
     if plan.duplicate_groups:
-        print(f" {_console.bold(f'{len(plan.duplicate_groups)} within-split duplicate group(s):')}")
+        print(f" {console.bold(f'{len(plan.duplicate_groups)} within-split duplicate group(s):')}")
         for h, paths in plan.duplicate_groups.items():
             _print_group(h, paths if not plan.dedup else paths[:1], paths[1:] if plan.dedup else [])
         if not plan.dedup:
-            _console.warning("Duplicates were kept; pass --no-duplicates to remove them.")
+            console.warning("Duplicates were kept; pass --no-duplicates to remove them.")
     else:
-        _console.success("No within-split duplicates found.")
+        console.success("No within-split duplicates found.")
 
     print()
     splits = [s for s in (*layout_mod.SPLIT_NAMES, None)
               if plan.counts_before[s] or plan.counts_after[s]]
-    print(_console.dim(f"   {'Split':<8}  {'Before':>7}  {'After':>7}"))
+    print(console.dim(f"   {'Split':<8}  {'Before':>7}  {'After':>7}"))
     for s in splits:
         print(f"   {s or '(none)':<8}  {plan.counts_before[s]:>7}  {plan.counts_after[s]:>7}")
 
     print()
     verb = "Would write" if dry_run else "Wrote"
-    _console.success(f"{verb} {len(plan.actions)} image(s)")
-    print(_console.rule())
+    console.success(f"{verb} {len(plan.actions)} image(s)")
+    print(console.rule())
 
 
 @data.command(
@@ -618,7 +618,7 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
     with no boxes are split the same proportional, seeded way as every
     other group. SRC is never modified.
     """
-    from cvbench.core import _console
+    from cvbench.core import console
 
     src_dir = Path(src)
     dst_dir = Path(dst)
@@ -640,20 +640,20 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
 
     plan = split_mod.plan_split(src_dir, ratios, seed)
     if not dry_run:
-        with _console.progress(len(plan.actions), "Copying") as advance:
+        with console.progress(len(plan.actions), "Copying") as advance:
             split_mod.apply_plan(plan, dst_dir, progress=advance)
 
-    print(_console.rule())
-    print(f" {_console.bold('CVBench — data split')}")
-    print(_console.rule())
-    print(f"  Source  : {_console.dim(str(src_dir))}  ({_console.dim('yolo' if plan.is_yolo else 'classification')})")
-    print(f"  Dest    : {_console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print(console.rule())
+    print(f" {console.bold('CVBench — data split')}")
+    print(console.rule())
+    print(f"  Source  : {console.dim(str(src_dir))}  ({console.dim('yolo' if plan.is_yolo else 'classification')})")
+    print(f"  Dest    : {console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
     print(f"  Ratios  : train={train_ratio}  val={val_ratio}  test={test_ratio}  seed={seed}")
     print()
 
     classes = sorted({c for counts in plan.counts.values() for c in counts})
     max_cls = max((len(c) for c in classes), default=5)
-    print(_console.dim(f"   {'Class':<{max_cls}}  {'Train':>7}  {'Val':>7}  {'Test':>7}"))
+    print(console.dim(f"   {'Class':<{max_cls}}  {'Train':>7}  {'Val':>7}  {'Test':>7}"))
     for cls in classes:
         row = [plan.counts.get(s, {}).get(cls, 0) for s in ("train", "val", "test")]
         print(f"   {cls:<{max_cls}}  {row[0]:>7}  {row[1]:>7}  {row[2]:>7}")
@@ -661,8 +661,8 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
     print()
     verb = "Would write" if dry_run else "Wrote"
     total = len(plan.actions)
-    _console.success(f"{verb} {total} image(s) across {len(plan.splits_written)} split(s)")
-    print(_console.rule())
+    console.success(f"{verb} {total} image(s) across {len(plan.splits_written)} split(s)")
+    print(console.rule())
 
 
 @data.command(
@@ -688,7 +688,7 @@ def flatten(src, dst, dry_run):
     + labels/*), with no train/val/test structure. Use 'data split'
     afterward to re-partition. SRC is never modified.
     """
-    from cvbench.core import _console
+    from cvbench.core import console
 
     src_dir = Path(src)
     dst_dir = Path(dst)
@@ -704,25 +704,25 @@ def flatten(src, dst, dry_run):
 
     plan = flatten_mod.plan_flatten(src_dir)
     if not dry_run:
-        with _console.progress(len(plan.actions), "Copying") as advance:
+        with console.progress(len(plan.actions), "Copying") as advance:
             flatten_mod.apply_plan(plan, dst_dir, progress=advance)
 
-    print(_console.rule())
-    print(f" {_console.bold('CVBench — data flatten')}")
-    print(_console.rule())
-    print(f"  Source  : {_console.dim(str(src_dir))}  ({_console.dim('yolo' if plan.is_yolo else 'classification')})")
-    print(f"  Dest    : {_console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    print(console.rule())
+    print(f" {console.bold('CVBench — data flatten')}")
+    print(console.rule())
+    print(f"  Source  : {console.dim(str(src_dir))}  ({console.dim('yolo' if plan.is_yolo else 'classification')})")
+    print(f"  Dest    : {console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
     print()
 
     classes = sorted(plan.counts)
     max_cls = max((len(c) for c in classes), default=5)
-    print(_console.dim(f"   {'Class':<{max_cls}}  {'Count':>7}"))
+    print(console.dim(f"   {'Class':<{max_cls}}  {'Count':>7}"))
     for cls in classes:
         print(f"   {cls:<{max_cls}}  {plan.counts[cls]:>7}")
 
     print()
     verb = "Would write" if dry_run else "Wrote"
-    _console.success(f"{verb} {len(plan.actions)} image(s)")
-    print(_console.rule())
+    console.success(f"{verb} {len(plan.actions)} image(s)")
+    print(console.rule())
 
 

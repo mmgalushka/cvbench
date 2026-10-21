@@ -14,8 +14,8 @@ import difflib
 from collections.abc import Callable
 from pathlib import Path
 
-from cvbench.core._names import validate_slug
 from cvbench.core.errors import ConflictError, NotFoundError
+from cvbench.core.names import validate_slug
 
 
 class Registry:

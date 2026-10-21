@@ -4,7 +4,7 @@ Used by both the classification and detection evaluators — detection's matrix
 just carries an extra trailing ``background`` label, which prints like any
 other row/column.
 
-Colour goes through :mod:`cvbench.core._console`'s shared rich Console, so it
+Colour goes through :mod:`cvbench.core.console`'s shared rich Console, so it
 respects ``NO_COLOR`` and non-TTY (piped) output like every other CLI helper.
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ import numpy as np
 from rich.color import Color
 from rich.style import Style
 
-from cvbench.core._console import _color_enabled, _make_console
+from cvbench.core.console import _color_enabled, _make_console
 
 # ANSI 256-colour blue ramp: white -> pure blue (no cyan tint)
 # 231=#ffffff  189=#d7d7ff  147=#afafff  105=#8787ff  63=#5f5fff  21=#0000ff

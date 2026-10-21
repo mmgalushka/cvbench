@@ -5,8 +5,8 @@ from pathlib import Path
 
 import numpy as np
 
-from cvbench.core._names import class_label
 from cvbench.core.errors import ConfigError
+from cvbench.core.names import class_label
 
 
 def build_detection_result(outputs: list[np.ndarray], cfg, conf: float | None) -> dict:

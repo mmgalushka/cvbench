@@ -13,8 +13,8 @@ from cvbench.core.config import DetectionConfig, TransformConfig
 from cvbench.core.task import VAL_LOSS, DatasetSpec, MetricSpec, Task
 from cvbench.datasets.layout import detection_layout_errors, is_yolo_dataset, list_images, yolo_class_names
 from cvbench.detection import predict as _predict
-from cvbench.detection import view as _view
 from cvbench.detection.anchors import resolve_anchors
+from cvbench.detection.view import DetectionView
 
 # The 5 geometric transforms move pixels, so they'd desynchronize an image
 # from its (untouched) boxes. The 18 custom aug_* transforms and the 3
@@ -103,8 +103,8 @@ class DetectionTask(Task):
             kept.append(t)
 
         if dropped:
-            from cvbench.core import _console
-            _console.warning(
+            from cvbench.core import console
+            console.warning(
                 f"Dropping geometric augmentation(s) for detection: {', '.join(dropped)}"
                 " — they would move pixels without moving the boxes."
             )
@@ -159,17 +159,5 @@ class DetectionTask(Task):
             "confidence": top["confidence"] if top else None,
         }
 
-    def render_predictions(self, formats_run, all_formats) -> None:
-        _view.render_predictions(formats_run, all_formats)
-
-    def eval_summary(self, report, val_accuracy=None):
-        return _view.eval_summary(report, val_accuracy)
-
-    def per_class_table(self, report):
-        return _view.per_class_table(report)
-
-    def report_advisories(self, report) -> list[str]:
-        return _view.report_advisories(report)
-
-    def render_report(self, report, val_accuracy=None, advisories=()) -> None:
-        _view.render_report(report, val_accuracy, advisories)
+    def view(self) -> DetectionView:
+        return DetectionView()

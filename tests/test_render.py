@@ -5,8 +5,8 @@ Mirrors test_confusion_printer.py's style: build a synthetic report dict
 and assert the printed output surfaces the right numbers, without needing a
 real model or dataset.
 """
-from cvbench.classification.view import render_report as print_classification_body
-from cvbench.detection.view import render_report as print_detection_body
+from cvbench.classification.view import ClassificationView
+from cvbench.detection.view import DetectionView
 from cvbench.tasks import get_task
 
 
@@ -24,7 +24,7 @@ def _classification_report(top3=0.98):
 
 
 def test_classification_body_prints_accuracy_and_top3(capsys):
-    print_classification_body(_classification_report())
+    ClassificationView().render_report(_classification_report())
     out = capsys.readouterr().out
     assert "91.2%" in out
     assert "Top-3 accuracy" in out and "98.0%" in out
@@ -33,7 +33,7 @@ def test_classification_body_prints_accuracy_and_top3(capsys):
 
 
 def test_classification_body_omits_top3_when_absent(capsys):
-    print_classification_body(_classification_report(top3=None))
+    ClassificationView().render_report(_classification_report(top3=None))
     out = capsys.readouterr().out
     assert "Top-3 accuracy" not in out
 
@@ -76,7 +76,7 @@ def _detection_report():
 
 
 def test_detection_body_prints_localization_and_per_class_ap(capsys):
-    print_detection_body(_detection_report())
+    DetectionView().render_report(_detection_report())
     out = capsys.readouterr().out
     assert "Localization" in out
     assert "82.0%" in out  # mean IoU
@@ -92,7 +92,7 @@ def test_detection_body_prints_localization_and_per_class_ap(capsys):
 def test_detection_body_handles_missing_ap75(capsys):
     report = _detection_report()
     report["per_class"]["cat"]["ap75"] = None
-    print_detection_body(report)
+    DetectionView().render_report(report)
     out = capsys.readouterr().out
     assert "n/a" in out
 
@@ -100,19 +100,19 @@ def test_detection_body_handles_missing_ap75(capsys):
 def test_detection_body_skips_outcomes_table_without_breakdown(capsys):
     report = _detection_report()
     del report["detection"]["class_breakdown"]
-    print_detection_body(report)
+    DetectionView().render_report(report)
     out = capsys.readouterr().out
     assert "Per-class outcomes" not in out
     assert "Detection quality" in out
 
 
 def test_classification_body_shows_val_accuracy_beside_test(capsys):
-    print_classification_body(_classification_report(), val_accuracy=0.934)
+    ClassificationView().render_report(_classification_report(), val_accuracy=0.934)
     assert "(val 93.4%)" in capsys.readouterr().out
 
 
 def test_detection_body_prints_threshold_legend(capsys):
-    print_detection_body(_detection_report())
+    DetectionView().render_report(_detection_report())
     out = capsys.readouterr().out
     assert out.count("conf ≥ 0.25, IoU ≥ 0.5") == 3  # outcomes, quality, TP/FP/FN footer
 
@@ -121,15 +121,15 @@ def test_detection_body_warns_on_many_false_positives_per_image(capsys):
     report = _detection_report()
     report["detection"]["counts"]["fp"] = 1117
     report["n_images"] = 15
-    print_detection_body(report, advisories=get_task("detection").report_advisories(report))
+    DetectionView().render_report(report, advisories=get_task("detection").view().report_advisories(report))
     assert "74.5 false positives per image" in capsys.readouterr().out
 
 
 def test_detection_body_quiet_on_few_false_positives(capsys):
-    print_detection_body(_detection_report())
+    DetectionView().render_report(_detection_report())
     assert "false positives per image" not in capsys.readouterr().out
 
 
 def test_detection_body_prints_extra_advisories(capsys):
-    print_detection_body(_detection_report(), advisories=["train longer please"])
+    DetectionView().render_report(_detection_report(), advisories=["train longer please"])
     assert "train longer please" in capsys.readouterr().out

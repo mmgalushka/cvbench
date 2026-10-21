@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cvbench.classification import predict as _predict
-from cvbench.classification import view as _view
+from cvbench.classification.view import ClassificationView
 from cvbench.core.task import VAL_LOSS, DatasetSpec, MetricSpec, Task
 from cvbench.datasets.layout import classification_layout_errors, is_yolo_dataset, list_images
 from cvbench.datasets.stats import get_class_distribution, print_imbalance_warning, resolve_class_weights
@@ -112,7 +112,7 @@ class ClassificationTask(Task):
             run_dir=run_dir,
             test_dir=cfg.data.test_dir,
             output_dir=output_dir,
-            val_accuracy=cfg.run.val_accuracy,
+            val_accuracy=cfg.run.metrics.get("val_accuracy"),
             listener=listener,
         )
 
@@ -125,14 +125,5 @@ class ClassificationTask(Task):
             **_predict.build_classification_result(outputs[0], cfg.data.classes, top_k),
         }
 
-    def render_predictions(self, formats_run, all_formats) -> None:
-        _view.render_predictions(formats_run, all_formats)
-
-    def eval_summary(self, report, val_accuracy=None):
-        return _view.eval_summary(report, val_accuracy)
-
-    def per_class_table(self, report):
-        return _view.per_class_table(report)
-
-    def render_report(self, report, val_accuracy=None, advisories=()) -> None:
-        _view.render_report(report, val_accuracy, advisories)
+    def view(self) -> ClassificationView:
+        return ClassificationView()

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import keras
 
-from cvbench.core import _console
+from cvbench.core import console
 from cvbench.core.backbone import apply_freeze
 from cvbench.core.checkpoint import build_checkpoint_callback, load_best_history, prune_checkpoints
 from cvbench.core.config import CVBenchConfig, update_run_status
@@ -114,7 +114,7 @@ def train(
             factor=lrs.factor,
             patience=lrs.patience,
             min_lr=lrs.min_lr,
-            verbose=1 if _console.is_tty() else 2,
+            verbose=1 if console.is_tty() else 2,
         ))
 
     class _EpochEmitter(keras.callbacks.Callback):
@@ -154,7 +154,7 @@ def train(
         validation_data=val_ds,
         callbacks=callbacks,
         class_weight=class_weight,
-        verbose=1 if _console.is_tty() else 2,
+        verbose=1 if console.is_tty() else 2,
     )
 
     interrupted = _stop_flag["value"]
@@ -181,7 +181,7 @@ def train(
         epochs_run=last_epoch,
         resumable=interrupted,
         resume_checkpoint=interrupt_ckpt,
-        **task.headline_metrics(final_metrics),
+        metrics={k: v for k, v in task.headline_metrics(final_metrics).items() if v is not None},
     )
 
     status = "interrupted" if interrupted else "done"

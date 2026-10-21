@@ -28,7 +28,7 @@ def fake_training(tmp_path, monkeypatch):
             save_config(cfg, str(out))
             raise RuntimeError("boom")
         cfg.run.status = "done"
-        cfg.run.val_loss = lr * 1000
+        cfg.run.metrics["val_loss"] = lr * 1000
         save_config(cfg, str(out))
         return str(out)
 
