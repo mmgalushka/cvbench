@@ -7,8 +7,8 @@ from typing import Any
 import click
 
 from cvbench.cli import _help
+from cvbench.core.backbone import backbone_names
 from cvbench.core.config import (
-    BACKBONE_NAMES,
     FLAG_KEYS,
     KEY_FLAGS,
     DataConfig,
@@ -34,7 +34,7 @@ _TRAIN = TrainingConfig()
 # Click type of every flag `train` and `sweep` share, so a value is accepted or rejected
 # identically by both (sweep converts each comma-separated item through the same type).
 FLAG_TYPES: dict[str, click.ParamType] = {
-    "backbone": click.Choice(BACKBONE_NAMES),
+    "backbone": click.Choice(backbone_names()),
     "weights": click.Choice(["imagenet", "none"]),
     "epochs": click.IntRange(min=1),
     "lr": click.FloatRange(min=0, min_open=True),
@@ -241,9 +241,8 @@ def validate_dataset(data_dir: str, from_dir: str | None = None) -> None:
 @click.option("--from", "from_dir", default=None, type=click.Path(exists=True),
               help="Load config from an existing run as baseline (default: none).")
 @click.option("--backbone", default=None, type=FLAG_TYPES["backbone"],
-              help="Backbone name (efficientnet_b0..b5, resnet_18, resnet_50). "
-                   f"(default: {_MODEL.backbone}; detection defaults to resnet_18 "
-                   "unless this is passed explicitly).")
+              help="Backbone name (efficientnet_b0..b5, resnet_18, resnet_50) "
+                   "(default: task default (efficientnet_b0; resnet_18 for detection)).")
 @click.option("--weights", default=None, type=FLAG_TYPES["weights"],
               help=f"Backbone weight init: imagenet (pretrained) or none (random/scratch) "
                    f"(default: {_MODEL.weights}).")

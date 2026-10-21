@@ -58,9 +58,10 @@ def run_training(
     if errors:
         raise ConfigError("Invalid config for task " + repr(cfg.task) + ": " + "; ".join(errors))
 
-    # resolve_layout must run before naming: it's what finalizes
-    # cfg.model.backbone (e.g. detection's resnet_18 default when --backbone
-    # wasn't passed explicitly), and make_run_name reads that field.
+    # The backbone default must be set before naming: make_run_name reads it.
+    if not cfg.model.backbone:
+        cfg.model.backbone = task.default_backbone
+
     spec = task.resolve_layout(cfg)
     resolved_weights = task.fit_class_weight(cfg, spec)
 

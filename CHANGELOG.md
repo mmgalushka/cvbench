@@ -1,3 +1,13 @@
+## Unreleased
+
+### Fix
+
+- normalise inputs with the ImageNet per-channel mean/std the pretrained backbones expect instead of a plain 1/255 rescale; runs trained from this version on are not numerically comparable with earlier ones (older checkpoints still load and keep their original rescaling)
+
+### Refactor
+
+- backbones are declared in a registry (`register_backbone`) and each task names its default backbone; `train --backbone` defaults to the task's backbone
+
 ## v0.43.0 (2026-05-19)
 
 ### Feat

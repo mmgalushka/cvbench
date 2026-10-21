@@ -233,7 +233,8 @@ def test_detection_task_resolve_layout(yolo_root):
     assert spec.num_train_images == 5
     assert cfg.data.classes == CLASSES
     assert cfg.model.num_classes == len(CLASSES)
-    assert cfg.model.backbone == "resnet_18"  # detection default, not explicit
+    assert task.default_backbone == "resnet_18"
+    assert cfg.model.backbone == ""  # the default is applied by run_training, not the layout
     assert len(cfg.detection.anchors) == len(cfg.detection.strides)
 
 

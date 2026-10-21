@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import keras
 
-from cvbench.core.backbone import build_optimizer, build_pyramid_stem
+from cvbench.core.backbone import build_stem
 from cvbench.core.config import CVBenchConfig
+from cvbench.core.optim import build_optimizer
 from cvbench.detection.losses import YoloLoss
 
 
@@ -34,8 +35,8 @@ def build_model(cfg: CVBenchConfig) -> keras.Model:
         ``(batch, G16, G16, A16*(5+C))`` and ``(batch, G32, G32, A32*(5+C))``.
     """
     stride_fine, stride_coarse = cfg.detection.strides
-    inputs, _backbone, (feat_fine, feat_coarse) = build_pyramid_stem(
-        cfg, stride=[stride_fine, stride_coarse]
+    inputs, _backbone, (feat_fine, feat_coarse) = build_stem(
+        cfg, strides=[stride_fine, stride_coarse]
     )
 
     num_classes = cfg.model.num_classes

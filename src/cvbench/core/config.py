@@ -17,15 +17,6 @@ import yaml
 from cvbench.core.errors import CVBenchError, NotFoundError
 from cvbench.tasks import DEFAULT_TASK
 
-# Backbone names accepted by --backbone. Kept here, not derived from
-# core/backbone.py's presets, because that module imports keras_hub and the CLI
-# must validate the flag without paying for it (tests keep the two in sync).
-BACKBONE_NAMES = (
-    "efficientnet_b0", "efficientnet_b1", "efficientnet_b2",
-    "efficientnet_b3", "efficientnet_b4", "efficientnet_b5",
-    "resnet_18", "resnet_50",
-)
-
 # ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------
@@ -44,8 +35,7 @@ class DataConfig:
 
 @dataclass
 class ModelConfig:
-    backbone: str = "efficientnet_b0"
-    backbone_explicit: bool = False  # True when --backbone was passed explicitly by the user
+    backbone: str = ""  # "" = the task's default_backbone, resolved by run_training
     weights: str = "imagenet"  # "imagenet" | "none"
     input_size: int = 224
     num_classes: int = 0
@@ -233,7 +223,7 @@ FLAG_KEYS: dict[str, str] = {
 KEY_FLAGS = {key: flag for flag, key in FLAG_KEYS.items()}
 
 # Setting these also records that the user chose the value (see ModelConfig / DataConfig).
-_EXPLICIT = {"model.backbone": "model.backbone_explicit", "data.val_split": "data.val_split_explicit"}
+_EXPLICIT = {"data.val_split": "data.val_split_explicit"}
 
 
 @functools.cache
@@ -349,6 +339,7 @@ def _migrate_run(r: dict) -> dict:
 _REMOVED_KEYS = frozenset({
     "detection.grid_stride", "training.grad_accum", "training.mixup",
     "model.use_lcn", "model.lcn_kernel_size", "model.lcn_epsilon", "model.normalization",
+    "model.backbone_explicit",
 })
 
 
