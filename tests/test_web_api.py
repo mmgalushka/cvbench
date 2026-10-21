@@ -24,7 +24,7 @@ from cvbench.web.app import create_app  # noqa: E402
 
 @pytest.fixture
 def client():
-    return TestClient(create_app())
+    return TestClient(create_app(), raise_server_exceptions=False)
 
 
 def _png_bytes(size: int = 32) -> bytes:
@@ -71,6 +71,30 @@ def test_domain_errors_map_to_http_status(client, exps, monkeypatch):
     assert issubclass(WrongKindError, CVBenchError)
 
 
+def test_conflict_error_maps_to_409(client, monkeypatch):
+    from cvbench.core.errors import ConflictError
+
+    def boom(_name, *_a, **_k):
+        raise ConflictError("A run named 'x' already exists.")
+
+    monkeypatch.setattr("cvbench.web.api.runs.resolve_run_dir", boom)
+    resp = client.get("/api/runs/x")
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": "A run named 'x' already exists."}
+
+
+def test_unexpected_exception_maps_to_500_json_and_is_logged(client, monkeypatch, caplog):
+    def boom(_name, *_a, **_k):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr("cvbench.web.api.runs.resolve_run_dir", boom)
+    with caplog.at_level("ERROR", logger="cvbench.web"):
+        resp = client.get("/api/runs/x")
+    assert resp.status_code == 500
+    assert resp.json() == {"detail": "kaboom"}
+    assert any(r.name == "cvbench.web" and r.exc_info for r in caplog.records)
+
+
 # ---------------------------------------------------------------------------
 # Runs
 # ---------------------------------------------------------------------------
@@ -111,10 +135,12 @@ def test_get_sweep_errors(client, exps, write_exp):
     assert client.get("/api/sweeps/manual").status_code == 404
 
 
-def test_get_sweep_with_a_broken_manifest_is_422(client, exps, make_sweep):
+def test_get_sweep_with_a_broken_manifest_is_400(client, exps, make_sweep):
     sweep = make_sweep(exps)
     (sweep / "sweep.yaml").write_text("not: [a, valid manifest")
-    assert client.get("/api/sweeps/sw").status_code == 422
+    resp = client.get("/api/sweeps/sw")
+    assert resp.status_code == 400
+    assert "Invalid" in resp.json()["detail"]
 
 
 def test_get_run_detail_shape(client, cls_run):
@@ -184,10 +210,10 @@ def test_rename_run_rejections(client, exps, write_exp, make_sweep):
     save_config(cfg, str(live))
     make_sweep(exps)
 
-    assert client.patch("/api/runs/mine", json={"new_name": "taken"}).status_code == 422
-    assert client.patch("/api/runs/mine", json={"new_name": "bad/name"}).status_code == 422
+    assert client.patch("/api/runs/mine", json={"new_name": "taken"}).status_code == 409
+    assert client.patch("/api/runs/mine", json={"new_name": "bad/name"}).status_code == 400
     assert client.patch("/api/runs/live", json={"new_name": "other"}).status_code == 409
-    assert client.patch("/api/runs/sw", json={"new_name": "other"}).status_code == 422
+    assert client.patch("/api/runs/sw", json={"new_name": "other"}).status_code == 400
     assert client.patch("/api/runs/ghost", json={"new_name": "other"}).status_code == 404
     assert client.patch("/api/runs/mine", json={}).status_code == 422  # body validation
 
@@ -465,9 +491,9 @@ def test_predict_single_unknown_run_is_404(client, exps):
     assert resp.status_code == 404
 
 
-def test_predict_single_without_checkpoint_is_400(client, cls_run):
+def test_predict_single_without_checkpoint_is_404(client, cls_run):
     resp = client.post("/api/predict/single", data={"run": "cls_run"}, files={"file": ("a.png", _png_bytes())})
-    assert resp.status_code == 400 and "No keras checkpoint" in resp.json()["detail"]
+    assert resp.status_code == 404 and "No keras checkpoint" in resp.json()["detail"]
 
 
 def test_predict_single_requires_the_form_fields(client, cls_run):

@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 
+from cvbench.core.errors import DatasetError
 from cvbench.detection.anchors import kmeans_anchors
 
 
@@ -37,7 +38,7 @@ def test_kmeans_anchors_iou_distance_prefers_shape_match_over_euclidean():
 
 
 def test_kmeans_anchors_raises_on_zero_boxes():
-    with pytest.raises(ValueError):
+    with pytest.raises(DatasetError):
         kmeans_anchors(np.zeros((0, 2)), k=3)
 
 
@@ -99,5 +100,5 @@ def test_resolve_anchors_raises_when_no_boxes_found(tmp_path):
     cfg.data.data_dir = str(root)
     cfg.data.train_dir = str(img_dir)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(DatasetError):
         resolve_anchors(cfg)

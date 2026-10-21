@@ -8,6 +8,7 @@ from typing import Any
 
 from cvbench.core import trainer as _trainer
 from cvbench.core.config import build_config, save_config, update_run_status
+from cvbench.core.errors import ConfigError, NotFoundError
 from cvbench.core.events import Listener, SeedSet, emit
 from cvbench.core.exp_store import EXPERIMENTS_DIR, check_output_dir, make_run_name, make_unique_dir
 from cvbench.services._runtime import report_devices
@@ -55,7 +56,7 @@ def run_training(
 
     errors = task.validate_config(cfg)
     if errors:
-        raise ValueError("Invalid config for task " + repr(cfg.task) + ": " + "; ".join(errors))
+        raise ConfigError("Invalid config for task " + repr(cfg.task) + ": " + "; ".join(errors))
 
     # resolve_layout must run before naming: it's what finalizes
     # cfg.model.backbone (e.g. detection's resnet_18 default when --backbone
@@ -72,7 +73,7 @@ def run_training(
     # Build datasets and model before touching the filesystem, so a bad dataset,
     # model or resume checkpoint leaves experiments/ unchanged.
     if resume and not os.path.isfile(resume):
-        raise FileNotFoundError(f"Resume checkpoint not found: {resume}")
+        raise NotFoundError(f"Resume checkpoint not found: {resume}")
     train_ds, val_ds, num_train = task.build_datasets(cfg, spec)
     model = task.build_model(cfg)
 

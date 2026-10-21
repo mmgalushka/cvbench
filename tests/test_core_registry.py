@@ -1,6 +1,6 @@
 import pytest
 
-from cvbench.core.errors import NotFoundError
+from cvbench.core.errors import ConfigError, ConflictError, NotFoundError
 from cvbench.core.registry import Registry
 
 # ---------------------------------------------------------------------------
@@ -94,9 +94,9 @@ def test_resolve_not_found_raises_bad_parameter_file_mode(tmp_path):
 
 def test_validate_name_rejects_unsafe_names(tmp_path):
     reg = Registry(str(tmp_path))
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigError):
         reg.validate_name("../etc/passwd")
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigError):
         reg.validate_name("")
     assert reg.validate_name("my-config_1") == "my-config_1"
 
@@ -121,7 +121,7 @@ def test_assert_available_raises_on_case_insensitive_conflict(tmp_path):
     base = tmp_path / "base"
     (base / "MyRun").mkdir(parents=True)
     reg = Registry(str(base), entity_name="experiment")
-    with pytest.raises(ValueError, match="MyRun"):
+    with pytest.raises(ConflictError, match="MyRun"):
         reg.assert_available("myrun")
 
 

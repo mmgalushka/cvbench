@@ -8,7 +8,6 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from cvbench.augmentations.registry import get_schema
-from cvbench.core.errors import CVBenchError
 from cvbench.core.exp_store import resolve_run_dir
 
 router = APIRouter()
@@ -42,15 +41,8 @@ async def predict_single(
     ``conf`` (detection) and ``top_k`` (classification) match `predict --conf` / `--top-k`.
     """
     image_bytes = await file.read()
-    try:
-        from cvbench.services.prediction import predict_image
-        result = predict_image(run, image_bytes, **_options(conf, top_k))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except CVBenchError:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    from cvbench.services.prediction import predict_image
+    result = predict_image(run, image_bytes, **_options(conf, top_k))
     return JSONResponse(result)
 
 
@@ -72,15 +64,8 @@ async def predict_augmented(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="augmentations must be valid JSON") from None
 
-    try:
-        from cvbench.services.prediction import predict_augmented as _predict_augmented
-        result = _predict_augmented(run, image_bytes, aug_list, **_options(conf, top_k))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except CVBenchError:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    from cvbench.services.prediction import predict_augmented as _predict_augmented
+    result = _predict_augmented(run, image_bytes, aug_list, **_options(conf, top_k))
     return JSONResponse(result)
 
 
@@ -103,10 +88,7 @@ async def predict_xai(
     if checkpoint is None:
         raise HTTPException(status_code=404, detail="No model checkpoint found for this run")
 
-    try:
-        from cvbench.services.gradcam import compute_gradcam_from_bytes
-        heatmap_b64 = compute_gradcam_from_bytes(str(checkpoint), image_bytes, class_index)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    from cvbench.services.gradcam import compute_gradcam_from_bytes
+    heatmap_b64 = compute_gradcam_from_bytes(str(checkpoint), image_bytes, class_index)
 
     return JSONResponse({"heatmap_b64": heatmap_b64})

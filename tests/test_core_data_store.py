@@ -1,7 +1,7 @@
 import pytest
 
 from cvbench.core.data_store import resolve_data_dir, validate_data_name
-from cvbench.core.errors import NotFoundError
+from cvbench.core.errors import ConfigError, NotFoundError
 
 
 def test_resolve_data_dir_literal_path(tmp_path):
@@ -31,6 +31,6 @@ def test_resolve_data_dir_not_found_raises_bad_parameter_pointing_to_data_list(t
 
 
 def test_validate_data_name_rejects_unsafe_names():
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigError):
         validate_data_name("../etc/passwd")
     assert validate_data_name("my-dataset_1") == "my-dataset_1"

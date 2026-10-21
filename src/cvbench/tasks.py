@@ -12,6 +12,8 @@ import importlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from cvbench.core.errors import ConfigError
+
 if TYPE_CHECKING:
     from cvbench.core.config import CVBenchConfig
     from cvbench.core.task import MetricSpec, Task
@@ -37,12 +39,12 @@ _OPTION_FLAGS = {"conf": ("--conf", "applies"), "top_k": ("--top-k and --probs",
 def get_task(name: str) -> Task:
     """Instantiate the task registered under NAME.
 
-    Raises ValueError with the list of valid names if NAME isn't registered.
+    Raise ConfigError with the list of valid names if NAME isn't registered.
     """
     try:
         module_name, attr = _TASKS[name]
     except KeyError:
-        raise ValueError(
+        raise ConfigError(
             f"Unknown task '{name}'. Valid options: {', '.join(TASK_NAMES)}"
         ) from None
     module = importlib.import_module(module_name)
@@ -101,11 +103,11 @@ def selection_metrics() -> dict[str, MetricSpec]:
 
 
 def check_selection_metric(metric: str, task_name: str) -> None:
-    """Raise ValueError when TASK_NAME cannot rank a sweep on METRIC."""
+    """Raise ConfigError when TASK_NAME cannot rank a sweep on METRIC."""
     task = get_task(task_name)
     if metric not in task.selection_metric_names:
         owners = [n for n in TASK_NAMES if metric in get_task(n).selection_metric_names]
-        raise ValueError(
+        raise ConfigError(
             f"--metric {metric} is only available for {' / '.join(owners)} datasets."
             if owners
             else f"Unknown metric '{metric}'."
@@ -130,12 +132,12 @@ def option_scope_message(option: str) -> str:
 
 
 def check_predict_options(task: Task, conf: float | None, top_k: int | None = 1) -> None:
-    """Raise ValueError when CONF or TOP_K is set for a task that doesn't honour it.
+    """Raise ConfigError when CONF or TOP_K is set for a task that doesn't honour it.
 
     ``top_k=1`` is the CLI default, so only another value counts as "set".
     """
     supported = task.predict_options()
     if conf is not None and "conf" not in supported:
-        raise ValueError(option_scope_message("conf"))
+        raise ConfigError(option_scope_message("conf"))
     if top_k != 1 and "top_k" not in supported:
-        raise ValueError(option_scope_message("top_k"))
+        raise ConfigError(option_scope_message("top_k"))

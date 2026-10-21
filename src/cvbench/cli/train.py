@@ -20,7 +20,7 @@ from cvbench.core.config import (
     build_config,
     resolve_key,
 )
-from cvbench.core.errors import CVBenchError
+from cvbench.core.errors import CVBenchError, NotFoundError
 
 _DATA = DataConfig()
 _MODEL = ModelConfig()
@@ -210,8 +210,8 @@ def validate_dataset(data_dir: str, from_dir: str | None = None) -> None:
     if from_dir is not None:
         try:
             task = load_config(from_dir).task
-        except FileNotFoundError as e:
-            raise click.BadParameter(str(e), param_hint="--from") from e
+        except NotFoundError as e:
+            raise click.BadParameter(e.message, param_hint="--from") from None
     errors = layout_errors(data_dir, task)
     if errors:
         raise click.BadParameter("\n".join(errors), param_hint="DATA_DIR")
@@ -310,8 +310,8 @@ def train(data_dir, output_dir, overwrite, from_dir, resume, set_options, **flag
     if output_dir is not None:
         try:
             check_output_dir(output_dir, resume=bool(resume), overwrite=overwrite)
-        except ValueError as e:
-            raise click.BadParameter(str(e), param_hint="--output") from e
+        except CVBenchError as e:
+            raise click.BadParameter(e.message, param_hint="--output") from None
 
     overrides: dict[str, Any] = {}
     for flag, value in flags.items():
@@ -320,10 +320,7 @@ def train(data_dir, output_dir, overwrite, from_dir, resume, set_options, **flag
     for item in set_options:
         overrides.update(parse_set_option(item))
     validate_dataset(data_dir, from_dir)
-    try:
-        build_config(data_dir, from_dir, overrides)  # reject a bad --set before TensorFlow loads
-    except CVBenchError as e:
-        raise click.BadParameter(e.message, param_hint=e.param_hint) from None
+    build_config(data_dir, from_dir, overrides)  # reject a bad --set before TensorFlow loads
 
     from cvbench.cli._listeners import ConsoleListener
     from cvbench.services.training import run_training  # deferred: pulls in TensorFlow

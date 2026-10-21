@@ -18,12 +18,10 @@ from cvbench.cli._listeners import ConsoleListener
 from cvbench.cli.train import parse_override, validate_dataset
 from cvbench.core import _console, present
 from cvbench.core.config import FLAG_KEYS, build_config, resolve_key
-from cvbench.core.errors import CVBenchError
 from cvbench.core.events import Event, SweepFinished, SweepInterrupted, TrialFailed, TrialStarted
 from cvbench.core.exp_store import EXPERIMENTS_DIR, assert_name_available, make_unique_dir
 from cvbench.core.sweep_store import (
     DEFAULT_RANDOM_SPACE,
-    SweepError,
     SweepManifest,
     TrialRow,
     best_trial,
@@ -176,76 +174,70 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
     from cvbench.core.data_store import resolve_data_dir
     from cvbench.tasks import check_selection_metric, detect_task_name
 
-    try:
-        if strategy == "random":
-            if n_trials is None:
-                raise click.ClickException("--trials is required for --strategy random.")
-        elif n_trials is not None:
-            raise click.ClickException(
-                "--trials is only valid with --strategy random (grid trains every combination)."
-            )
+    if strategy == "random":
+        if n_trials is None:
+            raise click.ClickException("--trials is required for --strategy random.")
+    elif n_trials is not None:
+        raise click.ClickException(
+            "--trials is only valid with --strategy random (grid trains every combination)."
+        )
 
-        # Parse every list up front so a typo fails before anything is created or trained.
-        # Random search starts from the curated default space; any flag the user passes
-        # explicitly overrides the corresponding entry (grid starts from nothing).
-        space: dict[str, list[str]] = dict(DEFAULT_RANDOM_SPACE) if strategy == "random" else {}
-        given: list[tuple[str, str]] = [(f, flag_values[f]) for f in FLAG_KEYS if flag_values.get(f) is not None]
-        for item in set_options:
-            key, sep, raw = item.partition("=")
-            if not sep:
-                raise click.BadParameter(
-                    f"expected key=v1,v2, got {item!r} (e.g. training.epochs=5,10)", param_hint="--set"
-                )
-            given.append((key.strip(), raw))
-        explicit: set[str] = set()
-        for flag, raw in given:
-            key = resolve_key(flag)
-            if key in explicit:
-                raise click.ClickException(f"{key} was given more than once.")
-            explicit.add(key)
-            space[key] = split_axis_values(flag, raw)
-        axes: dict[str, list[str]] = {}
-        fixed_raw: dict[str, str] = {}
-        for flag, values in space.items():
-            if len(values) >= 2:
-                axes[flag] = values
-            else:
-                fixed_raw[flag] = values[0]
-        if strategy == "grid" and not axes:
-            raise click.ClickException(
-                "Nothing to sweep: give at least one flag two or more comma-separated values "
-                "(e.g. --lr 1e-3,1e-4). For a single configuration use 'train'."
+    # Parse every list up front so a typo fails before anything is created or trained.
+    # Random search starts from the curated default space; any flag the user passes
+    # explicitly overrides the corresponding entry (grid starts from nothing).
+    space: dict[str, list[str]] = dict(DEFAULT_RANDOM_SPACE) if strategy == "random" else {}
+    given: list[tuple[str, str]] = [(f, flag_values[f]) for f in FLAG_KEYS if flag_values.get(f) is not None]
+    for item in set_options:
+        key, sep, raw = item.partition("=")
+        if not sep:
+            raise click.BadParameter(
+                f"expected key=v1,v2, got {item!r} (e.g. training.epochs=5,10)", param_hint="--set"
             )
-        fixed = _overrides(fixed_raw)
-        if strategy == "random":
-            if sample_seed is None:
-                sample_seed = random.randrange(2**31)
-            trials = sample_grid(axes, n_trials, sample_seed)
+        given.append((key.strip(), raw))
+    explicit: set[str] = set()
+    for flag, raw in given:
+        key = resolve_key(flag)
+        if key in explicit:
+            raise click.ClickException(f"{key} was given more than once.")
+        explicit.add(key)
+        space[key] = split_axis_values(flag, raw)
+    axes: dict[str, list[str]] = {}
+    fixed_raw: dict[str, str] = {}
+    for flag, values in space.items():
+        if len(values) >= 2:
+            axes[flag] = values
         else:
-            trials = expand_grid(axes)
-        trial_values = [_overrides(t) for t in trials]
+            fixed_raw[flag] = values[0]
+    if strategy == "grid" and not axes:
+        raise click.ClickException(
+            "Nothing to sweep: give at least one flag two or more comma-separated values "
+            "(e.g. --lr 1e-3,1e-4). For a single configuration use 'train'."
+        )
+    fixed = _overrides(fixed_raw)
+    if strategy == "random":
+        if sample_seed is None:
+            sample_seed = random.randrange(2**31)
+        trials = sample_grid(axes, n_trials, sample_seed)
+    else:
+        trials = expand_grid(axes)
+    trial_values = [_overrides(t) for t in trials]
 
-        data_dir = resolve_data_dir(data_dir)
-        validate_dataset(data_dir, from_dir)
-        for values in trial_values:  # type-check every override now, before anything is created or trained
-            build_config(data_dir, from_dir, {**fixed, **values})
-        task = load_config(from_dir).task if from_dir is not None else detect_task_name(data_dir)
-        if metric is None:
-            metric, direction = default_metric(task)
-        else:
-            direction = metric_direction(metric)
-        try:
-            check_selection_metric(metric, task)
-        except ValueError as e:
-            raise click.ClickException(str(e)) from e
-        if name is None:
-            name = make_unique_dir(EXPERIMENTS_DIR, f"sweep_{date.today().strftime('%Y_%m_%d')}").name
-        validate_sweep_name(name)
-        assert_name_available(name)
-        for i in range(1, len(trials) + 1):
-            assert_name_available(trial_dir_name(name, i))
-    except (SweepError, CVBenchError, ValueError) as e:
-        raise click.ClickException(str(e)) from e
+    data_dir = resolve_data_dir(data_dir)
+    validate_dataset(data_dir, from_dir)
+    for values in trial_values:  # type-check every override now, before anything is created or trained
+        build_config(data_dir, from_dir, {**fixed, **values})
+    task = load_config(from_dir).task if from_dir is not None else detect_task_name(data_dir)
+    if metric is None:
+        metric, direction = default_metric(task)
+    else:
+        direction = metric_direction(metric)
+    check_selection_metric(metric, task)
+    if name is None:
+        name = make_unique_dir(EXPERIMENTS_DIR, f"sweep_{date.today().strftime('%Y_%m_%d')}").name
+    validate_sweep_name(name)
+    assert_name_available(name)
+    for i in range(1, len(trials) + 1):
+        assert_name_available(trial_dir_name(name, i))
 
     planned = [TrialRow(i, trial_dir_name(name, i), t, "planned", None) for i, t in enumerate(trials, start=1)]
     axis_names = list(axes)

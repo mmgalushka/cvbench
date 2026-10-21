@@ -46,3 +46,19 @@ class AmbiguousNameError(CVBenchError):
 
 class WrongKindError(CVBenchError):
     """The entry exists but is the wrong kind (e.g. a sweep where a single run is expected)."""
+
+
+class ConfigError(CVBenchError):
+    """An invalid config or flag value: unknown backbone, strategy, transform or format."""
+
+
+class DatasetError(CVBenchError):
+    """A bad or missing dataset layout, no images found, or an unreadable image."""
+
+
+class ConflictError(CVBenchError):
+    """The requested name already exists, or the operation would overwrite existing data."""
+
+
+class ExportError(CVBenchError):
+    """A model conversion failed, or an optional runtime (tf2onnx, onnxruntime) is missing."""

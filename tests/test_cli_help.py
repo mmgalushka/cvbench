@@ -222,3 +222,34 @@ def test_train_help_shows_defaults_and_frozen_wording():
         assert "default" in section, f"{opt} help does not state its default"
     assert "FROZEN" in flat
     assert "images/ and labels/" in flat
+
+
+def test_domain_error_without_a_param_hint_is_a_plain_message():
+    from cvbench.cli import _help
+    from cvbench.core.errors import ConflictError
+
+    @_help.group()
+    def cli():
+        pass
+
+    @cli.command()
+    def boom():
+        raise ConflictError("name 'x' already exists")
+
+    result = CliRunner().invoke(cli, ["boom"])
+    assert result.exit_code == 1
+    assert "Error: name 'x' already exists" in result.output
+    assert "Invalid value" not in result.output
+
+
+def test_domain_error_with_a_param_hint_is_a_usage_error():
+    from cvbench.cli import _help
+    from cvbench.core.errors import ConfigError
+
+    @_help.command()
+    def boom():
+        raise ConfigError("unknown backbone", param_hint="--backbone")
+
+    result = CliRunner().invoke(boom, [])
+    assert result.exit_code == 2
+    assert "Invalid value for --backbone: unknown backbone" in result.output

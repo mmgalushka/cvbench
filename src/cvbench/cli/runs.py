@@ -137,12 +137,9 @@ def list_runs(experiments_dir, sort):
 def _show_sweep(sweep_dir):
     """`runs show` for a sweep: manifest intent plus the trial table (no per-run details)."""
     from cvbench.cli.sweep import print_trial_table
-    from cvbench.core.sweep_store import SweepError, best_trial, display_key, summarize
+    from cvbench.core.sweep_store import best_trial, display_key, summarize
 
-    try:
-        manifest, rows = summarize(sweep_dir)
-    except SweepError as e:
-        raise click.ClickException(str(e)) from e
+    manifest, rows = summarize(sweep_dir)
 
     print(_console.rule())
     print(f" {_console.bold(f'CVBench — sweep {manifest.name}')}")
@@ -188,10 +185,7 @@ def show(experiment):
         _show_sweep(run_dir)
         return
 
-    try:
-        cfg = load_config(str(run_dir))
-    except FileNotFoundError:
-        raise click.ClickException(f"No config.yaml in: {run_dir}") from None
+    cfg = load_config(str(run_dir))
 
     entry = _read_entry(run_dir)
     run_name = entry.get("name", run_dir.name)
@@ -274,20 +268,14 @@ def rename(experiment, new_name):
 
     run_dir = Path(resolve_run_dir(experiment, allow_sweep=True))
 
-    try:
-        assert_renamable(run_dir)
-    except ValueError as e:
-        raise click.ClickException(str(e)) from e
+    assert_renamable(run_dir)
 
     cfg = load_config(str(run_dir))
     if cfg.run.status == "running":
         raise click.ClickException("Cannot rename a currently running run.")
 
-    try:
-        validate_run_name(new_name)
-        assert_name_available(new_name, current_dir=run_dir)
-    except ValueError as e:
-        raise click.ClickException(str(e)) from e
+    validate_run_name(new_name)
+    assert_name_available(new_name, current_dir=run_dir)
 
     new_dir = run_dir.parent / new_name
     os.rename(run_dir, new_dir)
@@ -373,15 +361,10 @@ def export(experiment, fmt, quantize, output_dir, hw_arch, calib_total, calib_st
     """
     from cvbench.services.export import run_export  # deferred: pulls in TensorFlow
 
-    try:
-        run_export(
-            experiment, format=fmt, quantize=quantize, output_dir=output_dir,
-            calib_total=calib_total, calib_strategy=calib_strategy, hw_arch=hw_arch,
-        )
-    except FileNotFoundError as e:
-        raise click.ClickException(str(e)) from e
-    except RuntimeError as e:
-        raise click.ClickException(str(e)) from e
+    run_export(
+        experiment, format=fmt, quantize=quantize, output_dir=output_dir,
+        calib_total=calib_total, calib_strategy=calib_strategy, hw_arch=hw_arch,
+    )
 
 
 @runs.command(

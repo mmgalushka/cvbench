@@ -1,6 +1,8 @@
 """Tests that require TensorFlow/Keras — mark with @pytest.mark.tf."""
 import pytest
 
+from cvbench.core.errors import ConfigError
+
 pytestmark = pytest.mark.tf
 
 
@@ -27,5 +29,5 @@ def test_build_model_output_shape(minimal_cfg):
 def test_build_model_unknown_backbone(minimal_cfg):
     from cvbench.classification.model import build_model
     minimal_cfg.model.backbone = "resnet_99"
-    with pytest.raises(ValueError, match="Unknown backbone"):
+    with pytest.raises(ConfigError, match="Unknown backbone"):
         build_model(minimal_cfg)

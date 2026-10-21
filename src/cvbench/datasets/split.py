@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeVar
 
+from cvbench.core.errors import DatasetError
 from cvbench.datasets import layout
 
 T = TypeVar("T")
@@ -163,9 +164,9 @@ def apply_plan(plan: SplitPlan, dst: Path, progress: Callable[[int], None] | Non
 
 
 def plan_split(src: Path, ratios: tuple[float, float, float], seed: int) -> SplitPlan:
-    """Build the split plan for SRC. Read-only; raises ValueError if SRC is already split."""
+    """Build the split plan for SRC. Read-only; raises DatasetError if SRC is already split."""
     if layout.is_already_split(src):
-        raise ValueError(
+        raise DatasetError(
             f"'{src}' is already split into train/val/test — "
             "run 'data flatten' first, then 'data split' the flattened result."
         )

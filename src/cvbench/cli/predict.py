@@ -117,17 +117,14 @@ def predict(experiment, input_path, fmt, conf, top_k, probs, model_path):
             )
         fmt = suffix_fmt
 
-    try:
-        result = run_experiment_prediction(
-            experiment,
-            input_path,
-            fmt,
-            conf,
-            top_k=None if probs else top_k,
-            model_path=model_path,
-        )
-    except (ValueError, FileNotFoundError) as e:
-        raise click.ClickException(str(e)) from e
+    result = run_experiment_prediction(
+        experiment,
+        input_path,
+        fmt,
+        conf,
+        top_k=None if probs else top_k,
+        model_path=model_path,
+    )
 
     exp_name = result["experiment"]
 

@@ -13,7 +13,7 @@ from datetime import date
 from pathlib import Path
 
 from cvbench.core.config import CVBenchConfig, load_config
-from cvbench.core.errors import AmbiguousNameError, NotFoundError, WrongKindError
+from cvbench.core.errors import AmbiguousNameError, ConfigError, ConflictError, NotFoundError, WrongKindError
 from cvbench.core.registry import Registry
 
 EXPERIMENTS_DIR = "experiments"
@@ -30,25 +30,25 @@ EXP_REG = Registry(
 
 
 def validate_run_name(name: str) -> str:
-    """Raise ValueError if name is not safe to use as an experiment directory name."""
+    """Raise ConfigError if name is not safe to use as an experiment directory name."""
     return EXP_REG.validate_name(name, what="Name")
 
 
 def check_output_dir(output_dir: str, *, resume: bool = False, overwrite: bool = False) -> None:
     """Validate a user-supplied `train --output` path; no filesystem changes.
 
-    Raises ValueError if the run name (last path component) is unsafe, or if the
+    Raise ConfigError if the run name (last path component) is unsafe, or ConflictError if the
     path already exists and neither `resume` nor `overwrite` allows reusing it.
     """
     path = Path(output_dir)
     validate_run_name(path.name)
     if path.exists() and not (resume or overwrite):
-        raise ValueError(
+        raise ConflictError(
             f"Run '{path.name}' already exists at '{output_dir}' — "
             "use --overwrite to replace it, or pick another --output."
         )
     if path.exists() and overwrite and not resume and not (path / "config.yaml").is_file():
-        raise ValueError(f"'{output_dir}' exists but is not a run directory; refusing to overwrite it.")
+        raise ConflictError(f"'{output_dir}' exists but is not a run directory; refusing to overwrite it.")
 
 
 def is_sweep_dir(path: Path | str) -> bool:
@@ -88,7 +88,7 @@ def resolve_experiments_dir(name_or_path: str) -> str:
 
 
 def assert_name_available(new_name: str, current_dir: Path | None = None) -> None:
-    """Raise ValueError if new_name conflicts with an existing experiment or sweep trial directory."""
+    """Raise ConflictError if new_name conflicts with an existing experiment or sweep trial directory."""
     EXP_REG.base_dir = EXPERIMENTS_DIR
     EXP_REG.assert_available(new_name, current_dir=current_dir)
     # Trials are addressed by bare name too, so their names must stay unique across sweeps.
@@ -98,18 +98,18 @@ def assert_name_available(new_name: str, current_dir: Path | None = None) -> Non
                 continue
             if current_dir and trial.resolve() == current_dir.resolve():
                 continue
-            raise ValueError(f"A trial named '{trial.name}' already exists in sweep '{sweep.name}'.")
+            raise ConflictError(f"A trial named '{trial.name}' already exists in sweep '{sweep.name}'.")
 
 
 def assert_renamable(run_dir: Path) -> None:
-    """Raise ValueError if run_dir is a sweep or a sweep trial (renaming would break the sweep)."""
+    """Raise ConfigError if run_dir is a sweep or a sweep trial (renaming would break the sweep)."""
     if is_sweep_dir(run_dir):
-        raise ValueError(
+        raise ConfigError(
             f"'{run_dir.name}' is a sweep; renaming it would break its trial names. "
             "Rename individual runs instead, or start a new sweep with --name."
         )
     if is_sweep_dir(run_dir.parent):
-        raise ValueError(
+        raise ConfigError(
             f"'{run_dir.name}' is a trial of sweep '{run_dir.parent.name}'; "
             "renaming it would make the sweep report it as missing."
         )

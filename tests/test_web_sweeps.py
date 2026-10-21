@@ -5,7 +5,7 @@ pytest.importorskip("fastapi", reason="requires the 'web' extra")
 
 from fastapi import HTTPException  # noqa: E402
 
-from cvbench.core.errors import NotFoundError  # noqa: E402
+from cvbench.core.errors import ConfigError, NotFoundError  # noqa: E402
 from cvbench.web.api import runs as api  # noqa: E402
 
 
@@ -55,10 +55,9 @@ def test_delete_sweep(exps, sweep):
 
 
 def test_rename_sweep_and_trial_rejected(sweep):
-    for name in ("sw", "sw_001"):
-        with pytest.raises(HTTPException) as e:
+    for name, message in (("sw", "is a sweep"), ("sw_001", "trial of sweep")):
+        with pytest.raises(ConfigError, match=message):
             api.rename_run(name, api.RenameRequest(new_name="other"))
-        assert e.value.status_code == 422
 
 
 def test_get_run_sweep_field(exps, sweep, write_exp):

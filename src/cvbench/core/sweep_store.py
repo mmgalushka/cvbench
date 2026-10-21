@@ -26,7 +26,7 @@ from typing import Any
 import yaml
 
 from cvbench.core.config import FLAG_KEYS, KEY_FLAGS, key_type, resolve_key
-from cvbench.core.errors import CVBenchError
+from cvbench.core.errors import ConfigError, CVBenchError
 from cvbench.core.exp_store import SWEEP_MANIFEST, _read_entry, sweep_dirs, validate_run_name
 from cvbench.tasks import task_for_metric
 
@@ -54,7 +54,7 @@ _SPEC_KEYS = ("training.optimizer", "training.loss", "training.lr_scheduler")
 _METRIC_ALIASES = {"test_accuracy": "accuracy"}
 
 
-class SweepError(ValueError):
+class SweepError(ConfigError):
     """Invalid sweep definition, name, or manifest."""
 
 
@@ -176,7 +176,7 @@ def validate_sweep_name(name: str) -> None:
     """Raise SweepError if name is not a safe directory name (same rules as run names)."""
     try:
         validate_run_name(name)
-    except ValueError as e:
+    except ConfigError as e:
         raise SweepError(str(e)) from e
 
 

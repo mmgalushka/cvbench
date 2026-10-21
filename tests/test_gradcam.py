@@ -8,6 +8,7 @@ from PIL import Image
 
 pytestmark = pytest.mark.tf
 
+from cvbench.core.errors import ConfigError
 from cvbench.services import gradcam  # noqa: E402
 
 SIZE = 32
@@ -126,7 +127,7 @@ def test_compute_gradcam_from_bytes_cleans_up_when_the_model_fails(tmp_path, mon
 def test_compute_gradcam_requires_a_conv_layer(tmp_path, image_path):
     checkpoint = _save(_dense_only_model(), tmp_path)
 
-    with pytest.raises(ValueError, match="No Conv2D layer"):
+    with pytest.raises(ConfigError, match="No Conv2D layer"):
         gradcam.compute_gradcam(checkpoint, image_path, 0)
 
 

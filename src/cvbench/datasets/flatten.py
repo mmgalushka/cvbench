@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from cvbench.core.errors import DatasetError
 from cvbench.datasets import layout
 
 
@@ -106,7 +107,7 @@ def apply_plan(plan: FlattenPlan, dst: Path, progress: Callable[[int], None] | N
 
 
 def plan_flatten(src: Path) -> FlattenPlan:
-    """Build the flatten plan for SRC. Read-only; raises ValueError if SRC is already flat."""
+    """Build the flatten plan for SRC. Read-only; raises DatasetError if SRC is already flat."""
     if not layout.is_already_split(src):
-        raise ValueError(f"'{src}' is already flat — nothing to flatten.")
+        raise DatasetError(f"'{src}' is already flat — nothing to flatten.")
     return build_plan_yolo(src) if layout.is_yolo_dataset(src) else build_plan_classification(src)

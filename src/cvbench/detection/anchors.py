@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
+from cvbench.core.errors import DatasetError
 from cvbench.datasets.layout import list_images, read_yolo_boxes, yolo_label_dir
 
 
@@ -45,7 +46,7 @@ def kmeans_anchors(
     boxes = np.asarray(boxes, dtype=np.float64)
     n = len(boxes)
     if n == 0:
-        raise ValueError("Cannot derive anchors from zero boxes.")
+        raise DatasetError("Cannot derive anchors from zero boxes.")
     k = min(k, n)
 
     rng = np.random.RandomState(seed)
@@ -102,7 +103,7 @@ def resolve_anchors(cfg) -> list:
 
     shapes = _collect_box_shapes(cfg.data.train_dir, cfg.data.data_dir)
     if len(shapes) == 0:
-        raise ValueError(
+        raise DatasetError(
             f"No ground-truth boxes found under {cfg.data.train_dir} — "
             "cannot derive anchors."
         )

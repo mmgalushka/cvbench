@@ -58,6 +58,7 @@ Running (once web extras are installed)
     serve --host 0.0.0.0 --port 8080  # see: serve --help
 """
 
+import logging
 from pathlib import Path
 
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -85,17 +86,28 @@ def create_app():
     from fastapi import Request
     from fastapi.responses import JSONResponse
 
-    from cvbench.core.errors import AmbiguousNameError, CVBenchError, NotFoundError
+    from cvbench.core.errors import AmbiguousNameError, ConflictError, CVBenchError, NotFoundError
 
     @app.exception_handler(CVBenchError)
     async def _domain_error(_request: Request, exc: CVBenchError):
         """The one place domain errors become HTTP responses (message + candidate names)."""
-        status = 404 if isinstance(exc, NotFoundError) else 409 if isinstance(exc, AmbiguousNameError) else 400
+        if isinstance(exc, NotFoundError):
+            status = 404
+        elif isinstance(exc, (AmbiguousNameError, ConflictError)):
+            status = 409
+        else:
+            status = 400
         body: dict = {"detail": exc.message}
         candidates = getattr(exc, "candidates", None)
         if candidates:
             body["candidates"] = candidates
         return JSONResponse(body, status_code=status)
+
+    @app.exception_handler(Exception)
+    async def _unexpected_error(_request: Request, exc: Exception):
+        """Anything that is not a domain error is a bug: log it and answer 500."""
+        logging.getLogger("cvbench.web").exception("Unhandled error in %s", _request.url.path)
+        return JSONResponse({"detail": str(exc)}, status_code=500)
 
     if _STATIC_DIR.exists():
         app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True), name="static")

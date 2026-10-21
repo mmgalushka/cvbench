@@ -6,6 +6,7 @@ import keras
 import numpy as np
 
 from cvbench.core.config import OneOfConfig
+from cvbench.core.errors import ConfigError
 
 _KERAS_MAP: dict[str, tuple[type, dict[str, Any]]] = {
     "keras_flip":        (keras.layers.RandomFlip,        {"mode": "horizontal"}),
@@ -177,7 +178,7 @@ def _resolve(name: str, params: dict) -> Callable:
         fn = getattr(aug_mod, name, None)
         if fn is None:
             available = [n for n in dir(aug_mod) if n.startswith("aug_")]
-            raise ValueError(f"Unknown augmentation '{name}'. Available: {available}")
+            raise ConfigError(f"Unknown augmentation '{name}'. Available: {available}")
 
         # An aug_* function with its own `seed` gets one drawn from the
         # pipeline's generator, so its internal randomness replays too.
@@ -196,4 +197,4 @@ def _resolve(name: str, params: dict) -> Callable:
 
     aug_module = __import__("cvbench.augmentations", fromlist=["cvbench"])
     known = list(_KERAS_MAP) + [n for n in dir(aug_module) if n.startswith("aug_")]
-    raise ValueError(f"Unknown transform '{name}'. Known: {known}")
+    raise ConfigError(f"Unknown transform '{name}'. Known: {known}")

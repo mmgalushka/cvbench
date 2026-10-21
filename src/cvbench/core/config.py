@@ -14,7 +14,7 @@ from typing import Any
 
 import yaml
 
-from cvbench.core.errors import CVBenchError
+from cvbench.core.errors import CVBenchError, NotFoundError
 from cvbench.tasks import DEFAULT_TASK
 
 # Backbone names accepted by --backbone. Kept here, not derived from
@@ -589,7 +589,7 @@ def load_config(exp_dir: str) -> CVBenchConfig:
     """
     path = Path(exp_dir) / "config.yaml"
     if not path.exists():
-        raise FileNotFoundError(f"No config.yaml found in {exp_dir}")
+        raise NotFoundError(f"No config.yaml found in {exp_dir}")
     with open(path) as f:
         raw = yaml.safe_load(f) or {}
     cfg = config_from_dict(raw)

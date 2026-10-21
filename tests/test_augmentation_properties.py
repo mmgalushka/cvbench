@@ -12,6 +12,7 @@ from cvbench.augmentations.chirp import aug_chirp_artifacts
 from cvbench.augmentations.interference import aug_interference
 from cvbench.augmentations.mask import aug_mask, aug_mask_h, aug_mask_v
 from cvbench.augmentations.net import _line_mask, _stripe_mask, aug_net
+from cvbench.core.errors import ConfigError
 
 H, W = 64, 80
 
@@ -191,7 +192,7 @@ def test_chirp_justification_modes_run(justification):
 
 
 def test_chirp_rejects_an_unknown_justification():
-    with pytest.raises(ValueError, match="justification must be one of"):
+    with pytest.raises(ConfigError, match="justification must be one of"):
         aug_chirp_artifacts(_image(), justification="diagonal")
 
 
@@ -246,7 +247,7 @@ def test_interference_strength_grows_with_alpha():
 
 
 def test_interference_rejects_an_unknown_pattern():
-    with pytest.raises(ValueError, match="Unknown pattern"):
+    with pytest.raises(ConfigError, match="Unknown pattern"):
         aug_interference(_image(), pattern="plaid")
 
 

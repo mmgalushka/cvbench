@@ -21,7 +21,7 @@ WORK_REG = Registry(
 
 
 def validate_work_name(name: str) -> str:
-    """Raise ValueError if name is not safe to use as a workspace item name."""
+    """Raise ConfigError if name is not safe to use as a workspace item name."""
     return WORK_REG.validate_name(name, what="Name")
 
 

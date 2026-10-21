@@ -63,6 +63,8 @@ class HelpMixin:
         try:
             return super().invoke(ctx)
         except CVBenchError as e:
+            if e.param_hint is None:
+                raise click.ClickException(e.message) from None
             raise click.BadParameter(e.message, param_hint=e.param_hint) from None
 
     def format_usage(self, ctx, formatter):

@@ -9,6 +9,7 @@ from cvbench.core.config import (
     save_config,
     update_run_status,
 )
+from cvbench.core.errors import NotFoundError
 
 
 def test_build_config_defaults():
@@ -78,7 +79,7 @@ def test_save_and_load_config(tmp_path):
 
 
 def test_load_config_missing_raises(tmp_path):
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(NotFoundError):
         load_config(str(tmp_path))
 
 

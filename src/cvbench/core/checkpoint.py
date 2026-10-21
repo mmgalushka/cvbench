@@ -8,6 +8,7 @@ import keras
 
 from cvbench.core import _console
 from cvbench.core.config import CVBenchConfig
+from cvbench.core.errors import ConfigError
 
 
 def _append_best_event(run_dir: str, epoch: int, monitor: str, value: float | None) -> None:
@@ -73,7 +74,7 @@ def build_checkpoint_callback(cfg: CVBenchConfig, run_dir: str) -> keras.callbac
             verbose=0,
         )
 
-    raise ValueError(f"Unknown checkpoint strategy: '{strategy}'")
+    raise ConfigError(f"Unknown checkpoint strategy: '{strategy}'")
 
 
 def prune_checkpoints(run_dir: str, cfg: CVBenchConfig):
