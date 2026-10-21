@@ -9,7 +9,7 @@ from __future__ import annotations
 import platform
 from typing import Any
 
-from cvbench.core import _console
+from cvbench.core import console
 from cvbench.core.config import CVBenchConfig
 from cvbench.core.events import (
     DeviceDetected,
@@ -37,11 +37,11 @@ def fine_tune_label(fine_tune_from_layer: int) -> str:
 
 
 def print_header(exp_dir: str, cfg: CVBenchConfig, val_images: int | None = None) -> None:
-    print(_console.rule())
-    print(f" {_console.bold('CVBench — train')}")
-    print(_console.rule())
+    print(console.rule())
+    print(f" {console.bold('CVBench — train')}")
+    print(console.rule())
     print(f" Task      : {cfg.task}")
-    print(f" Data      : {_console.dim(cfg.data.data_dir)}")
+    print(f" Data      : {console.dim(cfg.data.data_dir)}")
     print(f" Backbone  : {cfg.model.backbone}  (weights: {cfg.model.weights})")
     print(f" Fine-tune : {fine_tune_label(cfg.model.fine_tune_from_layer)}")
     print(f" Input size: {cfg.model.input_size}px   Batch size: {cfg.data.batch_size}")
@@ -65,10 +65,10 @@ def print_header(exp_dir: str, cfg: CVBenchConfig, val_images: int | None = None
         print(f" LR        : {cfg.training.learning_rate}")
     n_transforms = len(cfg.augmentation.transforms)
     print(f" Aug       : {n_transforms} transform(s)")
-    print(f" Output    : {_console.dim(exp_dir)}")
-    print(_console.rule())
+    print(f" Output    : {console.dim(exp_dir)}")
+    print(console.rule())
     if val_images is not None and val_images < _SMALL_VAL_IMAGES:
-        _console.warning(
+        console.warning(
             f"Validation set has only {val_images} image(s); val metrics will be noisy."
         )
     print()  # breathing room before epoch output
@@ -78,46 +78,46 @@ def print_device_banner(purpose: str, gpus: tuple[str, ...]) -> None:
     """Print a GPU/CPU banner. PURPOSE is the present participle, e.g. "training"."""
     if gpus:
         if platform.system() == "Darwin" and platform.machine() == "arm64":
-            print(_console.dim(f"🟢 Apple Silicon GPU (Metal) detected — {purpose} on {len(gpus)} device(s)"))
+            print(console.dim(f"🟢 Apple Silicon GPU (Metal) detected — {purpose} on {len(gpus)} device(s)"))
         else:
-            print(_console.dim(f"🟢 GPU detected: {len(gpus)} device(s) — {', '.join(gpus)}"))
+            print(console.dim(f"🟢 GPU detected: {len(gpus)} device(s) — {', '.join(gpus)}"))
     else:
-        _console.warning(f"GPU not available, {purpose} on CPU")
+        console.warning(f"GPU not available, {purpose} on CPU")
 
 
 def print_run_summary(event: RunFinished) -> None:
     interrupted = event.status == "interrupted"
     if event.interrupt_checkpoint:
-        print(f"\n {_console.green('Checkpoint saved')} → {_console.dim(event.interrupt_checkpoint)}")
+        print(f"\n {console.green('Checkpoint saved')} → {console.dim(event.interrupt_checkpoint)}")
         print(
             f" To resume: train {event.data_dir}"
             f" --from {event.exp_dir}"
             f" --resume {event.interrupt_checkpoint}\n"
         )
     status_label = "interrupted" if interrupted else "complete"
-    status_color = _console.yellow if interrupted else _console.green
+    status_color = console.yellow if interrupted else console.green
     print()  # breathing room after last epoch line
-    print(_console.rule())
-    print(f" {_console.bold(f'Training {status_color(status_label)}')}")
+    print(console.rule())
+    print(f" {console.bold(f'Training {status_color(status_label)}')}")
     if event.final_metrics:
         max_k = max(len(k) for k in event.final_metrics)
         for k, v in event.final_metrics.items():
-            print(f"   {_console.bold(f'{k:<{max_k}}')} : {v:.4f}")
+            print(f"   {console.bold(f'{k:<{max_k}}')} : {v:.4f}")
     if event.best_events:
         metric_name = event.best_events[0]["metric"]
-        print(f"\n {_console.bold('Best weights history')}  ({_console.dim(metric_name)})")
+        print(f"\n {console.bold('Best weights history')}  ({console.dim(metric_name)})")
         for e in event.best_events:
             val_str = f"{e['value']:.4f}" if e["value"] is not None else "—"
             epoch_str = f"{e['epoch']:>4}"
-            print(f"   epoch {_console.bold(epoch_str)}  →  {val_str}")
+            print(f"   epoch {console.bold(epoch_str)}  →  {val_str}")
     for advisory in event.advisories:
         print()
-        _console.warning(advisory)
-    print(f"\n Run name      : {_console.bold(event.run_name)}")
-    print(f" Run directory → {_console.dim(event.exp_dir)}")
+        console.warning(advisory)
+    print(f"\n Run name      : {console.bold(event.run_name)}")
+    print(f" Run directory → {console.dim(event.exp_dir)}")
     if not interrupted:
-        print(f" Next          : {_console.green(f'evaluate {event.run_name}')}")
-    print(_console.rule())
+        print(f" Next          : {console.green(f'evaluate {event.run_name}')}")
+    print(console.rule())
 
 
 class ConsoleListener:
@@ -128,11 +128,11 @@ class ConsoleListener:
 
     def __call__(self, event: Event) -> None:
         if isinstance(event, Notice):
-            {"error": _console.error, "info": _console.info}.get(event.level, _console.warning)(event.message)
+            {"error": console.error, "info": console.info}.get(event.level, console.warning)(event.message)
         elif isinstance(event, DeviceDetected):
             print_device_banner(event.purpose, event.gpus)
         elif isinstance(event, SeedSet):
-            print(_console.dim(f" Seed: {event.seed} (reproducible run)"))
+            print(console.dim(f" Seed: {event.seed} (reproducible run)"))
         elif isinstance(event, RunStarted):
             print_header(event.exp_dir, event.cfg, event.val_images)
             if event.resume_checkpoint:
@@ -140,19 +140,19 @@ class ConsoleListener:
         elif isinstance(event, InterruptRequested):
             # \r\033[K is cursor control (clear the in-progress progress-bar line),
             # not color — left as a deliberate exception to the "route color
-            # through _console" rule. The warning itself still goes through
-            # _console.warning() so NO_COLOR/non-TTY gating still applies.
+            # through console" rule. The warning itself still goes through
+            # console.warning() so NO_COLOR/non-TTY gating still applies.
             print("\r\033[K")
-            _console.warning("Interrupt received — finishing current batch then saving...\n")
+            console.warning("Interrupt received — finishing current batch then saving...\n")
         elif isinstance(event, RunFinished):
             print_run_summary(event)
         elif isinstance(event, EvalStarted):
-            print(_console.dim(f" Found {event.num_files} files for evaluation ({event.num_classes} classes)."))
+            print(console.dim(f" Found {event.num_files} files for evaluation ({event.num_classes} classes)."))
         elif isinstance(event, EvalProgress):
             self._eval_progress(event)
         elif isinstance(event, SweepEvalTrialStarted):
             print()
-            print(f" {_console.bold(f'[{event.index}/{event.total}] {event.trial}')}")
+            print(f" {console.bold(f'[{event.index}/{event.total}] {event.trial}')}")
         # EpochEnded: Keras' own progress bar already shows each epoch in the terminal.
 
     def _eval_progress(self, event: EvalProgress) -> None:
@@ -160,7 +160,7 @@ class ConsoleListener:
 
         if self._bar is None:
             self._bar = tqdm.tqdm(
-                total=event.total, desc=" Evaluating", unit="batch", disable=not _console.is_tty(),
+                total=event.total, desc=" Evaluating", unit="batch", disable=not console.is_tty(),
             )
         else:
             self._bar.update(event.done - self._bar.n)

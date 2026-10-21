@@ -143,8 +143,8 @@ def get_run(name: str):
         "lr": cfg.training.learning_rate,
         "epochs": cfg.training.epochs,
         "epochs_run": epochs_run,
-        "val_accuracy": cfg.run.val_accuracy,
-        "val_loss": cfg.run.val_loss,
+        "val_accuracy": cfg.run.metrics.get("val_accuracy"),
+        "val_loss": cfg.run.metrics.get("val_loss"),
         "metrics": cfg.run.metrics,
         "primary_metric": cfg.run.primary_metric,
         "primary_value": primary_value,
@@ -154,7 +154,7 @@ def get_run(name: str):
         "cli_command": cfg.run.cli_command or "",
         "advisories": present.run_advisories(run_path, eval_report) if eval_report else [],
         "eval_display": (
-            present.eval_display(eval_report, cfg.run.val_accuracy) if eval_report else None
+            present.eval_display(eval_report, cfg.run.metrics.get("val_accuracy")) if eval_report else None
         ),
         "config": config_to_dict(cfg),
         "training_log": training_log,

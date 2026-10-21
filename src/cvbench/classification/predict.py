@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from cvbench.core._names import class_label
+from cvbench.core.names import class_label
 
 
 def build_classification_result(

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import keras
 
-from cvbench.core import _console
+from cvbench.core import console
 from cvbench.core.config import CVBenchConfig
 from cvbench.core.errors import ConfigError
 
@@ -41,7 +41,7 @@ def build_checkpoint_callback(cfg: CVBenchConfig, run_dir: str) -> keras.callbac
                     val_str = f"{val:.4f}" if val is not None else "—"
                     _append_best_event(run_dir, epoch, monitor, val)
                     print()
-                    _console.success(f"New best saved  {_console.dim(monitor)} = {_console.bold(val_str)}")
+                    console.success(f"New best saved  {console.dim(monitor)} = {console.bold(val_str)}")
 
         return _BestOnly(
             filepath=str(Path(run_dir) / "best.keras"),
@@ -62,7 +62,7 @@ def build_checkpoint_callback(cfg: CVBenchConfig, run_dir: str) -> keras.callbac
                 if (epoch + 1) % every_n == 0:
                     super().on_epoch_end(epoch, logs)
                     print()
-                    _console.success(f"Checkpoint saved  epoch {_console.bold(str(epoch + 1))}")
+                    console.success(f"Checkpoint saved  epoch {console.bold(str(epoch + 1))}")
 
         return _EveryNEpochs(
             filepath=str(Path(run_dir) / "epoch_{epoch:03d}.keras"),

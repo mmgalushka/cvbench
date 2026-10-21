@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cvbench.core import _console
+from cvbench.core import console
 from cvbench.datasets import layout
 
 IMBALANCE_THRESHOLD = 3.0  # max/min class count ratio at which imbalance is reported
@@ -95,19 +95,19 @@ def print_class_distribution(class_dist: dict[str, int]) -> bool:
     uniform = all(c == counts[0] for c in counts)
 
     bar_width = 20
-    print(f" {_console.bold('Class distribution:')}")
+    print(f" {console.bold('Class distribution:')}")
     rows = []
     for cls, count in class_dist.items():
         pct = count / total * 100
         bar = "" if uniform else "█" * int(count / max_count * bar_width)
         rows.append((cls, count, bar, f"{pct:.1f}%"))
-    _console.table(["Class", ("Images", "right"), "", ("%", "right")], rows)
+    console.table(["Class", ("Images", "right"), "", ("%", "right")], rows)
 
     imbalanced = ratio >= IMBALANCE_THRESHOLD
     if imbalanced:
         print()
         ratio_str = "∞" if ratio == float("inf") else f"{ratio:.1f}"
-        _console.warning(f"Imbalance ratio {ratio_str}:1 (threshold {IMBALANCE_THRESHOLD:.1f}:1)")
+        console.warning(f"Imbalance ratio {ratio_str}:1 (threshold {IMBALANCE_THRESHOLD:.1f}:1)")
     return imbalanced
 
 
@@ -119,10 +119,10 @@ def print_imbalance_warning(class_dist: dict[str, int], class_weight_cfg) -> Non
     ratio = max_count / min_count
 
     if ratio >= IMBALANCE_THRESHOLD:
-        _console.warning(f"Imbalance ratio {ratio:.1f}:1 (threshold {IMBALANCE_THRESHOLD:.1f}:1)")
+        console.warning(f"Imbalance ratio {ratio:.1f}:1 (threshold {IMBALANCE_THRESHOLD:.1f}:1)")
         if class_weight_cfg is None:
-            print(f"   {_console.dim('Tip: rerun with --class-weight auto')}")
+            print(f"   {console.dim('Tip: rerun with --class-weight auto')}")
         elif class_weight_cfg == "auto":
-            _console.success("class_weight=auto applied")
+            console.success("class_weight=auto applied")
         else:
-            _console.success("custom class weights applied")
+            console.success("custom class weights applied")

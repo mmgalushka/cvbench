@@ -50,6 +50,35 @@ class MetricSpec:
 VAL_LOSS = MetricSpec("val_loss", "Val Loss", "min", fmt="loss")
 
 
+class TaskView(abc.ABC):
+    """How a task shows itself in the terminal and tables: prediction and eval-report rendering.
+
+    Stateless and TensorFlow-free. ``core/present.py`` decides *what* to show,
+    ``core/render.py`` holds the terminal building blocks, and a task's view
+    composes them into that task's own report body.
+    """
+
+    @abc.abstractmethod
+    def render_predictions(self, formats_run: list[dict], all_formats: bool) -> None:
+        """Print ``predict`` results to the terminal."""
+
+    @abc.abstractmethod
+    def eval_summary(self, report: dict, val_accuracy: float | None = None) -> list[tuple[str, str]]:
+        """Ordered (label, value) headline facts of an eval report."""
+
+    @abc.abstractmethod
+    def per_class_table(self, report: dict) -> dict[str, list]:
+        """Columns and formatted rows of the per-class metrics table."""
+
+    def report_advisories(self, report: dict) -> list[str]:
+        """Advisories derivable from an eval report alone."""
+        return []
+
+    @abc.abstractmethod
+    def render_report(self, report: dict, val_accuracy: float | None = None, advisories=()) -> None:
+        """Print the body of an eval report to the terminal."""
+
+
 class Task(abc.ABC):
     """A training scenario: classification, detection, and (later) others.
 
@@ -57,7 +86,7 @@ class Task(abc.ABC):
     ``DatasetSpec`` passed into every method — so ``cvbench.tasks.get_task``
     can hand out a fresh instance per call for free.
 
-    Everything outside the model/data path (metadata, report rendering,
+    Everything outside the model/data path (metadata, presentation,
     prediction shaping) is TensorFlow-free, so the CLI and WebUI can ask a
     task about itself without paying for a TensorFlow import.
     """
@@ -192,7 +221,7 @@ class Task(abc.ABC):
 
     @abc.abstractmethod
     def headline_metrics(self, final_metrics: dict) -> dict:
-        """Map a Keras History's final-epoch metrics to update_run_status() kwargs."""
+        """Map a Keras History's final-epoch metrics to the run's headline metrics (None values are not recorded)."""
 
     def training_advisories(self, cfg: CVBenchConfig, final_metrics: dict) -> list[str]:
         """Advice for a run that finished training with FINAL_METRICS (none by default)."""
@@ -244,24 +273,8 @@ class Task(abc.ABC):
     ) -> dict:
         """Shape one image's raw head outputs (no batch axis) into a WebUI result."""
 
-    @abc.abstractmethod
-    def render_predictions(self, formats_run: list[dict], all_formats: bool) -> None:
-        """Print ``predict`` results to the terminal."""
-
-    # ---- report rendering -----------------------------------------------------
+    # ---- presentation -----------------------------------------------------
 
     @abc.abstractmethod
-    def eval_summary(self, report: dict, val_accuracy: float | None = None) -> list[tuple[str, str]]:
-        """Ordered (label, value) headline facts of an eval report."""
-
-    @abc.abstractmethod
-    def per_class_table(self, report: dict) -> dict[str, list]:
-        """Columns and formatted rows of the per-class metrics table."""
-
-    def report_advisories(self, report: dict) -> list[str]:
-        """Advisories derivable from an eval report alone."""
-        return []
-
-    @abc.abstractmethod
-    def render_report(self, report: dict, val_accuracy: float | None = None, advisories=()) -> None:
-        """Print the body of an eval report to the terminal."""
+    def view(self) -> TaskView:
+        """This task's terminal/table presentation."""

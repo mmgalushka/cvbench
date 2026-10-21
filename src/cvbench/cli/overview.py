@@ -22,7 +22,7 @@ import importlib
 import click
 
 from cvbench.cli import _help
-from cvbench.core import _console
+from cvbench.core import console
 
 # name → "module:attribute" — the console scripts from pyproject [project.scripts],
 # minus `commands` itself. This is a list of *where the commands are*, not a copy
@@ -111,9 +111,9 @@ def _grouped():
 
 
 def render() -> str:
-    w = min(_console.term_width(80), 90)
-    rule = _console.rule(w)
-    thick = _console.rule(w, "white")
+    w = min(console.term_width(80), 90)
+    rule = console.rule(w)
+    thick = console.rule(w, "white")
     top, groups = _grouped()
 
     cmd_col = max(len(p) for p, _ in iter_commands()) + 3
@@ -121,24 +121,24 @@ def render() -> str:
     # exceed it and wrap their description onto the next line.
     x_col = max((len(c) for _, rows in EXTRAS for c, _ in rows if len(c) <= 20), default=16) + 2
 
-    def dl_row(indent, term, desc, col, colour=_console.green):
+    def dl_row(indent, term, desc, col, colour=console.green):
         pad = " " * indent
         if len(term) <= col:
-            return f"{pad}{colour(f'{term:<{col}}')}{_console.dim(desc)}"
-        return f"{pad}{colour(term)}\n{pad}{' ' * col}{_console.dim(desc)}"
+            return f"{pad}{colour(f'{term:<{col}}')}{console.dim(desc)}"
+        return f"{pad}{colour(term)}\n{pad}{' ' * col}{console.dim(desc)}"
 
     out: list[str] = [thick]
-    out.append(f" {_console.bold('CVBench')} {_console.dim('—')} Computer Vision Training Sandbox")
+    out.append(f" {console.bold('CVBench')} {console.dim('—')} Computer Vision Training Sandbox")
     out.append(thick)
     out.append("")
-    out.append(f" {_console.bold('CVBench commands')}")
-    out.append(f"   {_console.dim('Every command explains itself:')}  train --help    data split --help")
+    out.append(f" {console.bold('CVBench commands')}")
+    out.append(f"   {console.dim('Every command explains itself:')}  train --help    data split --help")
     out.append("")
     for name, cmd in top:
-        out.append(dl_row(3, name, _short_help(cmd), cmd_col, colour=_console.green))
+        out.append(dl_row(3, name, _short_help(cmd), cmd_col, colour=console.green))
     for _name, grp, subs in groups:
         out.append("")
-        out.append(f"   {_console.dim(_short_help(grp))}")
+        out.append(f"   {console.dim(_short_help(grp))}")
         for sub_path, sub in subs:
             out.append(dl_row(3, sub_path, _short_help(sub), cmd_col))
     out.append("")
@@ -146,7 +146,7 @@ def render() -> str:
     for i, (title, rows) in enumerate(EXTRAS):
         if i:
             out.append("")
-        out.append(f" {_console.bold(title)}")
+        out.append(f" {console.bold(title)}")
         out.append("")
         for cmd, desc in rows:
             out.append(dl_row(3, cmd, desc, x_col))
@@ -158,7 +158,7 @@ def render() -> str:
 def render_markdown() -> str:
     """The ``## CLI reference`` block for README.md — command paths + one-line help.
 
-    Deliberately left off the `_console` rich migration: this produces plain
+    Deliberately left off the `console` rich migration: this produces plain
     Markdown *source* text for README.md, not a terminal rendering, and rich
     has no facility to emit Markdown source (only to render existing Markdown
     for display).
@@ -183,7 +183,7 @@ def render_markdown() -> str:
 def render_quickstart_markdown() -> str:
     """The ``## Quickstart`` block for README.md — the happy path, top to bottom.
 
-    Deliberately left off the `_console` rich migration — see
+    Deliberately left off the `console` rich migration — see
     :func:`render_markdown`.
     """
     width = max(len(c) for c, _ in QUICKSTART) + 3

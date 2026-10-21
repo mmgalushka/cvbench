@@ -110,7 +110,7 @@ def _stub_run_export(monkeypatch, tmp_path):
     cfg = SimpleNamespace(
         data=SimpleNamespace(classes=["a", "b"]),
         model=SimpleNamespace(input_size=8, backbone="stub"),
-        run=SimpleNamespace(val_accuracy=0.9, val_loss=0.1),
+        run=SimpleNamespace(metrics={"val_accuracy": 0.9, "val_loss": 0.1}),
     )
     monkeypatch.setattr(export, "resolve_run_dir", lambda _name: str(run_dir))
     monkeypatch.setattr(export, "load_config", lambda _path: cfg)

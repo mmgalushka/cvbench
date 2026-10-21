@@ -155,7 +155,7 @@ def _infer_tflite(model_path: Path, images: list[str], size: int) -> list[list[n
         raise ExportError(f"TFLite inference failed: {e}") from e
 
 
-def run_experiment_prediction(
+def run_prediction(
     experiment: str,
     input_path: str,
     fmt: str,

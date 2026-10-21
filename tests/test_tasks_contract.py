@@ -120,6 +120,28 @@ def test_task_implements_every_abstract_method(name):
         )
 
 
+@pytest.mark.parametrize("name", TASK_NAMES)
+def test_task_view_implements_every_abstract_view_method(name):
+    """``view()`` returns a TaskView that overrides every abstract view method."""
+    from cvbench.core.task import TaskView
+
+    view = get_task(name).view()
+    assert isinstance(view, TaskView)
+    for method_name in TaskView.__abstractmethods__:
+        method = getattr(view, method_name)
+        assert callable(method), f"{name} view.{method_name} must be callable"
+        assert method.__qualname__.split(".")[0] != "TaskView", (
+            f"{name} view does not override abstract method {method_name!r}"
+        )
+
+
+def test_task_view_cannot_be_instantiated_directly():
+    from cvbench.core.task import TaskView
+
+    with pytest.raises(TypeError):
+        TaskView()
+
+
 def test_get_task_unknown_name_lists_valid_options():
     with pytest.raises(ConfigError, match="Unknown task 'nonsense'"):
         get_task("nonsense")
@@ -201,7 +223,7 @@ def test_task_lifecycle(name, task_dataset, tmp_path):
     headline = task.headline_metrics({"val_loss": 0.5, "val_accuracy": 0.25})
     assert set(headline) == {"val_accuracy", "val_loss"} and headline["val_loss"] == 0.5
 
-    assert task.eval_summary(report) and task.per_class_table(report)["rows"] is not None
+    assert task.view().eval_summary(report) and task.view().per_class_table(report)["rows"] is not None
 
 
 @pytest.mark.parametrize("name", TASK_NAMES)

@@ -1,7 +1,7 @@
 """The shared ANSI confusion-matrix printer — both layouts render without raising."""
 import numpy as np
 
-from cvbench.core._confusion import print_confusion_matrix
+from cvbench.core.confusion import print_confusion_matrix
 
 
 def test_normal_layout_renders(capsys):

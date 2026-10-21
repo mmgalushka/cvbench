@@ -6,8 +6,10 @@ the two cannot drift: one unit convention (fractions in [0, 1] are shown as
 percentages with one decimal; losses are plain decimals), one set of column and
 section names, and one place that decides which advisories apply.
 
-Pure Python — no TensorFlow, no Rich — so both the CLI and the API can import it
-without a startup cost.
+Layering: this module decides *what* to show, shared by CLI and WebUI (pure Python,
+no Rich, no TensorFlow, so both import it without a startup cost); ``core/render.py``
+decides *how* to print it in the terminal; each ``<task>/view.py`` composes the two
+into that task's own report and prediction output.
 """
 from __future__ import annotations
 
@@ -211,19 +213,19 @@ def _report_task(report: dict, task: str | None):
 
 def eval_summary(report: dict, val_accuracy: float | None = None, task: str | None = None) -> list[tuple[str, str]]:
     """Ordered (label, value) headline facts of an eval report, for any task."""
-    return _report_task(report, task).eval_summary(report, val_accuracy)
+    return _report_task(report, task).view().eval_summary(report, val_accuracy)
 
 
 def per_class_table(report: dict, task: str | None = None) -> dict[str, list]:
     """Columns and formatted rows of the per-class metrics table, for any task."""
-    return _report_task(report, task).per_class_table(report)
+    return _report_task(report, task).view().per_class_table(report)
 
 
 def run_advisories(run_dir: Path | str, report: dict | None) -> list[str]:
     """Every advisory that applies to a run's evaluation — shown by `evaluate`, `runs show` and the WebUI."""
     advisories: list[str] = []
     if report is not None:
-        advisories += _report_task(report, None).report_advisories(report)
+        advisories += _report_task(report, None).view().report_advisories(report)
     if loss_still_falling(run_dir):
         advisories.append(TRAIN_LONGER)
     return advisories

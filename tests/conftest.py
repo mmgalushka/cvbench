@@ -46,7 +46,10 @@ def _write_exp(parent: Path, name: str, **run_kwargs) -> Path:
     cfg.run.date = "2026-01-01"
     cfg.run.status = "done"
     for k, v in run_kwargs.items():
-        setattr(cfg.run, k, v)
+        if k in ("val_accuracy", "val_loss"):  # shorthand for the run's headline metrics
+            cfg.run.metrics[k] = v
+        else:
+            setattr(cfg.run, k, v)
     save_config(cfg, str(exp_dir))
     return exp_dir
 

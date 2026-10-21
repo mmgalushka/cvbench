@@ -30,7 +30,7 @@ from cvbench.services import training as _training
 from cvbench.tasks import get_task, resolve_task
 
 
-def evaluate_on_val(trial_dir: str, listener: Listener | None = None) -> None:
+def run_val_evaluation(trial_dir: str, listener: Listener | None = None) -> None:
     """Score a trained trial on its VAL split and record the headline score in config.yaml.
 
     `run_evaluation` only ever scores the test split, and picking a hyper-parameter
@@ -126,7 +126,7 @@ def run_sweep(
         # val-evaluation failure, not misattributed as "training failed".
         if manifest.metric == post_hoc_metric:
             try:
-                evaluate_on_val(trial_dir, listener)
+                run_val_evaluation(trial_dir, listener)
             except KeyboardInterrupt:
                 emit(listener, SweepInterrupted(trial_name, "val evaluation"))
                 break

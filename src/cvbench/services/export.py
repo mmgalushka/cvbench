@@ -7,7 +7,7 @@ import random
 from datetime import datetime
 from pathlib import Path
 
-from cvbench.core import _console
+from cvbench.core import console
 from cvbench.core.config import load_config
 from cvbench.core.errors import ConfigError, DatasetError, ExportError, NotFoundError
 from cvbench.core.exp_store import resolve_run_dir
@@ -30,7 +30,7 @@ def _quiet_converter(fn):
     """Mute native converter stderr (TensorSpec/LLVM chatter); it is replayed if the call fails."""
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
-        with _console.quiet_native_stderr():
+        with console.quiet_native_stderr():
             return fn(*args, **kwargs)
 
     return wrapper
@@ -102,49 +102,49 @@ def _prepare_plan_package(run_dir: Path, cfg) -> Path:
 
     onnx_path = export_dir / "model.onnx"
     if onnx_path.exists():
-        print(_console.dim("  Reusing   model.onnx"))
+        print(console.dim("  Reusing   model.onnx"))
     else:
         model = resolve_task(cfg).load_model(str(run_dir / "best.keras"))
-        print(_console.dim("  Converting to ONNX (opset=13)..."))
+        print(console.dim("  Converting to ONNX (opset=13)..."))
         _export_onnx(model, onnx_path, cfg.model.input_size)
 
     return export_dir
 
 
 def _print_plan_instructions(run_name: str, onnx_exists: bool) -> None:
-    print(_console.rule())
+    print(console.rule())
     print(" TensorRT Engine Plan — Jetson deployment")
-    print(_console.rule())
+    print(console.rule())
     print()
     print(
-        _console.blue(
+        console.blue(
             " A TensorRT .plan file must be built on the target Jetson device itself,"
         )
     )
-    print(_console.blue(" since it is compiled for a specific GPU architecture."))
+    print(console.blue(" since it is compiled for a specific GPU architecture."))
     print()
     print(
-        f" {_console.bold('Step 1')} {_console.dim('— copy the ONNX model to your Jetson:')}"
+        f" {console.bold('Step 1')} {console.dim('— copy the ONNX model to your Jetson:')}"
     )
     print()
     print(f"   scp experiments/{run_name}/export/plan/model.onnx \\")
     print("       user@jetson:/home/user/model.onnx")
     print()
     print(
-        f" {_console.bold('Step 2')} {_console.dim('— on the Jetson, convert to TensorRT engine plan:')}"
+        f" {console.bold('Step 2')} {console.dim('— on the Jetson, convert to TensorRT engine plan:')}"
     )
     print()
     print("   trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32")
     print()
     print(
-        f" {_console.bold('Step 3')} {_console.dim('— on the Jetson, save infer.py and run it:')}"
+        f" {console.bold('Step 3')} {console.dim('— on the Jetson, save infer.py and run it:')}"
     )
     print()
     print(f"   predict {run_name} --format plan      # prints infer.py")
     print("   ./infer.py model.plan image.jpg")
     print()
     print(
-        _console.dim(
+        console.dim(
             " Or use the TensorRT Python API / DeepStream directly. Input is float32"
             " NHWC 0–255; normalisation is inside the model."
         )
@@ -152,18 +152,18 @@ def _print_plan_instructions(run_name: str, onnx_exists: bool) -> None:
     print()
     if not onnx_exists:
         print(
-            _console.yellow(
+            console.yellow(
                 " Note: ONNX export not found. Generate it first with:"
             )
         )
         print()
         print(f"   runs export {run_name} --format onnx")
         print()
-    print(_console.rule())
+    print(console.rule())
 
 
 def _print_onnx_snippet(model_name: str, input_size: int) -> None:
-    print(_console.dim(" Run it with onnxruntime (input: float32 NHWC, values 0–255):"))
+    print(console.dim(" Run it with onnxruntime (input: float32 NHWC, values 0–255):"))
     print()
     print("   import numpy as np, onnxruntime as ort")
     print(f'   sess = ort.InferenceSession("{model_name}")')
@@ -275,7 +275,7 @@ def _build_calibration_set(
 
     unit = "cluster(s)" if strategy == "diverse" else "class(es)"  # stratified also uses class(es)
     print(
-        _console.dim(
+        console.dim(
             f"  Building  calib_set.npy ({len(selected)} images, "
             f"{strategy} across {n_classes} {unit}, {size}×{size})..."
         )
@@ -290,10 +290,10 @@ def _build_calibration_set(
 
     calib_set = np.array(calib_data)
     np.save(str(output_path), calib_set)
-    print(_console.dim(f"  Written   calib_set.npy  shape={calib_set.shape}"))
+    print(console.dim(f"  Written   calib_set.npy  shape={calib_set.shape}"))
     if len(selected) < total:
         print(
-            _console.yellow(
+            console.yellow(
                 f"  Warning   calibration set has {len(selected)} images, fewer than the"
                 f" {total} requested (not enough distinct training images for"
                 f" '{strategy}'); quantization may be less accurate."
@@ -304,7 +304,7 @@ def _build_calibration_set(
 
 def _write_alls(output_path: Path) -> None:
     if output_path.exists():
-        print(_console.dim("  Reusing   model.alls"))
+        print(console.dim("  Reusing   model.alls"))
         return
     output_path.write_text(
         "model_optimization_flavor(optimization_level=2, compression_level=1)\n"
@@ -312,7 +312,7 @@ def _write_alls(output_path: Path) -> None:
         "quantization_param(avgpool3, precision_mode=a16_w16)\n"
         "quantization_param(fc11, precision_mode=a16_w16)\n"
     )
-    print(_console.dim("  Written   model.alls"))
+    print(console.dim("  Written   model.alls"))
 
 
 def _prepare_hailo_package(
@@ -325,20 +325,20 @@ def _prepare_hailo_package(
 
     tflite_path = export_dir / "model.tflite"
     if tflite_path.exists():
-        print(_console.dim("  Reusing   model.tflite"))
+        print(console.dim("  Reusing   model.tflite"))
     else:
         model = resolve_task(cfg).load_model(str(run_dir / "best.keras"))
-        print(_console.dim("  Converting to TFLite (float32)..."))
+        print(console.dim("  Converting to TFLite (float32)..."))
         _export_tflite(model, tflite_path, quantize="none")
 
     calib_path = export_dir / "calib_set.npy"
     if calib_path.exists():
-        print(_console.dim("  Reusing   calib_set.npy"))
+        print(console.dim("  Reusing   calib_set.npy"))
         shape = np.load(str(calib_path), mmap_mode="r").shape
         calib_meta = {"calib_set_images": shape[0], "calib_set_shuffled": True}
         if shape[0] < calib_total:
             print(
-                _console.yellow(
+                console.yellow(
                     f"  Warning   existing calib_set.npy has {shape[0]} images, fewer than"
                     f" the {calib_total} requested; delete it to rebuild."
                 )
@@ -363,27 +363,27 @@ def _print_hailo_instructions(
     run_name: str, export_dir: Path, hw_arch: str = "hailo8l"
 ) -> None:
     rel = f"experiments/{run_name}/export/hailo"
-    print(_console.rule())
+    print(console.rule())
     print(f" Hailo HEF — {hw_arch} deployment")
-    print(_console.rule())
+    print(console.rule())
     print()
     print(
-        _console.blue(
+        console.blue(
             " The Hailo conversion commands must be run inside the Hailo Docker container."
         )
     )
     print(
-        _console.blue(
+        console.blue(
             f" Mount or copy the export folder into the container: {rel}/"
         )
     )
     print()
-    print(f" {_console.bold('Step 1')} {_console.dim('— parse TFLite to HAR:')}")
+    print(f" {console.bold('Step 1')} {console.dim('— parse TFLite to HAR:')}")
     print()
     print("   hailo parser tf model.tflite")
     print()
     print(
-        f" {_console.bold('Step 2')} {_console.dim('— optimize with calibration data:')}"
+        f" {console.bold('Step 2')} {console.dim('— optimize with calibration data:')}"
     )
     print()
     print("   hailo optimize \\")
@@ -393,11 +393,11 @@ def _print_hailo_instructions(
     print("       --output-har-path model_optimized.har \\")
     print("       model.har")
     print()
-    print(f" {_console.bold('Step 3')} {_console.dim('— compile to HEF:')}")
+    print(f" {console.bold('Step 3')} {console.dim('— compile to HEF:')}")
     print()
     print(f"   hailo compiler --hw-arch {hw_arch} model_optimized.har")
     print()
-    print(_console.rule())
+    print(console.rule())
 
 
 def run_export(
@@ -437,9 +437,9 @@ def run_export(
         if not checkpoint.exists():
             raise NotFoundError(f"No best.keras found in: {run_dir}")
 
-        print(_console.rule())
+        print(console.rule())
         print(f" TensorRT Plan package — '{run_dir.name}'")
-        print(_console.rule())
+        print(console.rule())
 
         export_dir = _prepare_plan_package(run_dir, cfg)
 
@@ -452,8 +452,8 @@ def run_export(
             "normalization": "internal",
             "classes": cfg.data.classes,
             "backbone": cfg.model.backbone,
-            "val_accuracy": cfg.run.val_accuracy,
-            "val_loss": cfg.run.val_loss,
+            "val_accuracy": cfg.run.metrics.get("val_accuracy"),
+            "val_loss": cfg.run.metrics.get("val_loss"),
             "exported_at": datetime.now().isoformat(timespec="seconds"),
             "jetson_trtexec": "trtexec --onnx=model.onnx --saveEngine=model.plan --noTF32",
         }
@@ -461,9 +461,9 @@ def run_export(
             json.dumps(export_info, indent=2)
         )
         print("  Written   export_info.json")
-        print(_console.rule())
-        print(_console.green(f" Package ready → {export_dir}"))
-        print(_console.rule())
+        print(console.rule())
+        print(console.green(f" Package ready → {export_dir}"))
+        print(console.rule())
         _print_plan_instructions(run_dir.name, onnx_exists=True)
         return export_dir
 
@@ -480,9 +480,9 @@ def run_export(
         if not checkpoint.exists():
             raise NotFoundError(f"No best.keras found in: {run_dir}")
 
-        print(_console.rule())
+        print(console.rule())
         print(f" Hailo package — '{run_dir.name}'")
-        print(_console.rule())
+        print(console.rule())
 
         export_dir, calib_meta = _prepare_hailo_package(
             run_dir, cfg, calib_total=calib_total, calib_strategy=calib_strategy
@@ -497,8 +497,8 @@ def run_export(
             "normalization": "internal",
             "classes": cfg.data.classes,
             "backbone": cfg.model.backbone,
-            "val_accuracy": cfg.run.val_accuracy,
-            "val_loss": cfg.run.val_loss,
+            "val_accuracy": cfg.run.metrics.get("val_accuracy"),
+            "val_loss": cfg.run.metrics.get("val_loss"),
             "exported_at": datetime.now().isoformat(timespec="seconds"),
             "hw_arch": hw_arch,
             **calib_meta,
@@ -507,9 +507,9 @@ def run_export(
             json.dumps(export_info, indent=2)
         )
         print("  Written   export_info.json")
-        print(_console.rule())
-        print(_console.green(f" Package ready → {export_dir}"))
-        print(_console.rule())
+        print(console.rule())
+        print(console.green(f" Package ready → {export_dir}"))
+        print(console.rule())
         _print_hailo_instructions(run_dir.name, export_dir, hw_arch)
         return export_dir
 
@@ -531,10 +531,10 @@ def run_export(
     export_dir = export_base / subfolder
     export_dir.mkdir(parents=True, exist_ok=True)
 
-    print(_console.rule())
+    print(console.rule())
     print(f" Exporting '{run_dir.name}' → {subfolder}")
-    print(_console.rule())
-    print(_console.dim(f"  Loading   {checkpoint}"))
+    print(console.rule())
+    print(console.dim(f"  Loading   {checkpoint}"))
 
     model = resolve_task(cfg).load_model(str(checkpoint))
 
@@ -543,11 +543,11 @@ def run_export(
             f"model{_TFLITE_QUANTIZE_SUFFIX.get(quantize, '')}.tflite"
         )
         model_path = export_dir / model_filename
-        print(_console.dim(f"  Converting to TFLite (quantize={quantize})..."))
+        print(console.dim(f"  Converting to TFLite (quantize={quantize})..."))
         _export_tflite(model, model_path, quantize)
     elif format == "onnx":
         model_path = export_dir / "model.onnx"
-        print(_console.dim("  Converting to ONNX (opset=13)..."))
+        print(console.dim("  Converting to ONNX (opset=13)..."))
         _export_onnx(model, model_path, cfg.model.input_size)
 
     size_mb = model_path.stat().st_size / (1024 * 1024)
@@ -561,8 +561,8 @@ def run_export(
         "normalization": "internal",
         "classes": cfg.data.classes,
         "backbone": cfg.model.backbone,
-        "val_accuracy": cfg.run.val_accuracy,
-        "val_loss": cfg.run.val_loss,
+        "val_accuracy": cfg.run.metrics.get("val_accuracy"),
+        "val_loss": cfg.run.metrics.get("val_loss"),
         "exported_at": datetime.now().isoformat(timespec="seconds"),
     }
     if format == "onnx":
@@ -574,12 +574,12 @@ def run_export(
 
     print(f"  Written   {model_path.name}  ({size_mb:.1f} MB)")
     print("  Written   export_info.json")
-    print(_console.rule())
-    print(_console.green(f" Export complete → {export_dir}"))
-    print(_console.rule())
+    print(console.rule())
+    print(console.green(f" Export complete → {export_dir}"))
+    print(console.rule())
     if format == "tflite" and quantize == "int8":
         print(
-            _console.dim(
+            console.dim(
                 " Note: int8 is dynamic-range quantization (int8 weights, float32"
                 " input/output), not full-integer."
             )

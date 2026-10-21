@@ -16,7 +16,7 @@ import click
 from cvbench.cli import _help
 from cvbench.cli._listeners import ConsoleListener
 from cvbench.cli.train import parse_override, validate_dataset
-from cvbench.core import _console, present
+from cvbench.core import console, present
 from cvbench.core.config import FLAG_KEYS, build_config, resolve_key
 from cvbench.core.events import Event, SweepFinished, SweepInterrupted, TrialFailed, TrialStarted
 from cvbench.core.exp_store import EXPERIMENTS_DIR, assert_name_available, make_unique_dir
@@ -74,8 +74,8 @@ def print_trial_table(
         columns += ["Status"]
     vals = [present.fmt_metric(metric, r.value) for r in rows]
     tests = [present.fmt_pct(r.test_value) for r in rows]
-    val_cells = _console.star_cells(vals, [r.is_best for r in rows])
-    test_cells = _console.star_cells(tests, [r.is_best_test for r in rows])
+    val_cells = console.star_cells(vals, [r.is_best for r in rows])
+    test_cells = console.star_cells(tests, [r.is_best_test for r in rows])
     body = []
     for i, r in enumerate(rows):
         cells: list[Any] = [r.index, r.dir, *(r.params[a] for a in axes)]
@@ -85,9 +85,9 @@ def print_trial_table(
             else:
                 cells += [val_cells[i], r.status]
         body.append(cells)
-    _console.table(columns, body)
+    console.table(columns, body)
     if metric is not None and any(r.is_best for r in rows):
-        print(_console.dim(
+        print(console.dim(
             " ★ = best on that score. The sweep's pick is the val ★; the test ★ is only an indicator."
             if show_test else " ★ = the sweep's pick (best on the selection metric)."
         ))
@@ -242,18 +242,18 @@ def sweep(data_dir, name, strategy, n_trials, sample_seed, metric, from_dir, sho
     planned = [TrialRow(i, trial_dir_name(name, i), t, "planned", None) for i, t in enumerate(trials, start=1)]
     axis_names = list(axes)
 
-    print(_console.rule(79, "white"))
-    print(f" {_console.bold(f'CVBench — sweep {name}')}")
-    print(_console.rule(79, "white"))
+    print(console.rule(79, "white"))
+    print(f" {console.bold(f'CVBench — sweep {name}')}")
+    print(console.rule(79, "white"))
     print(f" {len(trials)} trials ({' x '.join(f'{len(v)} {display_key(k)}' for k, v in axes.items())}), "
           f"strategy {strategy}, metric {metric} ({direction})")
     if fixed_raw:
-        print(_console.dim(" fixed: " + ", ".join(f"{display_key(k)}={v}" for k, v in fixed_raw.items())))
+        print(console.dim(" fixed: " + ", ".join(f"{display_key(k)}={v}" for k, v in fixed_raw.items())))
     if strategy == "random":
-        print(_console.dim(f" sample-seed {sample_seed} (recorded in sweep.yaml; reuse it to repeat these trials)"))
+        print(console.dim(f" sample-seed {sample_seed} (recorded in sweep.yaml; reuse it to repeat these trials)"))
     if show:
         print_trial_table(planned, axis_names, None)
-        print(_console.dim(f" --show: nothing was trained. Total: {len(trials)} trials."))
+        print(console.dim(f" --show: nothing was trained. Total: {len(trials)} trials."))
         return
 
     from cvbench.services.sweep import run_sweep  # deferred: pulls in TensorFlow
@@ -274,15 +274,15 @@ class _SweepPrinter(ConsoleListener):
     def __call__(self, event: Event) -> None:
         if isinstance(event, TrialStarted):
             print()
-            print(f" {_console.bold(f'[{event.index}/{event.total}] {event.name}')}  "
+            print(f" {console.bold(f'[{event.index}/{event.total}] {event.name}')}  "
                   + ", ".join(f"{display_key(k)}={v}" for k, v in event.params.items()))
         elif isinstance(event, TrialFailed):
             what = "failed" if event.stage == "training" else "trained but val evaluation failed"
-            _console.error(f"Trial {event.name} {what}: {event.error_type}: {event.message}")
+            console.error(f"Trial {event.name} {what}: {event.error_type}: {event.message}")
         elif isinstance(event, SweepInterrupted):
             detail = (f"trial {event.name} did not finish" if event.stage == "training"
                       else f"evaluating {event.name}")
-            _console.warning(f"\n Interrupted — stopping the sweep ({detail}).")
+            console.warning(f"\n Interrupted — stopping the sweep ({detail}).")
         elif isinstance(event, SweepFinished):
             _finish(Path(event.sweep_dir))
         else:
@@ -292,23 +292,23 @@ class _SweepPrinter(ConsoleListener):
 def _finish(sweep_dir: Path) -> None:
     manifest, rows = summarize(sweep_dir)
     print()
-    print(_console.rule(79, "white"))
-    print(f" {_console.bold(f'CVBench — sweep {manifest.name} results')}  "
-          f"{_console.dim(f'{manifest.metric} ({manifest.direction})')}")
-    print(_console.rule(79, "white"))
+    print(console.rule(79, "white"))
+    print(f" {console.bold(f'CVBench — sweep {manifest.name} results')}  "
+          f"{console.dim(f'{manifest.metric} ({manifest.direction})')}")
+    print(console.rule(79, "white"))
     print_trial_table(rows, list(manifest.axes), manifest.metric)
     best = best_trial(rows)
     n_failed = sum(1 for r in rows if r.status != "done")
     if n_failed:
-        _console.warning(f"{n_failed} of {len(rows)} trials did not finish.")
+        console.warning(f"{n_failed} of {len(rows)} trials did not finish.")
     if best is None:
-        _console.warning("No trial produced a value for the selection metric.")
+        console.warning("No trial produced a value for the selection metric.")
     else:
         score = present.fmt_metric(manifest.metric, best.value)
-        print(f" Best: {_console.green(best.dir)} ({manifest.metric} = {score})")
-        print(_console.dim(f" Inspect it with: runs show {best.dir}"))
-        print(_console.dim(f" Evaluate the best trial on the test split:  evaluate {best.dir}"))
-        print(_console.dim(f" Evaluate all trials on the test split:      evaluate {manifest.name}"))
+        print(f" Best: {console.green(best.dir)} ({manifest.metric} = {score})")
+        print(console.dim(f" Inspect it with: runs show {best.dir}"))
+        print(console.dim(f" Evaluate the best trial on the test split:  evaluate {best.dir}"))
+        print(console.dim(f" Evaluate all trials on the test split:      evaluate {manifest.name}"))
 
 
 if __name__ == "__main__":

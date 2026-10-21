@@ -343,7 +343,7 @@ def test_cli_plan_names_the_run_when_given(tmp_path):
 def test_service_plan_short_circuits(tmp_path, monkeypatch):
     monkeypatch.setattr(prediction, "resolve_run_dir", lambda name: str(tmp_path))
 
-    result = prediction.run_experiment_prediction("run", "ignored", "plan")
+    result = prediction.run_prediction("run", "ignored", "plan")
 
     assert result == {"plan_only": True, "experiment": tmp_path.name, "run_dir": tmp_path}
 

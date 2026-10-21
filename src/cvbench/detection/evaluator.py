@@ -5,7 +5,7 @@ from pathlib import Path
 import keras
 import numpy as np
 
-from cvbench.core import _console, present
+from cvbench.core import console, present
 from cvbench.core.errors import DatasetError
 from cvbench.core.events import Listener, track_batches
 from cvbench.core.report import report_envelope, write_report
@@ -16,7 +16,7 @@ from cvbench.detection.metrics import (
     compute_detection_metrics,
     match_detections,
 )
-from cvbench.detection.view import render_report as print_body
+from cvbench.detection.view import DetectionView
 
 # Decode every candidate above a tiny epsilon (not the operating conf_threshold)
 # so compute_detection_metrics sees the full ranked list it needs for AP.
@@ -137,10 +137,10 @@ def evaluate(
 
 def _print_report(report: dict, run_dir: str, out_dir: Path) -> None:
     run_name = Path(run_dir).name
-    print(_console.rule())
-    print(f" {_console.bold('CVBench — evaluate')}  {_console.dim('|')}  {_console.dim('run: ' + run_name)}")
-    print(_console.rule())
-    print_body(report, advisories=present.run_advisories(run_dir, report))
-    print(f" {_console.bold('Saved:')}")
-    print(f"   {_console.dim(str(out_dir / 'eval_report.json'))}")
-    print(_console.rule())
+    print(console.rule())
+    print(f" {console.bold('CVBench — evaluate')}  {console.dim('|')}  {console.dim('run: ' + run_name)}")
+    print(console.rule())
+    DetectionView().render_report(report, advisories=present.run_advisories(run_dir, report))
+    print(f" {console.bold('Saved:')}")
+    print(f"   {console.dim(str(out_dir / 'eval_report.json'))}")
+    print(console.rule())

@@ -244,7 +244,7 @@ def progress(total: int, desc: str) -> Iterator[Callable[[int], None]]:
     Under NO_COLOR the bar is drawn without colour. The callback matches the
     optional ``progress`` parameter of the ``cvbench.datasets`` functions::
 
-        with _console.progress(len(images), "Copying") as advance:
+        with console.progress(len(images), "Copying") as advance:
             plan = build_plan(src, progress=advance)
     """
     if total <= 0 or not sys.stdout.isatty():

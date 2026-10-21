@@ -87,12 +87,12 @@ def test_update_run_status(tmp_path):
     cfg = build_config("data")
     save_config(cfg, str(tmp_path))
 
-    update_run_status(str(tmp_path), status="done", epochs_run=10, val_accuracy=0.92)
+    update_run_status(str(tmp_path), status="done", epochs_run=10, metrics={"val_accuracy": 0.92})
 
     reloaded = load_config(str(tmp_path))
     assert reloaded.run.status == "done"
     assert reloaded.run.epochs_run == 10
-    assert reloaded.run.val_accuracy == 0.92
+    assert reloaded.run.metrics.get("val_accuracy") == 0.92
 
 
 def test_update_run_status_interrupted(tmp_path):
@@ -235,7 +235,7 @@ def test_run_metrics_round_trip(tmp_path):
     cfg = build_config("data")
     cfg.run.primary_metric = "map50"
     cfg.run.primary_value = 0.5
-    cfg.run.val_loss = 0.25
+    cfg.run.metrics["val_loss"] = 0.25
     save_config(cfg, str(tmp_path))
 
     reloaded = load_config(str(tmp_path))
@@ -259,12 +259,12 @@ def test_legacy_run_keys_migrate_to_metrics(tmp_path):
     assert run.metrics == {"val_accuracy": 0.9, "val_loss": 0.3, "map50": 0.5}
     assert run.primary_metric == "map50"
     assert run.primary_value == 0.5
-    assert run.val_accuracy == 0.9
+    assert run.metrics.get("val_accuracy") == 0.9
 
 
 def test_update_run_status_merges_metrics(tmp_path):
     cfg = build_config("data")
-    cfg.run.val_loss = 0.4
+    cfg.run.metrics["val_loss"] = 0.4
     save_config(cfg, str(tmp_path))
 
     update_run_status(str(tmp_path), metrics={"map50": 0.6}, primary_metric="map50")

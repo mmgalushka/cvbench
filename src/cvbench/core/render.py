@@ -1,5 +1,6 @@
-"""Terminal rendering of an eval_report.json body, shared across entry points.
+"""Terminal building blocks: *how* to print an eval_report.json body, shared across entry points.
 
+``core/present.py`` decides *what* to show; this module prints it in the terminal.
 Pure NumPy — no TensorFlow/Keras dependency — and task-agnostic: it holds the
 building blocks (headline rows, per-class table, advisories). Each task's
 ``view.py`` composes them into its own report body, so ``evaluate()``'s live
@@ -10,12 +11,12 @@ from __future__ import annotations
 
 from typing import Literal
 
-from cvbench.core import _console
+from cvbench.core import console
 
 
 def print_advisories(advisories) -> None:
     for line in advisories:
-        _console.warning(line)
+        console.warning(line)
     if advisories:
         print()
 
@@ -23,7 +24,7 @@ def print_advisories(advisories) -> None:
 def print_summary(rows: list[tuple[str, str]], heading: str | None = None) -> None:
     """Split / images lines, then the report's headline scores (indented under HEADING when given)."""
     for label, value in rows[:2]:
-        print(_console.dim(f" {label:<22}: {value}"))
+        print(console.dim(f" {label:<22}: {value}"))
     if heading:
         print()
         print(heading)
@@ -31,7 +32,7 @@ def print_summary(rows: list[tuple[str, str]], heading: str | None = None) -> No
         if heading:
             print(f"   {label:<22} : {value}")
         else:
-            print(f" {_console.bold(f'{label:<22}')}: {_console.bold(value)}")
+            print(f" {console.bold(f'{label:<22}')}: {console.bold(value)}")
 
 
 def print_per_class(table: dict) -> None:
@@ -39,4 +40,4 @@ def print_per_class(table: dict) -> None:
         table["columns"][0],
         *((c, "right") for c in table["columns"][1:]),
     ]
-    _console.table(columns, table["rows"])
+    console.table(columns, table["rows"])

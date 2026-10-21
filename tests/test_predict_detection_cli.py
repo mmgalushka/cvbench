@@ -65,7 +65,7 @@ def test_decode_reorders_scales_and_applies_conf(det_run, monkeypatch):
     # each tensor with the right anchors/stride.
     _stub_outputs(monkeypatch, [coarse, fine], fmts=("keras",))
 
-    result = prediction.run_experiment_prediction("run", str(det_run), "keras")
+    result = prediction.run_prediction("run", str(det_run), "keras")
 
     assert result["task"] == "detection"
     dets = result["formats_run"][0]["results"][0]["detections"]
@@ -74,21 +74,21 @@ def test_decode_reorders_scales_and_applies_conf(det_run, monkeypatch):
     assert dog["confidence"] > 0.9
     assert dog["x"] == pytest.approx((2 + 0.5) / 4 - 0.2 / 2)  # fine-head anchor
 
-    strict = prediction.run_experiment_prediction("run", str(det_run), "keras", conf=1.0)
+    strict = prediction.run_prediction("run", str(det_run), "keras", conf=1.0)
     assert strict["formats_run"][0]["results"][0]["detections"] == []
 
 
 def test_conf_rejected_for_classification(det_run, monkeypatch):
     monkeypatch.setattr(prediction, "load_config", lambda path: _cfg("classification"))
     with pytest.raises(ConfigError, match="--conf only applies to detection runs"):
-        prediction.run_experiment_prediction("run", str(det_run), "keras", conf=0.3)
+        prediction.run_prediction("run", str(det_run), "keras", conf=0.3)
 
 
 def test_legacy_run_without_anchors_is_rejected(det_run, monkeypatch):
     monkeypatch.setattr(prediction, "load_config", lambda path: _cfg(anchors=None))
     _stub_outputs(monkeypatch, [_head(4), _head(2)], fmts=("keras",))
     with pytest.raises(ConfigError, match="predates anchor-based decoding"):
-        prediction.run_experiment_prediction("run", str(det_run), "keras")
+        prediction.run_prediction("run", str(det_run), "keras")
 
 
 def test_cli_prints_boxes_for_single_format(det_run, monkeypatch):
