@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cvbench.core.config import DetectionConfig, TransformConfig
+from cvbench.core.config import TransformConfig
 from cvbench.core.task import VAL_LOSS, DatasetSpec, MetricSpec, Task
 from cvbench.datasets.layout import detection_layout_errors, is_yolo_dataset, list_images, yolo_class_names
 from cvbench.detection import predict as _predict
 from cvbench.detection.anchors import resolve_anchors
+from cvbench.detection.config import DetectionConfig
 from cvbench.detection.view import DetectionView
 
 # The 5 geometric transforms move pixels, so they'd desynchronize an image
@@ -33,6 +34,7 @@ class DetectionTask(Task):
     primary_metric = MetricSpec("map50", "mAP@50", "max")
     sweep_metric = "map50"
     selection_metric_names = ("val_loss", "map50")
+    layout_priority = 10
     config_section = ("detection", DetectionConfig)
     hidden_config_prefixes = ("detection.anchors",)
     predict_option_names = frozenset({"conf"})

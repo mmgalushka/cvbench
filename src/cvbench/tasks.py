@@ -9,6 +9,8 @@ import-time crash.
 from __future__ import annotations
 
 import importlib
+import warnings
+from importlib.metadata import entry_points
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -24,13 +26,40 @@ _TASKS: dict[str, tuple[str, str]] = {
     "detection": ("cvbench.detection", "DetectionTask"),
 }
 
-TASK_NAMES: tuple[str, ...] = tuple(_TASKS)
+# Entry-point group an external package registers its Task subclasses under:
+#   [project.entry-points."cvbench.tasks"]
+#   segmentation = "my_pkg.segmentation:SegmentationTask"
+TASK_ENTRY_POINT_GROUP = "cvbench.tasks"
+
+
+def _registry() -> dict[str, tuple[str, str]]:
+    """The built-in tasks plus those installed packages register as entry points.
+
+    Nothing is imported here (an entry point only names ``(module, attr)``); a built-in
+    task always wins over a plugin of the same name.
+    """
+    registry = dict(_TASKS)
+    for ep in entry_points(group=TASK_ENTRY_POINT_GROUP):
+        if ep.name in _TASKS:
+            warnings.warn(
+                f"Ignoring plugin task '{ep.name}' ({ep.value}): a built-in task has that name.",
+                stacklevel=2,
+            )
+            continue
+        registry.setdefault(ep.name, (ep.module, ep.attr))
+    return registry
+
+
+def task_names() -> tuple[str, ...]:
+    """Names of every registered task, built-in ones first."""
+    return tuple(_registry())
+
+
+# Snapshot taken at import; use task_names() to see plugins registered later.
+TASK_NAMES: tuple[str, ...] = task_names()
 
 # The task assumed for a config or report that doesn't name one (pre-detection runs).
 DEFAULT_TASK = "classification"
-
-# Order in which layouts are sniffed: the most specific layout first, the catch-all last.
-_SNIFF_ORDER: tuple[str, ...] = ("detection", "classification")
 
 # Flag text and verb used when an option is passed to a run whose task ignores it.
 _OPTION_FLAGS = {"conf": ("--conf", "applies"), "top_k": ("--top-k and --probs", "apply")}
@@ -42,10 +71,10 @@ def get_task(name: str) -> Task:
     Raise ConfigError with the list of valid names if NAME isn't registered.
     """
     try:
-        module_name, attr = _TASKS[name]
+        module_name, attr = _registry()[name]
     except KeyError:
         raise ConfigError(
-            f"Unknown task '{name}'. Valid options: {', '.join(TASK_NAMES)}"
+            f"Unknown task '{name}'. Valid options: {', '.join(task_names())}"
         ) from None
     module = importlib.import_module(module_name)
     task_cls = getattr(module, attr)
@@ -59,15 +88,16 @@ def resolve_task(cfg: CVBenchConfig) -> Task:
 
 def task_or_default(name: str | None) -> Task:
     """The task named NAME, or the default task for a missing or unregistered name."""
-    return get_task(name if name in _TASKS else DEFAULT_TASK)
+    return get_task(name if name in task_names() else DEFAULT_TASK)
 
 
 def detect_task_name(data_dir: str | Path) -> str:
-    """Name of the task whose dataset layout DATA_DIR matches."""
+    """Name of the task whose dataset layout DATA_DIR matches (highest ``layout_priority`` first)."""
     root = Path(data_dir)
-    for name in _SNIFF_ORDER:
-        if get_task(name).matches_layout(root):
-            return name
+    tasks = sorted((get_task(n) for n in task_names()), key=lambda t: -t.layout_priority)
+    for task in tasks:  # stable: ties keep registration order
+        if task.matches_layout(root):
+            return task.name
     return DEFAULT_TASK
 
 
@@ -79,13 +109,13 @@ def layout_errors(data_dir: str | Path, task_name: str | None = None) -> list[st
 
 def task_meta() -> dict[str, dict]:
     """``{task name: Task.meta()}`` for every registered task — served to the WebUI."""
-    return {name: get_task(name).meta() for name in TASK_NAMES}
+    return {name: get_task(name).meta() for name in task_names()}
 
 
 def all_metrics() -> dict[str, MetricSpec]:
     """Every metric any task records, by name."""
     out: dict[str, MetricSpec] = {}
-    for name in TASK_NAMES:
+    for name in task_names():
         for m in get_task(name).metrics_schema():
             out.setdefault(m.name, m)
     return out
@@ -94,7 +124,7 @@ def all_metrics() -> dict[str, MetricSpec]:
 def selection_metrics() -> dict[str, MetricSpec]:
     """Every metric a sweep can rank on, by name, across all tasks."""
     out: dict[str, MetricSpec] = {}
-    for name in TASK_NAMES:
+    for name in task_names():
         task = get_task(name)
         for m in task.metrics_schema():
             if m.name in task.selection_metric_names:
@@ -106,7 +136,7 @@ def check_selection_metric(metric: str, task_name: str) -> None:
     """Raise ConfigError when TASK_NAME cannot rank a sweep on METRIC."""
     task = get_task(task_name)
     if metric not in task.selection_metric_names:
-        owners = [n for n in TASK_NAMES if metric in get_task(n).selection_metric_names]
+        owners = [n for n in task_names() if metric in get_task(n).selection_metric_names]
         raise ConfigError(
             f"--metric {metric} is only available for {' / '.join(owners)} datasets."
             if owners
@@ -116,13 +146,13 @@ def check_selection_metric(metric: str, task_name: str) -> None:
 
 def task_for_metric(metric: str) -> str:
     """The task a selection METRIC belongs to: the only one recording it, else the default."""
-    owners = [n for n in TASK_NAMES if get_task(n).metric(metric) is not None]
+    owners = [n for n in task_names() if get_task(n).metric(metric) is not None]
     return owners[0] if len(owners) == 1 else DEFAULT_TASK
 
 
 def tasks_supporting(option: str) -> list[str]:
     """Names of the tasks whose predictions honour OPTION (``conf`` or ``top_k``)."""
-    return [n for n in TASK_NAMES if option in get_task(n).predict_options()]
+    return [n for n in task_names() if option in get_task(n).predict_options()]
 
 
 def option_scope_message(option: str) -> str:

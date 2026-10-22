@@ -11,7 +11,9 @@ validate backbone names without paying for them.
 from __future__ import annotations
 
 import importlib
+import warnings
 from dataclasses import dataclass
+from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Any
 
 from cvbench.core.errors import ConfigError
@@ -84,7 +86,35 @@ def register_backbone(spec: BackboneSpec) -> None:
     BACKBONES[spec.name] = spec
 
 
+BACKBONE_ENTRY_POINT_GROUP = "cvbench.backbones"
+_plugins_loaded = False
+
+
+def _load_plugin_backbones() -> None:
+    """Register the backbones installed packages expose under the ``cvbench.backbones`` group.
+
+    Runs once, on the first ``backbone_names()`` / ``_load_backbone`` call. An entry point's
+    value is a ``BackboneSpec`` or a callable returning a list of them. A name that is
+    already registered (a built-in one always is) wins: the plugin's is skipped with a warning.
+    """
+    global _plugins_loaded
+    if _plugins_loaded:
+        return
+    _plugins_loaded = True
+    for ep in entry_points(group=BACKBONE_ENTRY_POINT_GROUP):
+        loaded = ep.load()
+        for spec in [loaded] if isinstance(loaded, BackboneSpec) else loaded():
+            if spec.name in BACKBONES:
+                warnings.warn(
+                    f"Ignoring plugin backbone '{spec.name}' ({ep.value}): the name is already registered.",
+                    stacklevel=2,
+                )
+                continue
+            register_backbone(spec)
+
+
 def backbone_names() -> list[str]:
+    _load_plugin_backbones()
     return list(BACKBONES)
 
 
@@ -118,6 +148,7 @@ def _import_attr(path: str, sep: str) -> Any:
 
 
 def _load_backbone(cfg: CVBenchConfig, name: str | None = None) -> keras.Model:
+    _load_plugin_backbones()
     spec = BACKBONES.get(cfg.model.backbone)
     if spec is None:
         raise ConfigError(

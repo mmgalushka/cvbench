@@ -71,6 +71,25 @@ a fixed coverage floor (see `codecov.yml`).
 A green CI check is required before a PR can be merged. CI does **not** run on every
 push to a feature branch — only when the PR is opened or updated against `main`.
 
+## Plugins
+
+A task or a backbone can live in an external package and be picked up through Python entry points; nothing in cvbench needs editing. There are two groups:
+
+- `cvbench.tasks`: each entry is `name = "pkg.module:TaskClass"`, a `cvbench.core.task.Task` subclass. It is imported only when the task is first requested. The task owns its config section through `config_section = ("name", SectionDataclass)` (read as `cfg.name`, written as a top-level `name:` block of `config.yaml`, settable as `--set name.key=value` and sweepable). Set `layout_priority` (higher is sniffed first; detection is 10) so `detect_task_name` tries it before the catch-all classification task, which must keep the lowest priority (0). Changing `task` through an override resets the sections to the new task's defaults.
+- `cvbench.backbones`: each entry is a `BackboneSpec`, or a callable returning a list of them. They are registered on the first `backbone_names()` call.
+
+A built-in task or backbone name always wins over a plugin with the same name, with a warning.
+
+```toml
+[project.entry-points."cvbench.tasks"]
+segmentation = "my_pkg.segmentation:SegmentationTask"
+
+[project.entry-points."cvbench.backbones"]
+my_backbone = "my_pkg.backbones:MY_BACKBONE"
+```
+
+The conformance suite `tests/test_tasks_contract.py` shows what a task must implement; the full guide is tracked in #162.
+
 ## Errors
 
 Code in `core/`, `services/`, `tasks.py`, `classification/`, `detection/`, `datasets/` and `augmentations/` raises only `CVBenchError` subclasses (from `cvbench.core.errors`) for user-facing problems. Built-in exceptions (`ValueError`, `RuntimeError`, `TypeError`, ...) are reserved for programmer errors.

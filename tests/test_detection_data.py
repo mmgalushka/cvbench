@@ -147,7 +147,7 @@ def test_build_detection_dataset_batch_shapes(yolo_root):
     from cvbench.core.config import CVBenchConfig
     from cvbench.detection.data import build_detection_dataset
 
-    cfg = CVBenchConfig()
+    cfg = CVBenchConfig(task="detection")
     cfg.model.input_size = 64
     cfg.data.batch_size = 2
     cfg.detection.strides = _STRIDES
@@ -178,7 +178,7 @@ def test_build_detection_dataset_missing_label_is_hard_negative(tmp_path):
     Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8)).save(img_dir / "0000.jpg")
     # Deliberately no 0000.txt written.
 
-    cfg = CVBenchConfig()
+    cfg = CVBenchConfig(task="detection")
     cfg.model.input_size = 32
     cfg.data.batch_size = 1
     cfg.detection.strides = [16, 32]
@@ -203,7 +203,7 @@ def test_build_detection_dataset_empty_label_file_is_hard_negative(tmp_path):
     Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8)).save(img_dir / "0000.jpg")
     (lbl_dir / "0000.txt").write_text("")
 
-    cfg = CVBenchConfig()
+    cfg = CVBenchConfig(task="detection")
     cfg.model.input_size = 32
     cfg.data.batch_size = 1
     cfg.detection.strides = [16, 32]

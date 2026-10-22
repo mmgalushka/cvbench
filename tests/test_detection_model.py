@@ -14,7 +14,7 @@ _ANCHORS = [
 def _minimal_cfg(fine_tune_from_layer=0):
     from cvbench.core.config import CVBenchConfig
 
-    cfg = CVBenchConfig()
+    cfg = CVBenchConfig(task="detection")
     cfg.model.backbone = "resnet_18"
     cfg.model.weights = "none"  # fast, no download — shape/serialization tests don't need pretrained
     cfg.model.input_size = 64

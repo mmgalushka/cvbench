@@ -126,6 +126,13 @@ def tiny_cls_root(tmp_path, _cls_template) -> Path:
 
 
 @pytest.fixture
+def tiny_plugin_root(tiny_cls_root) -> Path:
+    """The classification dataset plus the marker file the dummy plugin task sniffs for."""
+    (tiny_cls_root / "PLUGIN_MARKER").touch()
+    return tiny_cls_root
+
+
+@pytest.fixture
 def tiny_yolo_root(tmp_path, _yolo_template) -> Path:
     """A YOLO detection dataset (train 6 / val 3 / test 4, 64px) in tmp_path."""
     return Path(shutil.copytree(_yolo_template, tmp_path / "tiny_yolo")).resolve()
@@ -183,6 +190,7 @@ def cls_run_with_model(cls_run) -> Path:
 _TASK_DATASET_FIXTURES = {
     "classification": "tiny_cls_root",
     "detection": "tiny_yolo_root",
+    "plugin_cls": "tiny_plugin_root",
 }
 
 

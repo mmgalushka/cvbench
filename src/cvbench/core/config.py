@@ -14,7 +14,7 @@ from typing import Any
 
 import yaml
 
-from cvbench.core.errors import CVBenchError, NotFoundError
+from cvbench.core.errors import ConfigError, CVBenchError, NotFoundError
 from cvbench.tasks import DEFAULT_TASK
 
 # ---------------------------------------------------------------------------
@@ -153,31 +153,34 @@ class RunConfig:
 
 
 @dataclass
-class DetectionConfig:
-    """Detection-only settings (``DetectionTask.config_section``): the loader and
-    ``save_config`` only read and write this section for detection runs."""
-    strides: list = field(default_factory=lambda: [16, 32])  # output strides of the YOLO heads
-    anchors: list = field(default_factory=list)  # resolved once (see detection/anchors.py),
-    # then persisted here — [[ [w, h] x anchors_per_scale ] x len(strides)], smallest-area
-    # anchors first (assigned to the smallest stride).
-    anchors_per_scale: int = 3
-    ignore_iou_threshold: float = 0.5  # non-assigned anchors overlapping a GT above this are
-    # excluded from the objectness loss entirely (neither positive nor negative)
-    noobj_weight: float = 0.5     # objectness loss weight on negative (non-object) cells
-    conf_threshold: float = 0.25  # minimum score for a decoded detection to count
-    iou_threshold: float = 0.5    # IoU at which a prediction counts as matching a ground truth
-    max_detections: int = 100     # top-k cap on decoded detections per image
-
-
-@dataclass
 class CVBenchConfig:
     task: str = DEFAULT_TASK  # any name registered in cvbench.tasks
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
-    detection: DetectionConfig = field(default_factory=DetectionConfig)
     run: RunConfig = field(default_factory=RunConfig)
+    # Task-owned sections (``Task.config_section``), keyed by section name. Only the run's
+    # own task has one; it is read as an attribute (``cfg.<section>``) and written at the
+    # top level of config.yaml. ``task`` must be known before sections are built, so an
+    # override that changes ``task`` resets the sections to the new task's defaults.
+    sections: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.sync_sections()
+
+    def sync_sections(self) -> None:
+        """Keep exactly the section the current task owns (defaults when it is missing)."""
+        owned = _task_section(self.task)
+        self.sections = (
+            {owned[0]: self.sections.get(owned[0]) or owned[1]()} if owned else {}
+        )
+
+    def __getattr__(self, name: str) -> Any:  # only called for attributes that are missing
+        sections = self.__dict__.get("sections", {})
+        if name in sections:
+            return sections[name]
+        raise AttributeError(name)
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +215,10 @@ _EXPLICIT = {"data.val_split": "data.val_split_explicit"}
 
 @functools.cache
 def _hints(cls: type) -> dict[str, Any]:
-    return typing.get_type_hints(cls)
+    hints = typing.get_type_hints(cls)
+    if cls is CVBenchConfig:
+        hints.pop("sections")  # task sections are addressed by their own names, see _task_sections
+    return hints
 
 
 def _is_section(tp: Any) -> bool:
@@ -255,11 +261,26 @@ def _coerce(value: Any, tp: Any, path: str) -> Any:
     return value
 
 
+def _task_sections() -> dict[str, tuple[str, type]]:
+    """``{section name: (owning task, section dataclass)}`` over every registered task."""
+    from cvbench.tasks import get_task, task_names
+
+    return {s[0]: (n, s[1]) for n in task_names() if (s := get_task(n).config_section)}
+
+
+def _task_section(task: str) -> tuple[str, type] | None:
+    """``(name, dataclass)`` of the section TASK owns; None if it has none or is unregistered."""
+    from cvbench.tasks import get_task
+
+    try:
+        return get_task(task).config_section
+    except ConfigError:
+        return None
+
+
 def _section_owners() -> dict[str, str]:
     """``{config section name: task that owns it}`` over every registered task."""
-    from cvbench.tasks import TASK_NAMES, get_task
-
-    return {s[0]: n for n in TASK_NAMES if (s := get_task(n).config_section)}
+    return {name: owner for name, (owner, _) in _task_sections().items()}
 
 
 def _foreign_sections(task: str) -> set[str]:
@@ -354,15 +375,26 @@ def _build(cls: type, raw: Any, path: str = "") -> Any:
 def config_from_dict(d: dict) -> CVBenchConfig:
     """Build a config from parsed YAML.
 
-    Sections owned by another task are ignored (older configs carry a ``detection:``
-    block on every run); the pre-``metrics`` run keys are migrated.
+    The run's task section is built from its top-level block (defaults when absent) and
+    stored in ``sections``; sections owned by another task are ignored (older configs
+    carry another task's block on every run); the pre-``metrics`` run keys are migrated.
     """
     d = dict(d)
-    for section in _foreign_sections(d.get("task") or DEFAULT_TASK):
-        d.pop(section, None)
+    if "sections" in d:
+        raise _unknown_key("sections", _hints(CVBenchConfig), "")
+    task = d.get("task") or DEFAULT_TASK
+    owned = _task_section(task)
+    raw_section = None
+    for section in _task_sections():
+        value = d.pop(section, None)
+        if owned and section == owned[0]:
+            raw_section = value
     if isinstance(d.get("run"), dict):
         d["run"] = _migrate_run(d["run"])
-    return _build(CVBenchConfig, d)
+    cfg = _build(CVBenchConfig, d)
+    if owned:
+        cfg.sections = {owned[0]: _build(owned[1], raw_section, owned[0])}
+    return cfg
 
 
 def _to_plain(obj: Any) -> Any:
@@ -381,11 +413,15 @@ def _to_plain(obj: Any) -> Any:
 
 
 def config_to_dict(cfg: CVBenchConfig) -> dict:
-    """The exact inverse of ``config_from_dict``: plain dicts, only the run's task sections."""
-    d = _to_plain(cfg)
-    for section in _foreign_sections(cfg.task):
-        d.pop(section, None)
-    return d
+    """The exact inverse of ``config_from_dict``: plain dicts, the run's task section at the top level."""
+    out: dict[str, Any] = {}
+    for f in dataclasses.fields(cfg):
+        if f.name == "sections":
+            continue
+        if f.name == "run":  # task sections sit just before the run bookkeeping
+            out.update({name: _to_plain(section) for name, section in cfg.sections.items()})
+        out[f.name] = _to_plain(getattr(cfg, f.name))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -400,6 +436,8 @@ def _key_type(key: str) -> Any:
         if not _is_section(tp):
             raise CVBenchError(f"Unknown config key '{key}': '{'.'.join(parts)}' is not a section.")
         hints = _hints(tp)
+        if tp is CVBenchConfig:  # task-owned sections resolve through their owner's dataclass
+            hints = {**hints, **{n: cls for n, (_, cls) in _task_sections().items()}}
         if part not in hints:
             raise _unknown_key(part, hints, "".join(f"{p}." for p in parts))
         tp = hints[part]
@@ -455,14 +493,16 @@ def _set_key(cfg: CVBenchConfig, key: str, value: Any) -> None:
     else:
         value = _coerce(_parse_text(value, tp), tp, key)
         if key == "task":
-            from cvbench.tasks import TASK_NAMES
+            from cvbench.tasks import task_names
 
-            if value not in TASK_NAMES:
-                raise CVBenchError(f"Unknown task '{value}'. Valid options: {', '.join(TASK_NAMES)}.")
+            if value not in task_names():
+                raise CVBenchError(f"Unknown task '{value}'. Valid options: {', '.join(task_names())}.")
     obj: Any = cfg
     for part in parents:
         obj = getattr(obj, part)
     setattr(obj, leaf, value)
+    if key == "task":
+        cfg.sync_sections()
     if key in _EXPLICIT:
         _set_key(cfg, _EXPLICIT[key], True)
 
