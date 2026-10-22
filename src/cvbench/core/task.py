@@ -99,9 +99,12 @@ class Task(abc.ABC):
     # Metrics a sweep may rank trials on — never the test score of a task that also has a
     # validation-time metric (ranking on the test set would leak it into model selection).
     selection_metric_names: ClassVar[tuple[str, ...]]
-    # (CVBenchConfig attribute, its dataclass) holding the task-only settings; the config
+    # (config section name, its dataclass) holding the task-only settings; the config
     # loader/saver only touch that section for runs of this task.
     config_section: ClassVar[tuple[str, type] | None] = None
+    # Order in which `tasks.detect_task_name` sniffs dataset layouts: higher is tried first.
+    # The catch-all task (matches any layout) must have the lowest priority.
+    layout_priority: ClassVar[int] = 0
     hidden_config_prefixes: ClassVar[tuple[str, ...]] = ()  # bulky derived keys `runs show` skips
     predict_option_names: ClassVar[frozenset[str]] = frozenset()  # subset of {"conf", "top_k"}
 

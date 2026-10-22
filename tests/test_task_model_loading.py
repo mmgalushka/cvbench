@@ -17,8 +17,7 @@ def detection_run(tmp_path) -> Path:
     """A run dir holding a config.yaml and a tiny compiled detection model as best.keras."""
     from cvbench.detection.model import build_model
 
-    cfg = CVBenchConfig()
-    cfg.task = "detection"
+    cfg = CVBenchConfig(task="detection")
     cfg.model.backbone = "resnet_18"
     cfg.model.weights = "none"
     cfg.model.input_size = SIZE

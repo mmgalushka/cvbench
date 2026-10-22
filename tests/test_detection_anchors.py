@@ -56,7 +56,7 @@ def test_resolve_anchors_returns_existing_anchors_unchanged():
     from cvbench.core.config import CVBenchConfig
     from cvbench.detection.anchors import resolve_anchors
 
-    cfg = CVBenchConfig()
+    cfg = CVBenchConfig(task="detection")
     existing = [[[0.1, 0.1]], [[0.5, 0.5]]]
     cfg.detection.anchors = existing
     assert resolve_anchors(cfg) is existing
@@ -76,7 +76,7 @@ def test_resolve_anchors_derives_and_persists_from_labels(tmp_path):
         Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8)).save(img_dir / f"{i}.jpg")
         (lbl_dir / f"{i}.txt").write_text(f"0 0.5 0.5 {0.1 + i * 0.05} {0.1 + i * 0.05}\n")
 
-    cfg = CVBenchConfig()
+    cfg = CVBenchConfig(task="detection")
     cfg.data.data_dir = str(root)
     cfg.data.train_dir = str(img_dir)
     cfg.detection.strides = [16, 32]
@@ -96,7 +96,7 @@ def test_resolve_anchors_raises_when_no_boxes_found(tmp_path):
     img_dir = root / "images" / "train"
     img_dir.mkdir(parents=True)
 
-    cfg = CVBenchConfig()
+    cfg = CVBenchConfig(task="detection")
     cfg.data.data_dir = str(root)
     cfg.data.train_dir = str(img_dir)
 

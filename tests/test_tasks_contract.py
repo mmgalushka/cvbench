@@ -11,10 +11,33 @@ tiny generated dataset, so a task whose pieces don't fit together fails here too
 no dataset fixture in ``tests/conftest.py`` fails the test with instructions rather than
 being skipped.
 """
+import types
+
 import pytest
 
+from cvbench import tasks as tasks_mod
 from cvbench.core.errors import ConfigError
-from cvbench.tasks import TASK_NAMES, get_task
+from cvbench.tasks import TASK_NAMES as BUILTIN_TASK_NAMES
+from cvbench.tasks import get_task
+
+# The suite also runs over a dummy plugin task, registered through a faked entry point.
+PLUGIN_EP = types.SimpleNamespace(
+    name="plugin_cls", module="tests.plugin_task", attr="PluginTask",
+    value="tests.plugin_task:PluginTask",
+)
+TASK_NAMES = (*BUILTIN_TASK_NAMES, PLUGIN_EP.name)
+
+
+@pytest.fixture(autouse=True)
+def _plugin_task_installed(request, monkeypatch):
+    # Only tests parametrized over the plugin see it, so other tests keep the built-in registry.
+    if getattr(request.node, "callspec", None) is None or request.node.callspec.params.get("name") != PLUGIN_EP.name:
+        return
+    real = tasks_mod.entry_points
+    monkeypatch.setattr(
+        tasks_mod, "entry_points",
+        lambda group: [*real(group=group), PLUGIN_EP] if group == "cvbench.tasks" else real(group=group),
+    )
 
 
 def test_task_names_nonempty():
@@ -49,7 +72,7 @@ def test_task_metadata_is_consistent(name):
 
 
 def test_short_names_are_unique():
-    shorts = [get_task(n).short_name for n in TASK_NAMES]
+    shorts = [get_task(n).short_name for n in BUILTIN_TASK_NAMES]
     assert len(set(shorts)) == len(shorts)
 
 
@@ -227,10 +250,10 @@ def test_task_lifecycle(name, task_dataset, tmp_path):
 
 
 @pytest.mark.parametrize("name", TASK_NAMES)
-def test_config_section_names_a_field_of_cvbench_config(name):
+def test_config_section_is_built_for_runs_of_its_task(name):
     from cvbench.core.config import CVBenchConfig
 
     section = get_task(name).config_section
     if section is not None:
         attr, cls = section
-        assert isinstance(getattr(CVBenchConfig(), attr), cls)
+        assert isinstance(getattr(CVBenchConfig(task=name), attr), cls)

@@ -56,12 +56,10 @@ def _flatten(d: dict, prefix: str = "") -> dict:
 
 def _config_lines(cfg) -> list[tuple[str, object]]:
     """(key, value) pairs for every non-default config setting, plus the always-shown knobs."""
-    import dataclasses
+    from cvbench.core.config import CVBenchConfig, config_to_dict
 
-    from cvbench.core.config import CVBenchConfig
-
-    current = _flatten(dataclasses.asdict(cfg))
-    default = _flatten(dataclasses.asdict(CVBenchConfig()))
+    current = _flatten(config_to_dict(cfg))
+    default = _flatten(config_to_dict(CVBenchConfig(task=cfg.task)))
     lines = []
     for key, value in current.items():
         if key.endswith("_explicit"):

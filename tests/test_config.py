@@ -449,7 +449,7 @@ def test_every_field_of_every_section_can_be_overridden():
     # Guards the "adding a field needs only the dataclass change" promise: nothing is hand-mapped.
     import dataclasses
 
-    from cvbench.core.config import CVBenchConfig, _hints, _is_section, apply_overrides
+    from cvbench.core.config import CVBenchConfig, _hints, _is_section, _task_sections, apply_overrides
 
     def leaves(cls, prefix=""):
         for name, tp in _hints(cls).items():
@@ -459,7 +459,9 @@ def test_every_field_of_every_section_can_be_overridden():
                 yield f"{prefix}{name}"
 
     cfg = build_config("data", overrides={"task": "detection"})
-    for key in leaves(CVBenchConfig):
+    task_keys = [k for name, (_, cls) in _task_sections().items() for k in leaves(cls, f"{name}.")]
+    assert "detection.conf_threshold" in task_keys
+    for key in [*leaves(CVBenchConfig), *task_keys]:
         current = cfg
         for part in key.split("."):
             current = getattr(current, part)

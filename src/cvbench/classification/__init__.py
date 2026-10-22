@@ -27,6 +27,7 @@ class ClassificationTask(Task):
     primary_metric = MetricSpec("accuracy", "Accuracy", "max")
     sweep_metric = "val_loss"
     selection_metric_names = ("val_loss", "val_accuracy")
+    layout_priority = 0  # the catch-all: it matches any layout, so it is sniffed last
     predict_option_names = frozenset({"top_k"})
 
     def metrics_schema(self) -> tuple[MetricSpec, ...]:
