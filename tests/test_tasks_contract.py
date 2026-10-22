@@ -20,23 +20,32 @@ from cvbench.core.errors import ConfigError
 from cvbench.tasks import TASK_NAMES as BUILTIN_TASK_NAMES
 from cvbench.tasks import get_task
 
-# The suite also runs over a dummy plugin task, registered through a faked entry point.
+# The suite also runs over test-only plugin tasks, registered through faked entry points:
+# a classification clone, and an unlabeled autoencoder with two artifacts and its own fit loop.
 PLUGIN_EP = types.SimpleNamespace(
     name="plugin_cls", module="tests.plugin_task", attr="PluginTask",
     value="tests.plugin_task:PluginTask",
 )
-TASK_NAMES = (*BUILTIN_TASK_NAMES, PLUGIN_EP.name)
+AUTOENCODER_EP = types.SimpleNamespace(
+    name="autoencoder", module="tests.autoencoder_task", attr="AutoEncoderTask",
+    value="tests.autoencoder_task:AutoEncoderTask",
+)
+PLUGIN_EPS = {ep.name: ep for ep in (PLUGIN_EP, AUTOENCODER_EP)}
+TASK_NAMES = (*BUILTIN_TASK_NAMES, *PLUGIN_EPS)
 
 
 @pytest.fixture(autouse=True)
 def _plugin_task_installed(request, monkeypatch):
-    # Only tests parametrized over the plugin see it, so other tests keep the built-in registry.
-    if getattr(request.node, "callspec", None) is None or request.node.callspec.params.get("name") != PLUGIN_EP.name:
+    # Only tests parametrized over a plugin see it, so other tests keep the built-in registry.
+    if getattr(request.node, "callspec", None) is None:
+        return
+    ep = PLUGIN_EPS.get(request.node.callspec.params.get("name"))
+    if ep is None:
         return
     real = tasks_mod.entry_points
     monkeypatch.setattr(
         tasks_mod, "entry_points",
-        lambda group: [*real(group=group), PLUGIN_EP] if group == "cvbench.tasks" else real(group=group),
+        lambda group: [*real(group=group), ep] if group == "cvbench.tasks" else real(group=group),
     )
 
 
@@ -218,7 +227,8 @@ def test_task_lifecycle(name, task_dataset, tmp_path):
 
     spec = task.resolve_layout(cfg)
     assert isinstance(spec, DatasetSpec)
-    assert spec.class_names and cfg.model.num_classes == len(spec.class_names)
+    assert bool(spec.class_names) == task.label_spec.has_classes
+    assert cfg.model.num_classes == len(spec.class_names)
     assert spec.num_train_images == task.count_images(spec.train_dir) > 0
 
     train_ds, val_ds, num_train = task.build_datasets(cfg, spec)
@@ -244,7 +254,11 @@ def test_task_lifecycle(name, task_dataset, tmp_path):
     assert metric == task.primary_metric.name and 0.0 <= value <= 1.0
 
     headline = task.headline_metrics({"val_loss": 0.5, "val_accuracy": 0.25})
-    assert set(headline) == {"val_accuracy", "val_loss"} and headline["val_loss"] == 0.5
+    assert headline["val_loss"] == 0.5
+    if task.label_spec.has_classes:
+        assert set(headline) == {"val_accuracy", "val_loss"}
+    else:
+        assert set(headline) <= {m.name for m in task.metrics_schema()}
 
     assert task.view().eval_summary(report) and task.view().per_class_table(report)["rows"] is not None
 

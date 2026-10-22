@@ -133,6 +133,17 @@ def tiny_plugin_root(tiny_cls_root) -> Path:
 
 
 @pytest.fixture
+def tiny_flat_root(tmp_path, _cls_template) -> Path:
+    """An unlabeled dataset for the test-only autoencoder task: train/val/test hold images directly."""
+    root = tmp_path / "tiny_flat"
+    for split in ("train", "val", "test"):
+        (root / split).mkdir(parents=True)
+        for i, src in enumerate(sorted((_cls_template / split).rglob("*.*"))):
+            shutil.copy(src, root / split / f"{i:03d}{src.suffix}")
+    return root.resolve()
+
+
+@pytest.fixture
 def tiny_yolo_root(tmp_path, _yolo_template) -> Path:
     """A YOLO detection dataset (train 6 / val 3 / test 4, 64px) in tmp_path."""
     return Path(shutil.copytree(_yolo_template, tmp_path / "tiny_yolo")).resolve()
@@ -191,6 +202,7 @@ _TASK_DATASET_FIXTURES = {
     "classification": "tiny_cls_root",
     "detection": "tiny_yolo_root",
     "plugin_cls": "tiny_plugin_root",
+    "autoencoder": "tiny_flat_root",
 }
 
 
