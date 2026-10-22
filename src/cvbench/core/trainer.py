@@ -6,46 +6,20 @@ from typing import TYPE_CHECKING
 
 import keras
 
-from cvbench.core import console
-from cvbench.core.backbone import apply_freeze
-from cvbench.core.checkpoint import build_checkpoint_callback, load_best_history, prune_checkpoints
+from cvbench.core.checkpoint import ArtifactCheckpointer, load_best_history, prune_checkpoints, save_models
 from cvbench.core.config import CVBenchConfig, update_run_status
 from cvbench.core.events import (
-    EpochEnded,
     InterruptRequested,
     Listener,
-    Notice,
     RunFinished,
     RunStarted,
     emit,
 )
+from cvbench.core.fit import FitContext
+from cvbench.core.fit import apply_fine_tune_flags as _apply_fine_tune_flags  # noqa: F401  (kept importable here)
 
 if TYPE_CHECKING:
     from cvbench.core.task import Task
-
-
-def _apply_fine_tune_flags(model: keras.Model, fine_tune_from_layer: int, listener: Listener | None = None) -> None:
-    """Re-apply backbone trainable flags to a loaded checkpoint model.
-
-    Needed when resuming with a different fine_tune_from_layer than Phase 1
-    (e.g. Phase 2 unfreezes the backbone while the checkpoint still has it frozen).
-    """
-    try:
-        backbone = model.get_layer("backbone")
-    except ValueError:
-        # Checkpoint saved before backbone layers were named "backbone" —
-        # fall back to the old isinstance scan.
-        backbone = next(
-            (lyr for lyr in model.layers if isinstance(lyr, keras.Model) and lyr is not model),
-            None,
-        )
-    if backbone is None:
-        emit(listener, Notice(
-            "Could not locate the backbone layer to apply fine_tune_from_layer;"
-            " leaving the reloaded checkpoint's trainable flags unchanged."
-        ))
-        return
-    apply_freeze(backbone, fine_tune_from_layer)
 
 
 def train(
@@ -54,7 +28,7 @@ def train(
     train_ds,
     val_ds,
     class_names: list[str],
-    model: keras.Model,
+    model: keras.Model | None,
     task: Task,
     resume_checkpoint: str | None = None,
     num_train_samples: int | None = None,
@@ -62,6 +36,9 @@ def train(
     listener: Listener | None = None,
 ) -> str:
     """Run the training loop. Returns the experiment directory path.
+
+    MODEL is the primary artifact's model; ``Task.build_models`` adds the other artifacts of
+    a multi-artifact task (``Task.artifacts()``). The loop itself is ``Task.fit``.
 
     Prints nothing: progress goes to LISTENER as ``RunStarted``, ``EpochEnded`` and
     ``RunFinished`` events (see ``cvbench.core.events``).
@@ -73,21 +50,18 @@ def train(
     val_images = task.count_images(cfg.data.val_dir) if cfg.data.val_dir else None
     emit(listener, RunStarted(exp_dir, cfg, val_images, resume_checkpoint))
 
+    models = task.build_models(cfg, primary=model)
+
     # Resume from checkpoint if requested
     initial_epoch = 0
     if resume_checkpoint:
-        # Load the full model (weights + Adam moment accumulators) so the head's
+        # Load the full models (weights + Adam moment accumulators) so the head's
         # optimizer state carries over smoothly. model.load_weights() would restore
         # weight values but reset all moments to zero, causing an amplified effective
         # LR at the start of the resumed run (identical to the zero-moment problem
         # we're trying to avoid in the backbone during two-phase training).
-        model = task.load_model(resume_checkpoint)
-        # Re-apply trainable flags — the checkpoint reflects Phase 1's config
-        # (backbone frozen); Phase 2 may need a different setting.
-        _apply_fine_tune_flags(model, cfg.model.fine_tune_from_layer, listener)
-        # Sync the optimizer LR to the current config. Phase 2 typically uses
-        # a much lower LR; without this the checkpoint's Phase 1 LR would persist.
-        model.optimizer.learning_rate.assign(cfg.training.learning_rate)
+        models = task.load_models(resume_checkpoint)
+        task.prepare_resume(models, cfg, listener)
 
         if cfg.run.epochs_run > 0:
             # Use the epoch count stored in config (reliable for all checkpoint names,
@@ -99,30 +73,6 @@ def train(
             if m:
                 initial_epoch = int(m.group(1))
 
-    # Callbacks
-    callbacks = [
-        keras.callbacks.CSVLogger(str(run_dir / "training_log.csv"), append=bool(initial_epoch)),
-    ]
-    ckpt_cb = build_checkpoint_callback(cfg, str(run_dir))
-    if ckpt_cb:
-        callbacks.append(ckpt_cb)
-
-    lrs = cfg.training.lr_scheduler
-    if lrs.patience > 0:
-        callbacks.append(keras.callbacks.ReduceLROnPlateau(
-            monitor=lrs.monitor,
-            factor=lrs.factor,
-            patience=lrs.patience,
-            min_lr=lrs.min_lr,
-            verbose=1 if console.is_tty() else 2,
-        ))
-
-    class _EpochEmitter(keras.callbacks.Callback):
-        def on_epoch_end(self, epoch, logs=None):
-            emit(listener, EpochEnded(epoch, {k: float(v) for k, v in (logs or {}).items()}))
-
-    callbacks.append(_EpochEmitter())
-
     # Graceful interrupt
     _stop_flag = {"value": False}
 
@@ -133,45 +83,43 @@ def train(
     if cfg.training.interrupt.enabled:
         signal.signal(signal.SIGINT, _sigint_handler)
 
-    class _GracefulStop(keras.callbacks.Callback):
-        def on_batch_end(self, batch, logs=None):
-            if _stop_flag["value"]:
-                self.model.stop_training = True
-
-    callbacks.append(_GracefulStop())
-
     # Steps per epoch (needed because train_ds uses repeat())
     if num_train_samples is None:
         raise ValueError("train() requires num_train_samples (train_ds uses repeat())")
     import math
     steps_per_epoch = math.ceil(num_train_samples / cfg.data.batch_size)
 
-    history = model.fit(
-        train_ds,
-        epochs=cfg.training.epochs,
-        initial_epoch=initial_epoch,
+    ctx = FitContext(
+        cfg=cfg,
+        task=task,
+        run_dir=run_dir,
+        models=models,
+        train_ds=train_ds,
+        val_ds=val_ds,
         steps_per_epoch=steps_per_epoch,
-        validation_data=val_ds,
-        callbacks=callbacks,
+        initial_epoch=initial_epoch,
         class_weight=class_weight,
-        verbose=1 if console.is_tty() else 2,
+        listener=listener,
+        checkpointer=ArtifactCheckpointer(cfg, run_dir, task, models),
+        stop_requested=lambda: _stop_flag["value"],
     )
+    result = task.fit(ctx)
 
     interrupted = _stop_flag["value"]
-    last_epoch = initial_epoch + len(history.epoch)
+    last_epoch = initial_epoch + result.epochs
 
     # Save interrupt checkpoint
     interrupt_ckpt = None
     if interrupted and cfg.training.interrupt.save_checkpoint:
         ckpt_name = f"interrupt_epoch{last_epoch:03d}.keras"
         interrupt_ckpt = str(run_dir / ckpt_name)
-        model.save(interrupt_ckpt)
+        save_models(task, models, interrupt_ckpt)
 
     prune_checkpoints(str(run_dir), cfg)
 
     # Collect final metrics from history
     final_metrics = {}
-    for k, v in history.history.items():
+    for k, v in result.history.items():
         if v:
             final_metrics[k] = round(float(v[-1]), 4)
 

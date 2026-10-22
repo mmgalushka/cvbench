@@ -18,12 +18,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from cvbench.core.errors import NotFoundError
+
 if TYPE_CHECKING:
     import keras
     import tensorflow as tf
 
     from cvbench.core.config import CVBenchConfig
     from cvbench.core.events import Listener
+    from cvbench.core.fit import FitContext, FitResult
+    from cvbench.core.layout import LayoutAdapter
 
 
 @dataclass(frozen=True)
@@ -48,6 +52,34 @@ class MetricSpec:
 
 
 VAL_LOSS = MetricSpec("val_loss", "Val Loss", "min", fmt="loss")
+
+LABEL_KINDS = ("class", "boxes", "masks", "none")
+
+
+@dataclass(frozen=True)
+class LabelSpec:
+    """What a task's samples are labelled with.
+
+    ``class``: one class per image (a folder per class); ``boxes``: boxes with a class;
+    ``masks``: an image-shaped target per sample (e.g. segmentation); ``none``: unlabeled
+    (autoencoders, VAEs, GANs). Orchestrators ask this instead of assuming class names.
+    """
+
+    kind: str = "class"
+
+    def __post_init__(self) -> None:
+        if self.kind not in LABEL_KINDS:
+            raise ValueError(f"Unknown label kind {self.kind!r}; expected one of {LABEL_KINDS}")
+
+    @property
+    def has_classes(self) -> bool:
+        """Whether the dataset carries class names (``DatasetSpec.class_names`` is non-empty)."""
+        return self.kind in ("class", "boxes")
+
+    @property
+    def joint_targets(self) -> bool:
+        """Whether the target is an image-shaped array that geometric augmentation must move with the image."""
+        return self.kind == "masks"
 
 
 class TaskView(abc.ABC):
@@ -105,6 +137,11 @@ class Task(abc.ABC):
     # Order in which `tasks.detect_task_name` sniffs dataset layouts: higher is tried first.
     # The catch-all task (matches any layout) must have the lowest priority.
     layout_priority: ClassVar[int] = 0
+    # Name of the registered ``LayoutAdapter`` (``cvbench.core.layout``) that sniffs, validates
+    # and resolves this task's datasets. When set, matches_layout/layout_errors/resolve_layout
+    # delegate to it; a task may still override those methods directly.
+    layout: ClassVar[str | None] = None
+    label_spec: ClassVar[LabelSpec] = LabelSpec("class")
     hidden_config_prefixes: ClassVar[tuple[str, ...]] = ()  # bulky derived keys `runs show` skips
     predict_option_names: ClassVar[frozenset[str]] = frozenset()  # subset of {"conf", "top_k"}
 
@@ -140,21 +177,41 @@ class Task(abc.ABC):
     @classmethod
     def matches_layout(cls, data_dir: Path) -> bool:
         """Whether DATA_DIR looks like this task's dataset layout (used to sniff the task)."""
+        if cls.layout is not None:
+            from cvbench.core.layout import get_layout
+
+            return get_layout(cls.layout).sniff(Path(data_dir))
         return False
 
     def layout_errors(self, data_dir: Path) -> list[str]:
         """Human-readable problems with DATA_DIR as a dataset for this task."""
+        if self.layout is not None:
+            from cvbench.core.layout import get_layout
+
+            return get_layout(self.layout).errors(Path(data_dir))
         return []
 
     # ---- layout / config ---------------------------------------------------
 
-    @abc.abstractmethod
+    def layout_adapter(self) -> LayoutAdapter | None:
+        """The registered ``LayoutAdapter`` named by ``layout``, or None."""
+        if self.layout is None:
+            return None
+        from cvbench.core.layout import get_layout
+
+        return get_layout(self.layout)
+
     def resolve_layout(self, cfg: CVBenchConfig) -> DatasetSpec:
         """Inspect the dataset on disk and resolve it into a DatasetSpec.
 
         The sole writer of ``cfg.data.{train,val,test}_dir``, ``cfg.data.classes``
-        and ``cfg.model.num_classes`` — no other code may assign these.
+        and ``cfg.model.num_classes`` — no other code may assign these. Delegates to
+        the task's ``LayoutAdapter`` when ``layout`` is set; otherwise override it.
         """
+        adapter = self.layout_adapter()
+        if adapter is None:
+            raise NotImplementedError(f"{type(self).__name__} must set `layout` or override resolve_layout")
+        return adapter.resolve(cfg, self)
 
     def validate_config(self, cfg: CVBenchConfig) -> list[str]:
         """Return human-readable errors for a config this task cannot run.
@@ -201,6 +258,91 @@ class Task(abc.ABC):
     @abc.abstractmethod
     def build_model(self, cfg: CVBenchConfig) -> keras.Model:
         """Build and compile a model for this task."""
+
+    def build_models(self, cfg: CVBenchConfig, primary: keras.Model | None = None) -> dict[str, keras.Model]:
+        """Every artifact's model by name, primary first; PRIMARY is the model ``build_model`` returned.
+
+        The default is just that one model. A multi-model family (encoder + decoder,
+        generator + discriminator) overrides this together with ``artifacts()`` to build the
+        others around PRIMARY (``build_model`` then returns the primary one).
+        """
+        return {self.primary_artifact: primary if primary is not None else self.build_model(cfg)}
+
+    # ---- artifacts ------------------------------------------------------------
+
+    def artifacts(self) -> tuple[str, ...]:
+        """Names of the models a run saves; the first is the primary one.
+
+        The primary artifact lives at the checkpoint path itself (``best.keras``), every
+        other one next to it (``best.<name>.keras``) — see ``artifact_path``. Evaluation,
+        prediction and export operate on the primary artifact.
+        """
+        return ("model",)
+
+    @property
+    def primary_artifact(self) -> str:
+        return self.artifacts()[0]
+
+    def artifact_path(self, checkpoint: str | Path, name: str) -> Path:
+        """Where artifact NAME is stored for the (primary) CHECKPOINT path."""
+        checkpoint = Path(checkpoint)
+        if name == self.primary_artifact:
+            return checkpoint
+        if name not in self.artifacts():
+            raise ValueError(f"{self.name} has no artifact {name!r}; it has {self.artifacts()}")
+        return checkpoint.with_name(f"{checkpoint.stem}.{name}{checkpoint.suffix}")
+
+    def load_models(self, checkpoint: str) -> dict[str, keras.Model]:
+        """Load every artifact of the run checkpoint CHECKPOINT (the primary artifact's path)."""
+        models = {}
+        for name in self.artifacts():
+            path = self.artifact_path(checkpoint, name)
+            if name != self.primary_artifact and not path.is_file():
+                raise NotFoundError(f"Artifact '{name}' of {self.name} not found: {path}")
+            models[name] = self.load_model(str(path))
+        return models
+
+    def prepare_resume(
+        self, models: dict[str, keras.Model], cfg: CVBenchConfig, listener: Listener | None = None,
+    ) -> None:
+        """Adjust freshly reloaded MODELS for a resumed run (trainable flags, learning rate).
+
+        The default re-applies ``fine_tune_from_layer`` to the primary model's backbone and
+        syncs its optimizer learning rate to the config.
+        """
+        from cvbench.core.fit import KerasFitLoop
+
+        KerasFitLoop.prepare_resume(models[self.primary_artifact], cfg, listener)
+
+    # ---- training loop --------------------------------------------------------
+
+    def fit(self, ctx: FitContext) -> FitResult:
+        """Run the training loop over CTX and return what happened (see ``cvbench.core.fit``).
+
+        The default is ``KerasFitLoop``: ``model.fit`` on the primary model with the standard
+        callbacks. A custom loop (GAN, VAE) overrides this and reports each epoch through
+        ``ctx.end_epoch`` so logging, checkpointing and events keep working.
+        """
+        from cvbench.core.fit import KerasFitLoop
+
+        return KerasFitLoop().fit(ctx)
+
+    # ---- export ---------------------------------------------------------------
+
+    def export_targets(self) -> tuple[str, ...] | None:
+        """Names from the Exporter registry (``services.export.EXPORTERS``) this task supports.
+
+        None (the default) means every registered exporter.
+        """
+        return None
+
+    def calibration_groups(self, cfg: CVBenchConfig) -> dict[str, list[Path]] | None:
+        """Calibration image candidates for quantizing exporters, grouped for stratified sampling.
+
+        None (the default) lets ``services/export/calibration.py`` take the training images
+        grouped by class folder. Override for datasets that are not laid out that way.
+        """
+        return None
 
     def custom_objects(self) -> dict[str, Any]:
         """Custom losses/layers ``load_model`` needs to deserialize this task's models.

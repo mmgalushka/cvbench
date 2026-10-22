@@ -35,13 +35,15 @@ def build_image_dataset(
     training: bool = False,
     seed: int | None = None,
     transforms: list | None = None,
+    joint_targets: bool = False,
 ) -> tf.data.Dataset:
     """Build a batched, prefetched dataset of ``(image, target)`` pairs.
 
     Args:
         image_paths: one image file per sample.
         targets: per-sample targets, sliced along axis 0 — an array, or a
-            tuple of arrays (e.g. detection's per-scale targets).
+            tuple of arrays (e.g. detection's per-scale targets). With JOINT_TARGETS,
+            one target image file path per sample instead.
         image_size: images are stretch-resized to (image_size, image_size).
         batch_size: samples per batch.
         training: shuffle every epoch, apply TRANSFORMS and repeat forever.
@@ -49,6 +51,9 @@ def build_image_dataset(
             seed is drawn when None.
         transforms: augmentation transforms (``cfg.augmentation.transforms``,
             already filtered by the task); applied only when TRAINING.
+        joint_targets: the target is an image (a segmentation mask): it is decoded to one
+            channel, stretch-resized with nearest-neighbour and moved together with the
+            image by geometric augmentation (``Task.label_spec.joint_targets``).
 
     Returns:
         Dataset yielding (image (size, size, 3) float32 in [0, 255], target)
@@ -58,30 +63,47 @@ def build_image_dataset(
     if seed is None:
         seed = secrets.randbits(31)
 
-    ds = cached_bytes(image_paths, targets)
+    ds = cached_bytes(image_paths, targets, read_targets=joint_targets)
 
     if training:
         ds = ds.shuffle(max(len(image_paths), 1), seed=seed, reshuffle_each_iteration=True)
 
-    augment = _build_augment(transforms or [], seed, deterministic) if training else None
+    augment = _build_augment(transforms or [], seed, deterministic, joint_targets) if training else None
 
     def _resize(img):
         img = tf.image.resize(img, (image_size, image_size))  # stretch; float32
         img.set_shape((image_size, image_size, 3))
         return img
 
+    def _resize_target(target):
+        if not joint_targets:
+            return target
+        target = tf.image.resize(target, (image_size, image_size), method="nearest")
+        target.set_shape((image_size, image_size, 1))
+        return target
+
     def _decode(img_bytes):
         return _resize(tf.image.decode_image(img_bytes, channels=3, expand_animations=False))
 
+    def _decode_target(target):
+        if not joint_targets:
+            return target
+        img = tf.image.decode_image(target, channels=1, expand_animations=False)
+        img = tf.image.resize(tf.cast(img, tf.float32), (image_size, image_size), method="nearest")
+        img.set_shape((image_size, image_size, 1))
+        return img
+
     if augment is None:
-        ds = ds.map(lambda b, y: (_decode(b), y), num_parallel_calls=tf.data.AUTOTUNE)
+        ds = ds.map(lambda b, y: (_decode(b), _decode_target(y)), num_parallel_calls=tf.data.AUTOTUNE)
     else:
         ds = tf.data.Dataset.zip(
             (ds, tf.data.Dataset.random(seed=seed, rerandomize_each_iteration=True))
         )
-        ds = ds.map(lambda by, s: (_decode(by[0]), by[1], s), num_parallel_calls=tf.data.AUTOTUNE)
+        ds = ds.map(
+            lambda by, s: (_decode(by[0]), _decode_target(by[1]), s), num_parallel_calls=tf.data.AUTOTUNE,
+        )
         # Augmentation (e.g. keras_crop) may change the size; resize back.
-        ds = augment(ds).map(lambda x, y: (_resize(x), y), num_parallel_calls=tf.data.AUTOTUNE)
+        ds = augment(ds).map(lambda x, y: (_resize(x), _resize_target(y)), num_parallel_calls=tf.data.AUTOTUNE)
 
     ds = ds.batch(batch_size)
     if training:
@@ -89,14 +111,20 @@ def build_image_dataset(
     return ds.prefetch(tf.data.AUTOTUNE)
 
 
-def cached_bytes(image_paths: list[str], targets) -> tf.data.Dataset:
-    """In-memory cached dataset of ``(encoded file bytes, target)`` pairs."""
+def cached_bytes(image_paths: list[str], targets, read_targets: bool = False) -> tf.data.Dataset:
+    """In-memory cached dataset of ``(encoded file bytes, target)`` pairs.
+
+    With READ_TARGETS the targets are file paths and their encoded bytes are cached too.
+    """
     ds = tf.data.Dataset.from_tensor_slices((tf.constant(image_paths, dtype=tf.string), targets))
-    ds = ds.map(lambda p, y: (tf.io.read_file(p), y), num_parallel_calls=tf.data.AUTOTUNE)
+    if read_targets:
+        ds = ds.map(lambda p, t: (tf.io.read_file(p), tf.io.read_file(t)), num_parallel_calls=tf.data.AUTOTUNE)
+    else:
+        ds = ds.map(lambda p, y: (tf.io.read_file(p), y), num_parallel_calls=tf.data.AUTOTUNE)
     return ds.cache()
 
 
-def _build_augment(transforms: list, seed: int, deterministic: bool):
+def _build_augment(transforms: list, seed: int, deterministic: bool, joint_targets: bool = False):
     """Return a dataset transform that augments ``(img, y, element_seed)``
     samples into ``(img, y)``, or None when TRANSFORMS has nothing to apply.
 
@@ -108,11 +136,16 @@ def _build_augment(transforms: list, seed: int, deterministic: bool):
     Custom aug_* functions are numpy-based and run in tf.numpy_function with a
     generator seeded from the element's own seed, so they stay parallel.
     """
-    from cvbench.augmentations.pipeline import build_custom_aug_fn, build_keras_aug_fn
+    from cvbench.augmentations.pipeline import build_custom_aug_fn, build_joint_keras_aug_fn, build_keras_aug_fn
 
-    keras_aug = build_keras_aug_fn(transforms, seed=seed if deterministic else None)
+    if joint_targets:
+        joint_aug = build_joint_keras_aug_fn(transforms, seed=seed if deterministic else None)
+        keras_aug = None
+    else:
+        joint_aug = None
+        keras_aug = build_keras_aug_fn(transforms, seed=seed if deterministic else None)
     custom_aug = build_custom_aug_fn(transforms)
-    if keras_aug is None and custom_aug is None:
+    if keras_aug is None and joint_aug is None and custom_aug is None:
         return None
 
     def _custom(img, element_seed):
@@ -126,6 +159,11 @@ def _build_augment(transforms: list, seed: int, deterministic: bool):
         return x_aug, y
 
     def augment(ds: tf.data.Dataset) -> tf.data.Dataset:
+        if joint_aug is not None:
+            ds = ds.map(
+                lambda x, y, s: (*joint_aug(x, y, s), s),
+                num_parallel_calls=None if deterministic else tf.data.AUTOTUNE,
+            )
         if keras_aug is not None:
             ds = ds.map(
                 lambda x, y, s: (keras_aug(x, s), y, s),

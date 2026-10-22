@@ -3,12 +3,16 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import keras
 
 from cvbench.core import console
 from cvbench.core.config import CVBenchConfig
 from cvbench.core.errors import ConfigError
+
+if TYPE_CHECKING:
+    from cvbench.core.task import Task
 
 
 def _append_best_event(run_dir: str, epoch: int, monitor: str, value: float | None) -> None:
@@ -77,22 +81,72 @@ def build_checkpoint_callback(cfg: CVBenchConfig, run_dir: str) -> keras.callbac
     raise ConfigError(f"Unknown checkpoint strategy: '{strategy}'")
 
 
-def prune_checkpoints(run_dir: str, cfg: CVBenchConfig):
-    """Remove old rolling checkpoints, keeping the most recent keep_last_n.
+def save_models(task: Task, models: dict[str, keras.Model], checkpoint: str | Path) -> None:
+    """Save every artifact in MODELS next to CHECKPOINT (the primary artifact's path)."""
+    for name, model in models.items():
+        model.save(str(task.artifact_path(checkpoint, name)))
 
-    'best.keras' is never touched. Only epoch_NNN.keras files are pruned.
+
+class ArtifactCheckpointer:
+    """Checkpointing for a run's artifacts, driven by ``training.checkpoints``.
+
+    ``keras_callback()`` is the Keras-fit path (primary model only, the former behaviour);
+    ``on_epoch_end`` applies the same strategy for a custom fit loop and saves *every*
+    artifact, so ``best.keras`` plus ``best.<name>.keras`` stay in step.
+    """
+
+    def __init__(self, cfg: CVBenchConfig, run_dir: str | Path, task: Task, models: dict[str, keras.Model]):
+        self.cfg = cfg
+        self.run_dir = Path(run_dir)
+        self.task = task
+        self.models = models
+        self.best: float | None = None
+
+    def keras_callback(self) -> keras.callbacks.ModelCheckpoint | None:
+        return build_checkpoint_callback(self.cfg, str(self.run_dir))
+
+    def on_epoch_end(self, epoch: int, logs: dict[str, float]) -> None:
+        ckpt = self.cfg.training.checkpoints
+        if ckpt.strategy == "best_only":
+            value = logs.get(ckpt.monitor)
+            if value is None:
+                return
+            improved = (
+                self.best is None
+                or (value < self.best if ckpt.mode == "min" else value > self.best)
+            )
+            if improved:
+                self.best = value
+                save_models(self.task, self.models, self.run_dir / "best.keras")
+                _append_best_event(str(self.run_dir), epoch, ckpt.monitor, value)
+                print()
+                console.success(f"New best saved  {console.dim(ckpt.monitor)} = {console.bold(f'{value:.4f}')}")
+        elif ckpt.strategy in ("every_epoch", "every_n_epochs"):
+            every_n = ckpt.every_n_epochs if ckpt.strategy == "every_n_epochs" else 1
+            if (epoch + 1) % every_n == 0:
+                save_models(self.task, self.models, self.run_dir / f"epoch_{epoch + 1:03d}.keras")
+                print()
+                console.success(f"Checkpoint saved  epoch {console.bold(str(epoch + 1))}")
+        else:
+            raise ConfigError(f"Unknown checkpoint strategy: '{ckpt.strategy}'")
+
+
+def prune_checkpoints(run_dir: str, cfg: CVBenchConfig):
+    """Remove old rolling checkpoints, keeping the most recent keep_last_n epochs.
+
+    'best.keras' is never touched. Only epoch_NNN.keras files (and the sibling
+    epoch_NNN.<artifact>.keras files of a multi-artifact run) are pruned.
     """
     keep = cfg.training.checkpoints.keep_last_n
-    pattern = re.compile(r"epoch_(\d+)\.keras$")
+    pattern = re.compile(r"epoch_(\d+)(?:\.\w+)?\.keras$")
 
-    epoch_files = []
+    by_epoch: dict[int, list[Path]] = {}
     for p in Path(run_dir).iterdir():
         m = pattern.match(p.name)
         if m:
-            epoch_files.append((int(m.group(1)), p))
+            by_epoch.setdefault(int(m.group(1)), []).append(p)
 
-    epoch_files.sort(key=lambda t: t[0])
-
-    to_delete = epoch_files[: max(0, len(epoch_files) - keep)]
-    for _, path in to_delete:
-        path.unlink(missing_ok=True)
+    epochs = sorted(by_epoch)
+    for epoch in epochs[: max(0, len(epochs) - keep)]:
+        for path in by_epoch[epoch]:
+            path.unlink(missing_ok=True)

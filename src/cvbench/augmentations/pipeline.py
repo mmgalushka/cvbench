@@ -115,6 +115,59 @@ def build_keras_aug_fn(transforms: list, seed: int | None = None):
     return apply
 
 
+# keras_* transforms that move pixels: on a task with image-shaped targets (masks) they must
+# move the target with the image; the other keras_* transforms and every aug_* only change colour.
+GEOMETRIC_KERAS = frozenset({"keras_flip", "keras_rotation", "keras_zoom", "keras_translation", "keras_crop"})
+
+
+def build_joint_keras_aug_fn(transforms: list, seed: int | None = None):
+    """
+    Like ``build_keras_aug_fn`` for samples whose target is an image-shaped array (a mask).
+
+    Returns apply(x (H, W, C), y (H, W, K), element_seed) -> (x, y), or None when TRANSFORMS has
+    no keras_* transforms. Geometric transforms run once on ``x`` and ``y`` stacked along the
+    channel axis, so both get the same random flip/rotation/crop; nearest-neighbour
+    interpolation keeps ``y`` free of in-between values. Photometric transforms touch only ``x``.
+    """
+    import tensorflow as tf
+
+    steps: list[tuple[keras.layers.Layer, float, bool]] = []
+    for t in transforms:
+        if isinstance(t, OneOfConfig) or t.name not in _KERAS_MAP:
+            continue
+        cls, defaults = _KERAS_MAP[t.name]
+        merged = {**defaults, **t.params}
+        geometric = t.name in GEOMETRIC_KERAS
+        if geometric and "interpolation" in inspect.signature(cls).parameters:
+            merged["interpolation"] = "nearest"
+        if seed is not None:
+            merged.setdefault("seed", seed + len(steps))
+        steps.append((cls(**merged), float(t.prob), geometric))
+
+    if not steps:
+        return None
+
+    def apply(x, y, element_seed):
+        channels = x.shape[-1]
+        for i, (layer, prob, geometric) in enumerate(steps):
+            gate = tf.random.stateless_uniform((), seed=tf.stack([element_seed, tf.constant(i, tf.int64)]))
+            if geometric:
+                def _both(x=x, y=y, layer=layer):
+                    both = layer(tf.concat([x, y], axis=-1)[None], training=True)[0]
+                    return both[..., :channels], both[..., channels:]
+
+                x, y = tf.cond(gate < prob, true_fn=_both, false_fn=lambda x=x, y=y: (x, y))
+            else:
+                x = tf.cond(
+                    gate < prob,
+                    true_fn=lambda x=x, layer=layer: layer(x[None], training=True)[0],
+                    false_fn=lambda x=x: x,
+                )
+        return x, y
+
+    return apply
+
+
 def build_custom_aug_fn(transforms: list):
     """
     Build a numpy-compatible per-image function from aug_* transforms only.

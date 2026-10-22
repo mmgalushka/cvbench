@@ -12,8 +12,9 @@ from pathlib import Path
 
 from cvbench.classification import predict as _predict
 from cvbench.classification.view import ClassificationView
-from cvbench.core.task import VAL_LOSS, DatasetSpec, MetricSpec, Task
-from cvbench.datasets.layout import classification_layout_errors, is_yolo_dataset, list_images
+from cvbench.core.task import VAL_LOSS, DatasetSpec, LabelSpec, MetricSpec, Task
+from cvbench.datasets import adapters as _adapters  # noqa: F401  (registers the built-in layouts)
+from cvbench.datasets.layout import list_images
 from cvbench.datasets.stats import get_class_distribution, print_imbalance_warning, resolve_class_weights
 
 # A frozen run is flagged when its val accuracy is within this margin of chance.
@@ -27,32 +28,13 @@ class ClassificationTask(Task):
     primary_metric = MetricSpec("accuracy", "Accuracy", "max")
     sweep_metric = "val_loss"
     selection_metric_names = ("val_loss", "val_accuracy")
+    layout = "class_folders"
     layout_priority = 0  # the catch-all: it matches any layout, so it is sniffed last
+    label_spec = LabelSpec("class")
     predict_option_names = frozenset({"top_k"})
 
     def metrics_schema(self) -> tuple[MetricSpec, ...]:
         return (VAL_LOSS, MetricSpec("val_accuracy", "Val Acc", "max"), self.primary_metric)
-
-    @classmethod
-    def matches_layout(cls, data_dir: Path) -> bool:
-        return not is_yolo_dataset(data_dir)
-
-    def layout_errors(self, data_dir: Path) -> list[str]:
-        return classification_layout_errors(data_dir)
-
-    def resolve_layout(self, cfg) -> DatasetSpec:
-        from cvbench.classification.data import get_class_names as _get_class_names
-
-        class_names = _get_class_names(cfg.data.train_dir)
-        cfg.data.classes = class_names
-        cfg.model.num_classes = len(class_names)
-        return DatasetSpec(
-            class_names=class_names,
-            train_dir=cfg.data.train_dir,
-            val_dir=cfg.data.val_dir,
-            test_dir=cfg.data.test_dir,
-            num_train_images=self.count_images(cfg.data.train_dir),
-        )
 
     def count_images(self, directory: str) -> int:
         return len(list_images(Path(directory), recursive=True))
