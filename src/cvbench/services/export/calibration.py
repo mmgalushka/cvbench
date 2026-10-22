@@ -8,6 +8,7 @@ from pathlib import Path
 from cvbench.core import console
 from cvbench.core.errors import DatasetError
 from cvbench.datasets.layout import list_images
+from cvbench.tasks import resolve_task
 
 
 def collect_images_by_class(source_dir: Path) -> dict[str, list[Path]]:
@@ -17,6 +18,21 @@ def collect_images_by_class(source_dir: Path) -> dict[str, list[Path]]:
         per_class = {d.name: list_images(d, recursive=True) for d in class_dirs}
         return {k: v for k, v in per_class.items() if v}
     return {"_all": list_images(source_dir, recursive=True)}
+
+
+def calibration_groups(cfg) -> dict[str, list[Path]]:
+    """The images calibration samples from, grouped (by class folder unless the task says otherwise).
+
+    A task supplies its own candidates through ``Task.calibration_groups``; the default is the
+    training images (validation images when there is no train dir) grouped by class folder.
+    """
+    groups = resolve_task(cfg).calibration_groups(cfg)
+    if groups is not None:
+        return {name: files for name, files in groups.items() if files}
+    source_dir = Path(
+        cfg.data.train_dir if os.path.isdir(cfg.data.train_dir) else cfg.data.val_dir
+    )
+    return collect_images_by_class(source_dir)
 
 
 def _thumbnail_features(files: list[Path]):
@@ -96,15 +112,14 @@ def build_calibration_set(
     import numpy as np
     from PIL import Image
 
-    source_dir = Path(
-        cfg.data.train_dir if os.path.isdir(cfg.data.train_dir) else cfg.data.val_dir
-    )
     size = cfg.model.input_size
     rng = random.Random(42)
 
-    per_class = collect_images_by_class(source_dir)
+    per_class = calibration_groups(cfg)
     if not per_class:
-        raise DatasetError(f"No images found in: {source_dir}")
+        raise DatasetError(
+            f"No images found in: {cfg.data.train_dir if os.path.isdir(cfg.data.train_dir) else cfg.data.val_dir}"
+        )
 
     n_classes = len(per_class)
     if strategy == "stratified":

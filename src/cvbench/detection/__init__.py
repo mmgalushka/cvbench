@@ -10,8 +10,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from cvbench.core.config import TransformConfig
-from cvbench.core.task import VAL_LOSS, DatasetSpec, MetricSpec, Task
-from cvbench.datasets.layout import detection_layout_errors, is_yolo_dataset, list_images, yolo_class_names
+from cvbench.core.task import VAL_LOSS, DatasetSpec, LabelSpec, MetricSpec, Task
+from cvbench.datasets import adapters as _adapters  # noqa: F401  (registers the built-in layouts)
+from cvbench.datasets.layout import list_images
 from cvbench.detection import predict as _predict
 from cvbench.detection.anchors import resolve_anchors
 from cvbench.detection.config import DetectionConfig
@@ -34,7 +35,9 @@ class DetectionTask(Task):
     primary_metric = MetricSpec("map50", "mAP@50", "max")
     sweep_metric = "map50"
     selection_metric_names = ("val_loss", "map50")
+    layout = "yolo"
     layout_priority = 10
+    label_spec = LabelSpec("boxes")
     config_section = ("detection", DetectionConfig)
     hidden_config_prefixes = ("detection.anchors",)
     predict_option_names = frozenset({"conf"})
@@ -42,36 +45,10 @@ class DetectionTask(Task):
     def metrics_schema(self) -> tuple[MetricSpec, ...]:
         return (VAL_LOSS, self.primary_metric)
 
-    @classmethod
-    def matches_layout(cls, data_dir: Path) -> bool:
-        return is_yolo_dataset(data_dir)
-
-    def layout_errors(self, data_dir: Path) -> list[str]:
-        return detection_layout_errors(data_dir)
-
     def resolve_layout(self, cfg) -> DatasetSpec:
-        root = Path(cfg.data.data_dir)
-        class_names = yolo_class_names(root)
-        cfg.data.classes = class_names
-        cfg.model.num_classes = len(class_names)
-
-        train_dir = root / "images" / "train"
-        val_dir = root / "images" / "val"
-        test_dir = root / "images" / "test"
-
-        cfg.data.train_dir = str(train_dir)
-        cfg.data.val_dir = str(val_dir) if val_dir.is_dir() else ""
-        cfg.data.test_dir = str(test_dir) if test_dir.is_dir() else ""
-
+        spec = super().resolve_layout(cfg)
         resolve_anchors(cfg)
-
-        return DatasetSpec(
-            class_names=class_names,
-            train_dir=cfg.data.train_dir,
-            val_dir=cfg.data.val_dir,
-            test_dir=cfg.data.test_dir,
-            num_train_images=self.count_images(cfg.data.train_dir),
-        )
+        return spec
 
     def count_images(self, directory: str) -> int:
         d = Path(directory)

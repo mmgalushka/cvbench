@@ -6,6 +6,7 @@ from pathlib import Path
 from cvbench.core.config import load_config
 from cvbench.core.errors import ConfigError, NotFoundError
 from cvbench.core.exp_store import resolve_run_dir
+from cvbench.tasks import resolve_task
 
 from .base import (
     HAILO_HW_ARCHS,
@@ -33,12 +34,27 @@ __all__ = [
     "Exporter",
     "ExportOptions",
     "build_calibration_set",
+    "export_targets",
     "prepare_hailo_package",
     "print_hailo_instructions",
     "print_onnx_snippet",
     "print_plan_instructions",
     "run_export",
 ]
+
+
+def export_targets(task) -> tuple[str, ...]:
+    """The exporters TASK supports: ``Task.export_targets()`` checked against ``EXPORTERS``."""
+    declared = task.export_targets()
+    if declared is None:
+        return tuple(EXPORTERS)
+    unknown = [n for n in declared if n not in EXPORTERS]
+    if unknown:
+        raise ConfigError(
+            f"Task '{task.name}' lists unknown export target(s) {', '.join(unknown)}. "
+            f"Registered: {', '.join(EXPORTERS)}"
+        )
+    return tuple(declared)
 
 
 def run_export(
@@ -70,6 +86,11 @@ def run_export(
     run_dir = Path(resolve_run_dir(experiment))
     quiet_tf()
     cfg = load_config(str(run_dir))
+    supported = export_targets(resolve_task(cfg))
+    if format not in supported:
+        raise ConfigError(
+            f"Export format '{format}' is not supported by {cfg.task} runs. Choose from: {', '.join(supported)}"
+        )
     checkpoint = run_dir / "best.keras"
     if not checkpoint.exists():
         raise NotFoundError(f"No best.keras found in: {run_dir}")
