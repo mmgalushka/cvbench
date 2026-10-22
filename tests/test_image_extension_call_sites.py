@@ -71,7 +71,7 @@ def test_calibration_set_selects_decodable_images_case_insensitively(tmp_path):
     )
     out = tmp_path / "calib.npy"
 
-    export._build_calibration_set(cfg, out)
+    export.build_calibration_set(cfg, out)
 
     calib = np.load(out)
     assert calib.shape == (2, 4, 4, 3)

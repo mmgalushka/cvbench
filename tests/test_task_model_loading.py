@@ -67,6 +67,7 @@ def test_prediction_service_loads_a_detection_checkpoint(detection_run):
 
 def test_export_service_loads_a_detection_checkpoint(detection_run, monkeypatch):
     from cvbench.services import export
+    from cvbench.services.export import tflite
 
     seen = []
     monkeypatch.setattr(export, "resolve_run_dir", lambda _name: str(detection_run))
@@ -75,7 +76,7 @@ def test_export_service_loads_a_detection_checkpoint(detection_run, monkeypatch)
         seen.append(model)
         path.write_bytes(b"t")
 
-    monkeypatch.setattr(export, "_export_tflite", fake_export)
+    monkeypatch.setattr(tflite, "convert_tflite", fake_export)
 
     export.run_export("det_run", format="tflite")
 
