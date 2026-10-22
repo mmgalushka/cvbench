@@ -36,6 +36,8 @@ nav:
       - Jetson Deployment: deployment/jetson.md
   - CLI Reference: cli-reference.md
   - Technology References: references.md
+  - Developer Guide:
+      - Architecture: dev/architecture.md
 
 theme:
   name: material

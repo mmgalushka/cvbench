@@ -88,7 +88,7 @@ segmentation = "my_pkg.segmentation:SegmentationTask"
 my_backbone = "my_pkg.backbones:MY_BACKBONE"
 ```
 
-The conformance suite `tests/test_tasks_contract.py` shows what a task must implement; the full guide is tracked in #162.
+The conformance suite `tests/test_tasks_contract.py` shows what a task must implement. The layers, the rules and step-by-step guides for adding a task, a backbone or an exporter are in [docs/dev/architecture.md](docs/dev/architecture.md).
 
 ## Errors
 
