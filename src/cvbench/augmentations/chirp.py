@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import random
-from typing import Literal
 
 import numpy as np
 from PIL import Image, ImageDraw
 
 from cvbench.core.errors import ConfigError
 
-JustificationMode = Literal["left", "right", "center", "random"]
 _JUSTIFY_MODES = ("left", "right", "center")
 
 
@@ -147,7 +145,7 @@ def _render_chirp_mask(
         else:
             y0 = rnd.randint(thickness, height - thickness)
 
-        _draw_chirp(draw, x0, y0, length, thickness, brightness, fade_ratio, width)
+        _draw_chirp(draw, x0, y0, length, thickness, brightness, fade_ratio)
 
     return np.array(mask_img)
 
@@ -160,7 +158,6 @@ def _draw_chirp(
     thickness: int,
     brightness: float,
     fade_ratio: float,
-    canvas_width: int,
 ) -> None:
     fade_pixels = max(1, int(length * fade_ratio))
     half_h = thickness // 2

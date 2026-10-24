@@ -20,17 +20,6 @@
 }
 .badge-split:hover { background: var(--brand-color); color: #fff; border-color: var(--brand-color); }
 
-.ds-splits-cell { white-space: nowrap; }
-
-.ds-path-cell {
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--pico-muted-color, var(--muted-color));
-  font-size: 0.769rem;
-}
-
 /* ── Gallery filter bar ──────────────────────────────────────────────────────── */
 
 .ds-filter-bar {

@@ -72,7 +72,6 @@ class AugmentationConfig:
 class InterruptConfig:
     enabled: bool = True
     save_checkpoint: bool = True
-    save_optimizer_state: bool = True
 
 
 @dataclass
@@ -283,11 +282,6 @@ def _section_owners() -> dict[str, str]:
     return {name: owner for name, (owner, _) in _task_sections().items()}
 
 
-def _foreign_sections(task: str) -> set[str]:
-    """Task-owned sections that do not belong to a run of ``task``."""
-    return {section for section, owner in _section_owners().items() if owner != task}
-
-
 def _parse_transforms(raw: list) -> list:
     transforms: list[TransformConfig | OneOfConfig] = []
     for t in raw or []:
@@ -344,7 +338,7 @@ def _migrate_run(r: dict) -> dict:
 _REMOVED_KEYS = frozenset({
     "detection.grid_stride", "training.grad_accum", "training.mixup",
     "model.use_lcn", "model.lcn_kernel_size", "model.lcn_epsilon", "model.normalization",
-    "model.backbone_explicit",
+    "model.backbone_explicit", "interrupt.save_optimizer_state",
 })
 
 

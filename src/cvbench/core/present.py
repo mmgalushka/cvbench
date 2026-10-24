@@ -54,10 +54,6 @@ def fmt_epochs(done: int | None, total: int | None = None) -> str:
     return f"{done} / {total}" if total else str(done)
 
 
-def fmt_count(value: int | None) -> str:
-    return EMPTY if value is None else str(value)
-
-
 # ---------------------------------------------------------------------------
 # Names
 # ---------------------------------------------------------------------------

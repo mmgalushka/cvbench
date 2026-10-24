@@ -447,10 +447,6 @@ body { margin: 0; }
   gap: 0.4rem;
   margin: 0;
 }
-.ds-box-legend-note {
-  color: var(--pico-muted-color, var(--muted-color));
-  font-weight: 400;
-}
 .ds-box-legend-item {
   display: inline-flex;
   align-items: center;
