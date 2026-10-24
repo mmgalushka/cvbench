@@ -18,7 +18,7 @@ def convert_onnx(model, output_path: Path, input_size: int) -> None:
     except ImportError:
         raise ExportError(
             "tf2onnx is required for ONNX export. "
-            "Install it with: pip install 'cvbench[export]'"
+            "Install it with: uv pip install 'cvbench[export]'"
         ) from None
 
     input_spec = (

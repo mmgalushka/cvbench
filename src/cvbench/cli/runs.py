@@ -300,7 +300,7 @@ def rename(experiment, new_name):
     type=click.Choice(["tflite", "onnx", "plan", "hailo"]),
     help=(
         "Export format (plan prepares model.onnx and prints Jetson TensorRT steps; hailo prepares"
-        " a Hailo Docker package). onnx/plan need the 'export' extra: pip install 'cvbench[export]'."
+        " a Hailo Docker package). onnx/plan need the 'export' extra: uv pip install 'cvbench[export]'."
         " Exported models take float32 NHWC input, values 0-255; normalisation is inside the model."
     ),
 )

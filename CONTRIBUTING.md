@@ -5,7 +5,7 @@
 ```bash
 git clone git@github.com:mmgalushka/cvbench.git
 cd cvbench
-./helper.sh init          # creates .venv and installs all dependencies
+./helper.sh init          # uv sync: creates .venv and installs all dependencies (needs uv: https://docs.astral.sh/uv/)
 source .venv/bin/activate
 ./helper.sh test -m 'not tf'   # run the test suite (no GPU required)
 ```

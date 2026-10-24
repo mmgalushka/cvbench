@@ -22,7 +22,7 @@ def serve(host, port):
     """Start the CVBench WebUI server.
 
     Browse runs, metrics, confusion matrices and predictions in a
-    browser. Needs the [web] extras: pip install cvbench[web]
+    browser. Needs the [web] extras: uv pip install cvbench[web]
 
     Set the CVBENCH_URL environment variable to override the URL printed at
     startup — useful when the container is reached through a different hostname
@@ -32,7 +32,7 @@ def serve(host, port):
         import uvicorn
     except ImportError as exc:
         raise click.ClickException(
-            "WebUI dependencies are not installed. Run: pip install cvbench[web]"
+            "WebUI dependencies are not installed. Run: uv pip install cvbench[web]"
         ) from exc
 
     cvbench_url = os.environ.get("CVBENCH_URL")

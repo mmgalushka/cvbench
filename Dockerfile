@@ -1,5 +1,10 @@
 FROM tensorflow/tensorflow:2.16.2-gpu AS prod
 
+# ── uv (installs into the image's system Python) ──────────────────────────
+COPY --from=ghcr.io/astral-sh/uv:0.13 /uv /uvx /usr/local/bin/
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_LINK_MODE=copy
+
 # ── System dependencies ────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -17,15 +22,15 @@ ENV TF_CPP_MIN_LOG_LEVEL=3
 WORKDIR /opt/cvbench
 
 COPY pyproject.toml README.md ./
-# Stub the package so pip resolves and caches all dependencies without the real source.
+# Stub the package so uv resolves and caches all dependencies without the real source.
 # On code-only changes this layer is reused, skipping the full dependency download.
 RUN mkdir -p src/cvbench && touch src/cvbench/__init__.py \
- && pip install --no-cache-dir ".[web,export]" jupyterlab \
+ && uv pip install --no-cache ".[web,export]" jupyterlab \
  && rm -rf src/
 
 COPY src/ ./src/
 # Reinstall the package itself — no network I/O, all deps already present
-RUN pip install --no-cache-dir --no-deps .
+RUN uv pip install --no-cache --no-deps .
 
 # ── Suppress TF banner and ldconfig error from /etc/bash.bashrc ──────────
 RUN echo '# cleared by CVBench' > /etc/bash.bashrc
@@ -61,8 +66,8 @@ WORKDIR /opt/cvbench
 
 COPY tests/ ./tests/
 
-RUN pip install --no-cache-dir pytest pytest-cov commitizen
-RUN pip install --no-cache-dir -e .
+RUN uv pip install --no-cache pytest pytest-cov commitizen
+RUN uv pip install --no-cache -e .
 
 USER cvbench
 WORKDIR /home/cvbench
