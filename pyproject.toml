@@ -105,6 +105,7 @@ filterwarnings = [
 markers = [
     "tf: marks tests that require TensorFlow (deselect with '-m \"not tf\"')",
     "slow: trains a real model for more than a few seconds; CI runs these in their own step ('-m slow')",
+    "smoke: downloads real datasets and runs the pipeline for one epoch; run by hand with '-m smoke'",
 ]
 
 [tool.coverage.run]

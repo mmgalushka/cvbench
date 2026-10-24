@@ -57,3 +57,7 @@
 
 # Except Codecov config
 !codecov.yml
+
+# Except smoke-test dataset manifest
+!tests/smoke/
+!tests/smoke/datasets.yaml
