@@ -18,7 +18,7 @@ echo    "  Type 'commands' to see everything you can do here."
 echo
 
 # The `commands` overview is generated from the CLI itself — see
-# cvbench.cli.overview. It is installed as a console script by `pip install`.
+# cvbench.cli.overview. It is installed as a console script by `uv pip install`.
 
 # ── tm — tmux session manager ─────────────────────────────────────────────
 tm() {

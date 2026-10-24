@@ -48,6 +48,7 @@
 !Dockerfile
 !docker-compose.yml
 !pyproject.toml
+!uv.lock
 !mkdocs.yml
 !LICENSE
 !README.md

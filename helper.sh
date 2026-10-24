@@ -18,7 +18,7 @@ action_usage(){
     echo -e "Computer Vision Training Sandbox"
     echo -e ""
     echo -e "${BOLD}Dev commands (./helper.sh <name>):${NC}"
-    echo -e "  ${CMD}init${NC}                 create .venv and install all dependencies"
+    echo -e "  ${CMD}init${NC}                 create .venv and install all dependencies with uv"
     echo -e "  ${CMD}test${OPT} [-m mark] [-c]${NC}  run the test suite (-c adds a coverage summary)"
     echo -e "  ${CMD}prep${OPT} [--fix]${NC}       run lint and mypy exactly like CI (--fix applies safe ruff fixes)"
     echo -e "  ${CMD}release${OPT} [--dry-run]${NC}  preview the next version bump (CI does the real one)"
@@ -87,20 +87,18 @@ action_site(){
 }
 
 action_init(){
-    if [ -d .venv ]; then
-        rm -rf .venv
+    if ! command -v uv >/dev/null 2>&1; then
+        echo "uv not found. Install it: https://docs.astral.sh/uv/getting-started/installation/"
+        exit 1
     fi
 
-    python3 -m venv .venv
-    source .venv/bin/activate
-    pip install --upgrade pip -q
-
+    EXTRAS=(--extra web --extra export --group docs)
     if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
         echo "Apple Silicon detected — installing tensorflow-metal for GPU acceleration"
-        pip install -e ".[dev,web,export,docs,gpu-mac]"
-    else
-        pip install -e ".[dev,web,export,docs]"
+        EXTRAS+=(--extra gpu-mac)
     fi
+
+    uv sync "${EXTRAS[@]}"
 }
 
 action_activate(){

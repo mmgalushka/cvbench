@@ -117,7 +117,7 @@ def _infer_onnx(model_path: Path, images: list[str], size: int) -> list[list[np.
     except ImportError:
         raise ExportError(
             "onnxruntime is required for ONNX inference. "
-            "Install it with: pip install onnxruntime"
+            "Install it with: uv pip install onnxruntime"
         ) from None
     try:
         sess = ort.InferenceSession(str(model_path))

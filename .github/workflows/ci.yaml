@@ -14,24 +14,25 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v7
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.10"
+          enable-cache: true
 
       - name: Install dependencies
-        run: pip install -e ".[dev,web]"
+        run: uv sync --locked --extra web
 
       - name: Lint
-        run: ruff check .
+        run: uv run --no-sync ruff check .
 
       - name: Type check
-        run: mypy src
+        run: uv run --no-sync mypy src
 
       - name: Run tests
-        run: pytest -m "not slow" --cov --cov-report=xml
+        run: uv run --no-sync pytest -m "not slow" --cov --cov-report=xml
 
       - name: Detection quality gate
-        run: pytest -m slow --no-cov
+        run: uv run --no-sync pytest -m slow --no-cov
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5

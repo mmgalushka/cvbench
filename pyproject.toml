@@ -39,6 +39,8 @@ export = [
     "onnx==1.16.2",
     "onnxruntime>=1.18",
 ]
+
+[dependency-groups]
 dev = [
     "pytest==9.0.3",
     "pytest-cov==7.1.0",
@@ -60,6 +62,9 @@ sweep    = "cvbench.cli.sweep:sweep"
 data     = "cvbench.cli.data:data"
 serve    = "cvbench.cli.serve:serve"
 commands = "cvbench.cli.overview:commands"
+
+[tool.uv]
+default-groups = ["dev"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

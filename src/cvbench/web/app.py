@@ -53,7 +53,7 @@ here can queue for live updates.
 
 Running (once web extras are installed)
 ---------------------------------------
-    pip install cvbench[web]
+    uv pip install cvbench[web]
     serve                             # http://localhost:8000
     serve --host 0.0.0.0 --port 8080  # see: serve --help
 """
@@ -68,14 +68,14 @@ def create_app():
     """Application factory — returns a FastAPI app instance.
 
     Requires the [web] optional dependencies:
-        pip install cvbench[web]
+        uv pip install cvbench[web]
     """
     try:
         import fastapi
         from fastapi.staticfiles import StaticFiles
     except ImportError as exc:
         raise ImportError(
-            "WebUI dependencies are not installed. Run: pip install cvbench[web]"
+            "WebUI dependencies are not installed. Run: uv pip install cvbench[web]"
         ) from exc
 
     from cvbench.web.api import router as api_router

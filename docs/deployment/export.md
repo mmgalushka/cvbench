@@ -39,7 +39,7 @@ runs export my_run --format plan                        # print Jetson TensorRT 
     [post-training quantization guide](https://ai.google.dev/edge/litert/models/post_training_quantization)
     for the trade-offs.
 
-`onnx` and `plan` need the `export` extra: `pip install 'cvbench[export]'`.
+`onnx` and `plan` need the `export` extra: `uv pip install 'cvbench[export]'`.
 
 ## Input contract
 
