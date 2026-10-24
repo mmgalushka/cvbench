@@ -1,0 +1,37 @@
+# Real-world datasets for the one-epoch pipeline smoke test (tests/smoke/test_smoke.py).
+# `kind` picks the fetcher in fetch.py; train/val/test are image counts in the subset.
+- name: xray
+  kind: roboflow_zips
+  task: classification
+  note: grayscale chest X-rays, 2 classes
+  base_url: https://huggingface.co/datasets/keremberke/chest-xray-classification/resolve/main/data
+  train: 300
+  val: 60
+  test: 60
+
+- name: eurosat
+  kind: hf_parquet
+  task: classification
+  note: 64x64 satellite tiles, 10 classes
+  url: https://huggingface.co/datasets/tanganke/eurosat/resolve/main/data/test-00000-of-00001.parquet
+  classes: [AnnualCrop, Forest, HerbaceousVegetation, Highway, Industrial, Pasture, PermanentCrop, Residential, River, SeaLake]
+  train: 350
+  val: 75
+  test: 75
+
+- name: pets
+  kind: pets
+  task: classification
+  note: 37 fine-grained cat and dog breeds
+  url: https://www.robots.ox.ac.uk/~vgg/data/pets/data/images.tar.gz
+  per_class: {train: 12, val: 3, test: 3}
+
+- name: voc
+  kind: voc
+  task: detection
+  note: Pascal VOC 2007 (XML boxes), 4 classes
+  url: http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtrainval_06-Nov-2007.tar
+  classes: [cat, dog, car, person]
+  train: 300
+  val: 60
+  test: 60
