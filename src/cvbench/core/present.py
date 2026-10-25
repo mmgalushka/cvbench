@@ -250,6 +250,8 @@ def eval_display(report: dict, val_accuracy: float | None = None) -> dict[str, A
 DATASET_COLUMNS: list[tuple[str, str, str]] = [
     ("name", "Dataset", "left"),
     ("task", "Task", "left"),
+    ("format", "Format", "left"),
+    ("status", "Status", "left"),
     ("train", "Train", "right"),
     ("val", "Val", "right"),
     ("test", "Test", "right"),
@@ -258,15 +260,26 @@ DATASET_COLUMNS: list[tuple[str, str, str]] = [
 
 
 def present_dataset(info: dict[str, Any]) -> dict[str, str]:
-    """Display strings for one ``datasets.catalog.dataset_info`` entry."""
+    """Display strings for one ``datasets.catalog.dataset_info`` entry.
+
+    A dataset that is not ready (unknown layout, or VOC/COCO awaiting `data convert`) has no
+    task, splits or classes to show, so those cells are a dash.
+    """
     splits = info.get("splits", {})
+    ready = info.get("status", "ready") == "ready"
+
+    def count(value: Any) -> str:
+        return str(value) if ready else "—"
+
     return {
         "name": str(info["name"]),
-        "task": task_short(info.get("task")),
-        "train": str(splits.get("train", {}).get("images", 0)),
-        "val": str(splits.get("val", {}).get("images", 0)),
-        "test": str(splits.get("test", {}).get("images", 0)),
-        "classes": str(info.get("num_classes", 0)),
+        "task": task_short(info.get("task")) if ready else "—",
+        "format": str(info.get("format", "")),
+        "status": str(info.get("status", "ready")),
+        "train": count(splits.get("train", {}).get("images", 0)),
+        "val": count(splits.get("val", {}).get("images", 0)),
+        "test": count(splits.get("test", {}).get("images", 0)),
+        "classes": count(info.get("num_classes", 0)),
     }
 
 

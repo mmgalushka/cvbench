@@ -41,7 +41,7 @@ function datasetCell(col, ds) {
   if (col.key === 'name') {
     return `<strong title="${escHtml(ds.path)}">${value}</strong>`;
   }
-  if (col.key === 'task') {
+  if (col.key === 'task' && ds.task) {
     return `<span class="badge badge-task-${ds.task}">${value}</span>`;
   }
   const split = ds.splits[col.key];

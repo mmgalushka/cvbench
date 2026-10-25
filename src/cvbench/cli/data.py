@@ -76,6 +76,10 @@ def list_data(data_dir):
             for info in infos
         ],
     )
+    for info in infos:
+        if info["status"] == "needs conversion":
+            label = convert_mod.FORMAT_LABELS[info["format"]]
+            print(f" {info['name']} is a {label} dataset; convert it with: data convert {info['path']} <output_dir>")
 
 
 def _mean_brightness(path: Path) -> float:
