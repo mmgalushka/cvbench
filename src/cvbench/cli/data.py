@@ -39,7 +39,7 @@ def _fresh_token(used: set) -> str:
         ("data generate", "make a synthetic dataset to experiment with"),
         ("data split data/pool data/ready", "turn a flat folder into train/val/test"),
         ("data convert data/VOC2007 data/voc", "turn a Pascal VOC or COCO dataset into YOLO"),
-        ("data explore data/ready", "check class balance and brightness bias"),
+        ("data explore data/ready", "check class balance and brightness"),
     ],
 )
 def data():
@@ -55,7 +55,7 @@ data.add_command(generate, name="generate")
     examples=[
         ("data list", "every dataset under data/"),
     ],
-    see_also=[("data explore <dataset>", "check class balance and brightness bias")],
+    see_also=[("data explore <dataset>", "check class balance and brightness")],
 )
 @click.argument("data_dir", default=DATA_DIR)
 def list_data(data_dir):
@@ -140,8 +140,15 @@ def _print_integrity(root, issues):
     print(console.rule())
 
 
-def _explore_split(split_dir: Path, bad: set[Path]) -> bool:
-    """Print the brightness and class-balance report for SPLIT_DIR; False if it holds no images."""
+# Mean brightness (0–255) gap for one class between two splits that signals a real shift.
+_SPLIT_SHIFT_THRESHOLD = 25.0
+
+
+def _explore_split(split_dir: Path, bad: set[Path]) -> dict[str, float] | None:
+    """Print the brightness and class-balance report for SPLIT_DIR.
+
+    Returns the per-class mean brightness, or None if the split holds no images.
+    """
     from cvbench.core import console
 
     class_dirs = sorted(p for p in split_dir.iterdir() if p.is_dir())
@@ -176,7 +183,7 @@ def _explore_split(split_dir: Path, bad: set[Path]) -> bool:
         })
 
     if not stats:
-        return False
+        return None
 
     means = [s["mean"] for s in stats]
     dataset_mean = float(np.mean(means))
@@ -193,35 +200,52 @@ def _explore_split(split_dir: Path, bad: set[Path]) -> bool:
     biased = [s for s in stats if std_of_means > 0 and abs(s["mean"] - dataset_mean) > std_of_means]
 
     for s in stats:
-        flag = f"  {console.yellow('⚠️')}" if s in biased else ""
         n_bad = s["unreadable"]
         note = f"  {console.dim(f'({n_bad} unreadable, excluded from brightness)')}" if n_bad else ""
         mean_str = console.bold(f"{s['mean']:>6.1f}")
         print(
             f"   {s['class']:<{max_cls}}  {s['count']:>7}  "
             f"{mean_str}  {s['std']:>6.1f}  "
-            f"{s['min']:>5.1f}  {s['max']:>5.1f}{flag}{note}"
+            f"{s['min']:>5.1f}  {s['max']:>5.1f}{note}"
         )
 
     print()
     print(f" Dataset mean brightness : {console.bold(f'{dataset_mean:.1f}')}")
 
     if biased:
-        print()
-        for s in biased:
-            dev = s["mean"] - dataset_mean
-            direction = "brighter" if dev > 0 else "darker"
-            console.warning(f"'{s['class']}' is {abs(dev):.1f} units {direction} than the dataset mean")
-        print()
-        print(f"   {console.dim('Suggestion: consider brightness augmentation or per-image normalization.')}")
-    else:
-        console.success("No significant brightness bias detected.")
+        names = ", ".join(f"'{s['class']}'" for s in biased)
+        print(console.dim(
+            f" Note: {names} differ{'s' if len(biased) == 1 else ''} noticeably in brightness from the "
+            "dataset mean. That is often natural class signal, not a problem."
+        ))
 
     print()
     dist = dict(sorted(((c.name, len(i)) for c, i in all_images.items()), key=lambda x: -x[1]))
     if not print_class_distribution(dist):
         console.success("No significant class imbalance detected.")
-    return True
+    return {s["class"]: s["mean"] for s in stats}
+
+
+def _print_split_shift(names: list[str], per_split: list[dict[str, float] | None]) -> None:
+    """Warn about classes whose mean brightness differs strongly between splits."""
+    from cvbench.core import console
+
+    shifted = []
+    for cls in sorted({c for m in per_split if m for c in m}):
+        vals = [(n, m[cls]) for n, m in zip(names, per_split, strict=True) if m and cls in m]
+        if len(vals) > 1:
+            lo, hi = min(vals, key=lambda v: v[1]), max(vals, key=lambda v: v[1])
+            if hi[1] - lo[1] > _SPLIT_SHIFT_THRESHOLD:
+                shifted.append((cls, lo, hi))
+    if not shifted:
+        return
+    print(console.rule())
+    for cls, lo, hi in shifted:
+        console.warning(
+            f"'{cls}' brightness differs between splits: {lo[0]} {lo[1]:.1f} vs {hi[0]} {hi[1]:.1f} "
+            "(possible distribution shift)"
+        )
+    print()
 
 
 @data.command(
@@ -239,7 +263,7 @@ def _explore_split(split_dir: Path, bad: set[Path]) -> bool:
 @click.option("--split", default=None,
               help="Analyse only this split (train / val / test); default: every split present.")
 def explore(data_dir, split):
-    """Analyse per-class brightness and class distribution to detect potential bias.
+    """Analyse per-class brightness and class distribution.
 
     DATA_DIR is the root dataset directory (containing train/, val/, test/
     subdirectories) or a split directory directly.
@@ -272,6 +296,7 @@ def explore(data_dir, split):
     reported = [_explore_split(d, bad) for d in split_dirs]
     if not any(reported):
         raise click.ClickException("No images found.")
+    _print_split_shift([d.name for d in split_dirs], reported)
     print(console.rule())
     _print_integrity(root, issues)
     if issues:
