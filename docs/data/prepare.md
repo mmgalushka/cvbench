@@ -1,13 +1,13 @@
 # Preparing Real Datasets
 
-The `data` command group has eight subcommands in total: `list` and `explore`
+The `data` command group has nine subcommands in total: `list` and `explore`
 for inspecting a dataset, `generate` for making a synthetic dataset (see
 [Synthetic Data](synthetic.md)), `aug` for writing an augmentation config, `upsample` for correcting class imbalance (see
 [Augmentation](augmentation.md#upsampling-a-class-folder)), and three verbs for
 reshaping a dataset (classification or
 [YOLO](https://docs.ultralytics.com/datasets/detect/) layout) without touching the
-source — prep, split, and flatten. Each of the three copies
-`SRC` to `DST` and leaves `SRC` untouched.
+source — prep, split, and flatten — plus `convert` for bringing in a Pascal VOC or
+COCO dataset. Each of the four copies `SRC` to `DST` and leaves `SRC` untouched.
 
 ## Listing and inspecting datasets
 
@@ -118,6 +118,48 @@ data split data/my_data data/my_data_split --train 0.8 --val 0.1 --test 0.1 --se
 | `--test FLOAT` |  | Fraction assigned to test (default: 0.1) |
 | `--seed N` |  | Random seed for the stratified shuffle (default: 42) |
 | `--dry-run` |  | Print the planned split without writing `DST` |
+
+## Converting a Pascal VOC or COCO dataset
+
+CVBench trains on two layouts: class folders (classification) and
+[YOLO](https://docs.ultralytics.com/datasets/detect/) (detection). Detection
+data often arrives as Pascal VOC or COCO instead, so `data convert` turns
+either into YOLO. It is a separate, explicit step on purpose: look at the data
+and choose the classes and splits before training. `data list` and `train` do
+not convert anything silently.
+
+| Format | Recognised by |
+|---|---|
+| Pascal VOC | `Annotations/*.xml` and `JPEGImages/` (splits from `ImageSets/Main/{train,val,test}.txt`) |
+| COCO | an instances JSON: `annotations/instances_<split>.json` (images in `<split>2017/` or next to it), a `*.json` in the root, or `<split>/_annotations.coco.json` (Roboflow; a `valid/` folder is the val split) |
+
+```bash
+data convert data/VOC2007 data/voc --classes cat,dog,car,person
+data convert data/coco data/coco_yolo --dry-run          # preview classes and counts
+data convert data/VOC2007 data/voc --resplit --limit 500  # ignore the source splits, sample 500 images
+train data/voc --epochs 20
+```
+
+- **Splits.** When the source has its own split lists (or one JSON per split), they
+  are used as they are; images in none of them are dropped. Otherwise, or with
+  `--resplit`, the images get the same seeded, class-stratified split as `data split`.
+  Detection training needs a `val` split, and `data convert` warns when there is none.
+- **Classes.** By default every class that has a box, sorted by name, so class ids are
+  stable. `--classes a,b,c` keeps only those and uses their order as the ids.
+- **What is dropped.** The command lists it: VOC objects marked `difficult`, COCO crowd
+  regions (`iscrowd`), boxes with no area, objects of unselected classes, and images left
+  with no boxes. VOC `truncated` objects are kept and counted.
+
+| Option | Required | Description |
+|---|---|---|
+| `--classes A,B,C` |  | Classes to keep, in class-id order (default: all, sorted) |
+| `--train FLOAT` |  | Fraction assigned to train when splitting here (default: 0.8) |
+| `--val FLOAT` |  | Fraction assigned to val when splitting here (default: 0.1) |
+| `--test FLOAT` |  | Fraction assigned to test when splitting here (default: 0.1) |
+| `--seed N` |  | Random seed for the split and `--limit` (default: 42) |
+| `--limit N` |  | Keep a seeded random sample of N images |
+| `--resplit` |  | Ignore the source's own split lists |
+| `--dry-run` |  | Print the planned conversion without writing `DST` |
 
 ## Flattening a dataset
 

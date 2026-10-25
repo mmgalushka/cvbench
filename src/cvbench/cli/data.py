@@ -13,6 +13,7 @@ from cvbench.cli import _help
 from cvbench.cli.generate import generate
 from cvbench.core import present
 from cvbench.core.data_store import DATA_DIR, DATA_REG
+from cvbench.datasets import convert as convert_mod
 from cvbench.datasets import flatten as flatten_mod
 from cvbench.datasets import hashify as hashify_mod
 from cvbench.datasets import layout as layout_mod
@@ -37,6 +38,7 @@ def _fresh_token(used: set) -> str:
     examples=[
         ("data generate", "make a synthetic dataset to experiment with"),
         ("data split data/pool data/ready", "turn a flat folder into train/val/test"),
+        ("data convert data/VOC2007 data/voc", "turn a Pascal VOC or COCO dataset into YOLO"),
         ("data explore data/ready", "check class balance and brightness bias"),
     ],
 )
@@ -662,6 +664,114 @@ def split(src, dst, train_ratio, val_ratio, test_ratio, seed, dry_run):
     verb = "Would write" if dry_run else "Wrote"
     total = len(plan.actions)
     console.success(f"{verb} {total} image(s) across {len(plan.splits_written)} split(s)")
+    print(console.rule())
+
+
+@data.command(
+    "convert",
+    short_help="Convert a Pascal VOC or COCO dataset into YOLO.",
+    examples=[
+        ("data convert data/VOC2007 data/voc", "Convert, keeping the source's own splits when it has them"),
+        ("data convert data/coco data/pets --classes cat,dog", "Keep only some classes (their order sets the ids)"),
+        ("data convert data/VOC2007 data/voc --resplit --train 0.7 --val 0.15 --test 0.15",
+         "Ignore the source's splits and re-split with custom ratios"),
+        ("data convert data/VOC2007 data/voc --dry-run", "Preview the classes and per-split counts"),
+    ],
+    see_also=[("train data/voc --epochs 20", "train on the result")],
+)
+@click.argument("src")
+@click.argument("dst")
+@click.option("--classes", default=None, metavar="A,B,C",
+              help="Comma-separated classes to keep, in class-id order. Default: every class, sorted.")
+@click.option("--train", "train_ratio", default=0.8, show_default=True, type=float,
+              help="Fraction of images assigned to train when the data is split here.")
+@click.option("--val", "val_ratio", default=0.1, show_default=True, type=float,
+              help="Fraction of images assigned to val when the data is split here.")
+@click.option("--test", "test_ratio", default=0.1, show_default=True, type=float,
+              help="Fraction of images assigned to test when the data is split here.")
+@click.option("--seed", default=42, show_default=True, type=int,
+              help="Random seed for the split and for --limit.")
+@click.option("--limit", default=None, type=click.IntRange(min=1),
+              help="Keep a seeded random sample of this many images.")
+@click.option("--resplit", is_flag=True, default=False,
+              help="Ignore the source's own split lists and split with --train/--val/--test.")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Show the planned conversion without writing DST.")
+def convert(src, dst, classes, train_ratio, val_ratio, test_ratio, seed, limit, resplit, dry_run):
+    """Convert the Pascal VOC or COCO dataset in SRC to a YOLO dataset in DST.
+
+    SRC  a Pascal VOC dataset (Annotations/ + JPEGImages/) or a COCO one
+    (instances JSON + images)\n
+    DST  destination for the YOLO dataset; must be empty or non-existent.
+
+    Conversion is explicit so you choose the classes and splits after looking
+    at the data. The source's own split lists (VOC ImageSets, COCO train/val/
+    test files, a 'valid' folder counts as val) are used when present;
+    otherwise the images get a seeded, class-stratified split. Dropped objects
+    (VOC 'difficult', COCO crowds, unselected classes) and images are listed.
+    SRC is never modified.
+    """
+    from cvbench.core import console
+
+    src_dir = Path(src)
+    dst_dir = Path(dst)
+
+    if not src_dir.is_dir():
+        raise click.ClickException(f"Source directory not found: '{src_dir}'")
+
+    ratios = (train_ratio, val_ratio, test_ratio)
+    if abs(sum(ratios) - 1.0) > 1e-6:
+        raise click.ClickException(
+            f"--train/--val/--test must sum to 1.0 (got {sum(ratios):.4f})."
+        )
+
+    if dst_dir.exists() and any(dst_dir.iterdir()):
+        raise click.ClickException(
+            f"Destination '{dst_dir}' already contains files. "
+            "Provide an empty or non-existent directory."
+        )
+
+    wanted = [c.strip() for c in classes.split(",") if c.strip()] if classes else None
+    plan = convert_mod.plan_convert(
+        src_dir, classes=wanted, ratios=ratios, seed=seed, limit=limit, resplit=resplit,
+    )
+    if "val" not in plan.images:
+        console.warning(
+            "No val split in the result; detection training needs one. "
+            "Re-run with --resplit, or add a val list to the source."
+        )
+    if not dry_run:
+        with console.progress(len(plan.actions), "Copying") as advance:
+            convert_mod.apply_plan(plan, dst_dir, progress=advance)
+
+    print(console.rule())
+    print(f" {console.bold('CVBench — data convert')}")
+    print(console.rule())
+    print(f"  Source  : {console.dim(str(src_dir))}  ({console.dim(convert_mod.FORMAT_LABELS[plan.source_format])})")
+    print(f"  Dest    : {console.dim(str(dst_dir))}{'  (dry run)' if dry_run else ''}")
+    how = "the source's own split lists" if plan.used_source_splits else f"seeded split, seed={seed}"
+    print(f"  Splits  : {how}")
+    print(f"  Classes : {', '.join(f'{i}={c}' for i, c in enumerate(plan.class_names))}")
+    print()
+
+    max_cls = max((len(c) for c in plan.class_names), default=5)
+    print(console.dim(f"   {'Boxes':<{max_cls}}  {'Train':>7}  {'Val':>7}  {'Test':>7}"))
+    for cls in plan.class_names:
+        row = [plan.counts.get(s, {}).get(cls, 0) for s in ("train", "val", "test")]
+        print(f"   {cls:<{max_cls}}  {row[0]:>7}  {row[1]:>7}  {row[2]:>7}")
+    row = [plan.images.get(s, 0) for s in ("train", "val", "test")]
+    print(console.dim(f"   {'Images':<{max_cls}}  {row[0]:>7}  {row[1]:>7}  {row[2]:>7}"))
+
+    if plan.dropped or plan.kept_notes:
+        print()
+        for reason, n in sorted(plan.dropped.items()):
+            print(f"  Dropped : {n} {reason}")
+        for reason, n in sorted(plan.kept_notes.items()):
+            print(f"  Note    : {n} {reason}")
+
+    print()
+    verb = "Would write" if dry_run else "Wrote"
+    console.success(f"{verb} {len(plan.actions)} image(s) across {len(plan.splits_written)} split(s)")
     print(console.rule())
 
 
