@@ -21,7 +21,9 @@ data explore data/my_data --split test
 from its layout — see [Your First Model](../getting-started/first-model.md))
 and shows per-split image counts and the number of classes. `data explore`
 reports mean brightness and image counts per class, useful for spotting
-lighting bias or class imbalance before you train. It also lists unreadable
+class imbalance before you train. Brightness that differs by class is shown as
+an informational note (it is often real signal); it only warns when a class's
+brightness differs strongly between splits, which suggests a distribution shift. It also lists unreadable
 images (empty or undecodable), images PIL reads but TensorFlow's decoder rejects
 (training would crash on them), images that appear in more than one split
 (data leakage), identical images within a split and identical images with

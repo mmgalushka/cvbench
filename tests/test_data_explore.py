@@ -160,3 +160,30 @@ def test_near_equal_classes_not_flagged_imbalanced(tmp_path):
             _save(root / "train" / cls / f"{i}.png", hash((cls, i)) % 1000)
     result = CliRunner().invoke(explore, [str(root)])
     assert "Imbalance ratio" not in result.output
+
+
+def _solid(path: Path, value: int, name: str) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((16, 16, 3), value, dtype=np.uint8)).save(path / name, format="PNG")
+
+
+def test_natural_class_brightness_difference_is_not_a_warning(tmp_path):
+    root = tmp_path / "ds"
+    for split, jitter in (("train", 0), ("val", 3)):
+        _solid(root / split / "forest", 30 + jitter, f"{split}_f.png")
+        _solid(root / split / "city", 200 + jitter, f"{split}_c.png")
+        _solid(root / split / "river", 120 + jitter, f"{split}_r.png")
+    result = CliRunner().invoke(explore, [str(root)])
+    assert result.exit_code == 0, result.output
+    assert "⚠" not in result.output
+    assert "natural class signal" in result.output
+    assert "differs between splits" not in result.output
+
+
+def test_brightness_shift_between_splits_warns(tmp_path):
+    root = tmp_path / "ds"
+    _solid(root / "train" / "cat", 40, "a.png")
+    _solid(root / "val" / "cat", 220, "b.png")
+    result = CliRunner().invoke(explore, [str(root)])
+    assert result.exit_code == 0, result.output
+    assert "'cat' brightness differs between splits" in result.output
