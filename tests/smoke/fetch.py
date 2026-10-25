@@ -118,10 +118,12 @@ def _voc(entry: dict, raw: Path, out: Path) -> None:
     if not root.exists():
         with tarfile.open(archive) as tar:
             tar.extractall(raw, filter="data")
+    total = entry["train"] + entry["val"] + entry["test"]
     subprocess.run(
-        [sys.executable, str(HERE / "voc_to_yolo.py"), str(root), str(out),
-         "--classes", ",".join(entry["classes"]),
-         "--train", str(entry["train"]), "--val", str(entry["val"]), "--test", str(entry["test"])],
+        [str(Path(sys.executable).parent / "data"), "convert", str(root), str(out),
+         "--classes", ",".join(entry["classes"]), "--limit", str(total), "--resplit",
+         "--train", str(entry["train"] / total), "--val", str(entry["val"] / total),
+         "--test", str(entry["test"] / total)],
         check=True,
     )
 

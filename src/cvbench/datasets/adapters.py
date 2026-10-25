@@ -1,14 +1,17 @@
-"""Built-in layout adapters: class folders (classification) and YOLO txt (detection).
+"""Built-in layout adapters: class folders (classification) and YOLO txt (detection), plus
+Pascal VOC and COCO, which are recognised but not trainable (``data convert`` turns them into YOLO).
 
 Importing this module registers them in ``cvbench.core.layout``. TensorFlow-free.
 """
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
+from cvbench.core.errors import ConfigError
 from cvbench.core.layout import LayoutAdapter, register_layout
 from cvbench.core.task import DatasetSpec
+from cvbench.datasets import convert
 from cvbench.datasets.layout import (
     classification_layout_errors,
     detection_layout_errors,
@@ -79,5 +82,39 @@ class YoloLayout(LayoutAdapter):
         )
 
 
+class ForeignLayout(LayoutAdapter):
+    """A detection format CVBench reads only through ``data convert``: recognised, never trained on."""
+
+    format: ClassVar[str]
+
+    def sniff(self, root: Path) -> bool:
+        return convert.detect_format(root) == self.format
+
+    def errors(self, root: Path) -> list[str]:
+        return [
+            f"'{root}' is a {convert.FORMAT_LABELS[self.format]} dataset, which CVBench cannot train on "
+            f"directly. Convert it to YOLO first: data convert {root} <output_dir>"
+        ]
+
+    def resolve(self, cfg: CVBenchConfig, task: Task) -> DatasetSpec:
+        raise ConfigError(self.errors(Path(cfg.data.data_dir))[0])
+
+
+class VocLayout(ForeignLayout):
+    """``Annotations/*.xml`` + ``JPEGImages/`` — Pascal VOC."""
+
+    name = "voc"
+    format = convert.FORMAT_VOC
+
+
+class CocoLayout(ForeignLayout):
+    """An instances JSON (``annotations/``, the root, or ``<split>/_annotations.coco.json``) plus images — COCO."""
+
+    name = "coco"
+    format = convert.FORMAT_COCO
+
+
 register_layout(ClassFoldersLayout())
 register_layout(YoloLayout())
+register_layout(VocLayout())
+register_layout(CocoLayout())
