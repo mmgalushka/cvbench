@@ -122,3 +122,30 @@ def test_data_list_and_api_show_the_same_counts(cls_root):
 def test_empty_dataset_text_is_shared(tmp_path):
     out = CliRunner().invoke(data, ["list", str(tmp_path)]).output
     assert present.EMPTY_DATASETS.format(dir=tmp_path) in out.replace("\n", "")
+
+
+def test_unrecognised_folder_is_unknown_layout(tmp_path):
+    (tmp_path / "data" / "mystery").mkdir(parents=True)
+    (tmp_path / "data" / "mystery" / "notes.txt").write_text("hi")
+    info = dataset_info(tmp_path / "data" / "mystery")
+    assert info["format"] == "unknown" and info["status"] == "unknown layout" and info["task"] is None
+
+    out = CliRunner().invoke(data, ["list", str(tmp_path / "data")]).output
+    assert "unknown layout" in out
+
+
+def test_voc_folder_needs_conversion(tmp_path):
+    voc = tmp_path / "data" / "voc"
+    (voc / "Annotations").mkdir(parents=True)
+    (voc / "JPEGImages").mkdir()
+    (voc / "Annotations" / "a.xml").write_text("<annotation/>")
+    info = dataset_info(voc)
+    assert info["format"] == "voc" and info["status"] == "needs conversion"
+
+    out = CliRunner().invoke(data, ["list", str(tmp_path / "data")]).output
+    assert "needs conversion" in out and "data convert" in out
+
+
+def test_ready_dataset_shows_format_and_status(cls_root):
+    display = present.present_dataset(dataset_info(cls_root))
+    assert display["format"] == "classification" and display["status"] == "ready"
