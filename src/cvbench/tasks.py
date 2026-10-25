@@ -8,6 +8,7 @@ import-time crash.
 """
 from __future__ import annotations
 
+import functools
 import importlib
 import warnings
 from importlib.metadata import entry_points
@@ -32,11 +33,13 @@ _TASKS: dict[str, tuple[str, str]] = {
 TASK_ENTRY_POINT_GROUP = "cvbench.tasks"
 
 
+@functools.cache
 def _registry() -> dict[str, tuple[str, str]]:
     """The built-in tasks plus those installed packages register as entry points.
 
     Nothing is imported here (an entry point only names ``(module, attr)``); a built-in
-    task always wins over a plugin of the same name.
+    task always wins over a plugin of the same name. Computed once per process — scanning
+    entry points is slow and callers hit this per dataset; tests call ``cache_clear()``.
     """
     registry = dict(_TASKS)
     for ep in entry_points(group=TASK_ENTRY_POINT_GROUP):

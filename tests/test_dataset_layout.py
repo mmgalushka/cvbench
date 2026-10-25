@@ -108,3 +108,15 @@ def test_list_images_recurses_only_on_request(tmp_path):
 def test_trainable_extensions_are_a_subset_of_readable_ones():
     assert layout.IMAGE_EXTS < layout.READABLE_IMAGE_EXTS
     assert {".tif", ".tiff", ".webp"} == layout.READABLE_IMAGE_EXTS - layout.IMAGE_EXTS
+
+
+def test_count_images_matches_list_images(tmp_path):
+    (tmp_path / "sub").mkdir()
+    for rel in ("top.png", "note.txt", "sub/deep.PNG", "sub/scan.tif"):
+        (tmp_path / rel).write_bytes(b"")
+
+    for recursive in (False, True):
+        for exts in (layout.IMAGE_EXTS, layout.READABLE_IMAGE_EXTS):
+            assert layout.count_images(tmp_path, recursive=recursive, exts=exts) == len(
+                layout.list_images(tmp_path, recursive=recursive, exts=exts)
+            )

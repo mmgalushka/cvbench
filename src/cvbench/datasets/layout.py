@@ -9,6 +9,7 @@ Two layouts are recognised:
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import yaml
@@ -34,6 +35,18 @@ def list_images(
     """
     found = directory.rglob('*') if recursive else directory.glob('*')
     return sorted(f for f in found if f.is_file() and f.suffix.lower() in exts)
+
+
+def count_images(
+    directory: Path, *, recursive: bool = False, exts: set[str] = IMAGE_EXTS,
+) -> int:
+    """How many files ``list_images`` would return, without sorting or a stat per file."""
+    count = 0
+    for _, _, filenames in os.walk(directory):
+        count += sum(1 for name in filenames if os.path.splitext(name)[1].lower() in exts)
+        if not recursive:
+            break
+    return count
 
 
 def is_yolo_dataset(data_dir: Path) -> bool:

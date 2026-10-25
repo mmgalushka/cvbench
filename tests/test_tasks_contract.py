@@ -271,3 +271,15 @@ def test_config_section_is_built_for_runs_of_its_task(name):
     if section is not None:
         attr, cls = section
         assert isinstance(getattr(CVBenchConfig(task=name), attr), cls)
+
+
+def test_registry_is_computed_once_per_process(monkeypatch):
+    calls = []
+    real = tasks_mod.entry_points
+    monkeypatch.setattr(
+        tasks_mod, "entry_points", lambda group: calls.append(group) or real(group=group)
+    )
+    tasks_mod._registry.cache_clear()
+    tasks_mod.task_names()
+    tasks_mod.task_names()
+    assert len(calls) == 1

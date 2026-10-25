@@ -24,6 +24,16 @@ SEED = 1234
 
 
 @pytest.fixture(autouse=True)
+def _fresh_task_registry():
+    """Drop the cached task registry so a test patching entry points sees its own plugins."""
+    from cvbench import tasks
+
+    tasks._registry.cache_clear()
+    yield
+    tasks._registry.cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def _global_seed():
     """Seed every RNG a test might touch, so a failure reproduces on the next run."""
     random.seed(SEED)
