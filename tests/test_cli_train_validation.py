@@ -220,3 +220,31 @@ def test_set_accepts_a_flag_name_as_the_key(data_dir, monkeypatch):
     seen = _captured_overrides(monkeypatch)
     assert CliRunner().invoke(train, [str(data_dir), "--set", "lr=5e-4"]).exit_code == 0
     assert seen["overrides"] == {"training.learning_rate": 5e-4}
+
+
+# ---- foreign formats --------------------------------------------------------
+
+def test_layout_errors_name_voc_and_point_to_convert(tmp_path):
+    (tmp_path / "Annotations").mkdir()
+    (tmp_path / "JPEGImages").mkdir()
+    from cvbench.tasks import layout_errors
+
+    [msg] = layout_errors(tmp_path)
+    assert "Pascal VOC" in msg and "data convert" in msg and "data split" not in msg
+
+
+def test_layout_errors_name_coco_and_point_to_convert(tmp_path):
+    (tmp_path / "annotations").mkdir()
+    (tmp_path / "annotations" / "instances.json").write_text(
+        '{"images": [], "annotations": [], "categories": []}'
+    )
+    from cvbench.tasks import layout_errors
+
+    [msg] = layout_errors(tmp_path)
+    assert "COCO" in msg and "data convert" in msg and "data split" not in msg
+
+
+def test_layout_errors_unknown_layout_keeps_split_advice(tmp_path):
+    from cvbench.tasks import layout_errors
+
+    assert "data split" in layout_errors(tmp_path)[0]

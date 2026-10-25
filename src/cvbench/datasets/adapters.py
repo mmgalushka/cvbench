@@ -24,6 +24,13 @@ if TYPE_CHECKING:
     from cvbench.core.task import Task
 
 
+def _foreign_error(root: Path, fmt: str) -> str:
+    return (
+        f"'{root}' is a {convert.FORMAT_LABELS[fmt]} dataset, which CVBench cannot train on "
+        f"directly. Convert it to YOLO first: data convert {root} <output_dir>"
+    )
+
+
 class ClassFoldersLayout(LayoutAdapter):
     """``<root>/<split>/<class>/*.jpg`` — the catch-all, so it matches any non-YOLO folder."""
 
@@ -33,6 +40,10 @@ class ClassFoldersLayout(LayoutAdapter):
         return not is_yolo_dataset(root)
 
     def errors(self, root: Path) -> list[str]:
+        # A VOC/COCO folder lands here (it is not YOLO), where "run data split" would be wrong advice.
+        foreign = convert.detect_format(root)
+        if foreign:
+            return [_foreign_error(root, foreign)]
         return classification_layout_errors(root)
 
     def resolve(self, cfg: CVBenchConfig, task: Task) -> DatasetSpec:
@@ -91,10 +102,7 @@ class ForeignLayout(LayoutAdapter):
         return convert.detect_format(root) == self.format
 
     def errors(self, root: Path) -> list[str]:
-        return [
-            f"'{root}' is a {convert.FORMAT_LABELS[self.format]} dataset, which CVBench cannot train on "
-            f"directly. Convert it to YOLO first: data convert {root} <output_dir>"
-        ]
+        return [_foreign_error(root, self.format)]
 
     def resolve(self, cfg: CVBenchConfig, task: Task) -> DatasetSpec:
         raise ConfigError(self.errors(Path(cfg.data.data_dir))[0])
